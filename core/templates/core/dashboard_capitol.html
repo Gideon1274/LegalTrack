@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Capitol Staff Dashboard{% endblock %}
+
+{% block content %}
+<h2>{{ capitol_role }} Dashboard</h2>
+<div class="card">
+    <p>Hello {{ user.full_name }} – you are a <strong>{{ capitol_role }}</strong>.</p>
+    <p>Your work queue will be shown here after we build the case model.</p>
+</div>
+{% endblock %}

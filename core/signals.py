@@ -3,6 +3,9 @@ from django.contrib.auth.signals import user_logged_in, user_logged_out
 from django.dispatch import receiver
 from .models import AuditLog
 import json
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from .models import CustomUser
 
 @receiver(user_logged_in)
 def log_user_login(sender, user, request, **kwargs):
@@ -31,3 +34,4 @@ def get_client_ip(request):
     else:
         ip = request.META.get('REMOTE_ADDR')
     return ip
+

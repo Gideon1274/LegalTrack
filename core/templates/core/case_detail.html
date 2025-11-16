@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Case {{ case.tracking_id }}{% endblock %}
+
+{% block content %}
+<h2>Case {{ case.tracking_id }}</h2>
+<p><strong>Client:</strong> {{ case.client_name }}</p>
+<p><strong>Contact:</strong> {{ case.client_contact|default:"—" }}</p>
+<p><strong>Status:</strong> <span style="color:{% if case.status == 'not_received' %}orange{% elif case.status == 'received' %}blue{% else %}green{% endif %}">{{ case.get_status_display }}</span></p>
+<p><strong>Submitted by:</strong> {{ case.submitted_by }}</p>
+<p><strong>Created:</strong> {{ case.created_at|date:"M d, Y H:i" }}</p>
+
+<h3>Document Checklist</h3>
+<ul>
+{% for item in case.checklist %}
+    <li>{{ item.doc_type }} {% if item.required %}(Required){% endif %}</li>
+{% empty %}
+    <li><em>No items</em></li>
+{% endfor %}
+</ul>
+
+{% if can_edit %}
+    <a href="{% url 'submit_case' %}">Edit Submission</a>
+{% else %}
+    <p><em>This case can no longer be edited.</em></p>
+{% endif %}
+
+<a href="{% url 'dashboard' %}">Back</a>
+{% endblock %}

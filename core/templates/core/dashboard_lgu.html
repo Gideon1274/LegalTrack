@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}LGU Dashboard{% endblock %}
+
+{% block content %}
+<h2>LGU Administrator – {{ user.full_name }}</h2>
+
+<div class="card">
+    <a href="{% url 'submit_case' %}">
+        <button style="padding:10px 20px; font-size:16px;">+ Submit New Case</button>
+    </a>
+</div>
+
+<h3>Your Recent Submissions</h3>
+{% if recent_cases %}
+<ul>
+{% for case in recent_cases %}
+    <li>
+        <a href="{% url 'case_detail' case.tracking_id %}">
+            <strong>{{ case.tracking_id }}</strong> – {{ case.client_name }}
+            <em>({{ case.get_status_display }})</em>
+        </a>
+    </li>
+{% endfor %}
+</ul>
+{% else %}
+<p>No submissions yet. <a href="{% url 'submit_case' %}">Create one</a>.</p>
+{% endif %}
+{% endblock %}
