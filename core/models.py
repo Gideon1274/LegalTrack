@@ -13,7 +13,7 @@ from django.core.serializers.json import DjangoJSONEncoder
 import json
 
 class CustomUser(AbstractUser):
-    # Role choices based on spec
+    # roles
     ROLE_CHOICES = [
         ('super_admin', 'Super Admin'),
         ('lgu_admin', 'LGU Admin'),
