@@ -12,7 +12,7 @@ from django.utils import timezone
 from django.utils.text import slugify
 
 class CustomUser(AbstractUser):
-    # Role choices based on spec
+    # roles
     ROLE_CHOICES = [
         ('super_admin', 'Super Admin'),
         ('lgu_admin', 'LGU Admin'),
