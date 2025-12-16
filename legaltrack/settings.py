@@ -38,9 +38,6 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'core',
-    'allauth',
-    'allauth.account',
-    'allauth.socialaccount',
     'rest_framework',
     # 'password_reset',
 ]
@@ -51,14 +48,13 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'core.middleware.SessionTimeoutMiddleware',
+    'core.middleware.ForcePasswordChangeMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'allauth.account.middleware.AccountMiddleware',
 ]
 
 ROOT_URLCONF = 'legaltrack.urls'
-
-BASE_DIR = Path(__file__).resolve().parent.parent
 
 TEMPLATES = [
     {
@@ -84,24 +80,7 @@ WSGI_APPLICATION = 'legaltrack.wsgi.application'
 # Authentication
 AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
-    'allauth.account.auth_backends.AuthenticationBackend',
 ]
-
-# Allauth settings
-ACCOUNT_AUTHENTICATION_METHOD = 'email'
-ACCOUNT_EMAIL_REQUIRED = True
-ACCOUNT_USERNAME_REQUIRED = True
-# This three could be this
-# ACCOUNT_LOGIN_METHODS = {"email"}
-# ACCOUNT_SIGNUP_FIELDS = []
-
-ACCOUNT_USER_MODEL_USERNAME_FIELD = 'username'
-ACCOUNT_EMAIL_VERIFICATION = 'mandatory'  # Force email verification
-ACCOUNT_LOGIN_ON_EMAIL_CONFIRMATION = True
-ACCOUNT_LOGOUT_ON_PASSWORD_CHANGE = True
-
-# Email backend (use console for now)
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 DATABASES = {
     'default': {
@@ -132,6 +111,7 @@ AUTH_PASSWORD_VALIDATORS = [
     },
     {
         'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        'OPTIONS': {'min_length': 12},
     },
     {
         'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
@@ -139,7 +119,35 @@ AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
     },
+    {
+        'NAME': 'core.validators.StrongPasswordComplexityValidator',
+    },
 ]
+
+# Security (Module 1): prefer Argon2 password hashing
+PASSWORD_HASHERS = [
+    'django.contrib.auth.hashers.Argon2PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher',
+    'django.contrib.auth.hashers.BCryptSHA256PasswordHasher',
+]
+
+# Module 1: password reset tokens should expire within 24 hours
+PASSWORD_RESET_TIMEOUT = 60 * 60 * 24
+
+# Email (dev default): prints emails to the console. Configure SMTP in production.
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+DEFAULT_FROM_EMAIL = 'no-reply@cebu.gov.ph'
+
+# Local/dev convenience toggles.
+# - `LEGALTRACK_SEND_EMAILS`: keep emails enabled (console backend in dev).
+# - `LEGALTRACK_SHOW_ACTIVATION_LINK`: show activation link on-screen (dev only).
+LEGALTRACK_SEND_EMAILS = True
+LEGALTRACK_SHOW_ACTIVATION_LINK = True
+
+# Security: Django recommends POST for logout. Allowing GET is convenient during local dev,
+# but should be disabled in production.
+LEGALTRACK_ALLOW_GET_LOGOUT = DEBUG
 
 
 # Internationalization
@@ -166,7 +174,7 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 LOGIN_REDIRECT_URL = 'dashboard'
-ACCOUNT_LOGOUT_REDIRECT_URL = 'account_login'
+LOGOUT_REDIRECT_URL = 'login'
 
 
 # MEDIA

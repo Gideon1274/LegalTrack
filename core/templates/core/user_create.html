@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Create Staff Account{% endblock %}
+
+{% block content %}
+<h1 class="page-title">Create New Staff Account</h1>
+<p class="page-subtitle">Enter the information below to create a new account.</p>
+
+<div class="card">
+    <form method="post">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+            <div class="msg error">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <div class="form-grid">
+            <div>
+                <label for="{{ form.email.id_for_label }}">Email</label>
+                {{ form.email }}
+                {{ form.email.errors }}
+            </div>
+            <div>
+                <label for="{{ form.full_name.id_for_label }}">Full Name</label>
+                {{ form.full_name }}
+                {{ form.full_name.errors }}
+            </div>
+
+            <div>
+                <label for="{{ form.role.id_for_label }}">Role</label>
+                {{ form.role }}
+                {{ form.role.errors }}
+            </div>
+            <div>
+                <label for="{{ form.designation.id_for_label }}">Designation</label>
+                {{ form.designation }}
+                {{ form.designation.errors }}
+            </div>
+
+            <div class="span-2">
+                <label for="{{ form.position.id_for_label }}">Position</label>
+                {{ form.position }}
+                {{ form.position.errors }}
+            </div>
+        </div>
+
+        <div style="display:flex; gap:10px; margin-top:14px;">
+            <button class="btn btn-primary" type="submit">Create Account</button>
+            <a class="btn btn-secondary" href="{% url 'user_management' %}">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <p><strong>Account Status:</strong> New accounts are created as <strong>Pending Activation</strong> (cannot log in yet).</p>
+    <p><strong>Activation Link:</strong> Expires in <strong>1 hour</strong>. In local development, the link is shown on the success screen.</p>
+    <p><strong>Temporary Password:</strong> Shown once on the next screen and expires in <strong>7 days</strong>.</p>
+    <p><strong>Password Rules:</strong> Minimum 12 characters with uppercase, lowercase, number, and special character.</p>
+    <p><strong>Resend:</strong> Activation resend is available from User Management.</p>
+</div>
+{% endblock %}

@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Login{% endblock %}
+{% block container_class %}container--narrow{% endblock %}
+
+{% block content %}
+<div class="card" style="text-align:center;">
+    <div class="avatar" style="width:58px; height:58px; margin:0 auto 12px auto;"></div>
+    <h1 class="page-title">Login</h1>
+    <p class="page-subtitle">Sign in to your staff account.</p>
+
+    {% if form.errors %}
+        <div class="msg error">Invalid credentials. Please try again.</div>
+    {% endif %}
+
+    <form method="post" style="text-align:left;">
+        {% csrf_token %}
+        {{ form.non_field_errors }}
+
+        <label for="id_username">Email</label>
+        {{ form.username }}
+
+        <div style="display:flex; align-items:end; justify-content:space-between; gap:10px; margin-top:10px;">
+            <div style="flex:1;">
+                <label for="id_password">Password</label>
+                {{ form.password }}
+            </div>
+        </div>
+
+        <button class="btn btn-primary" type="submit" style="width:100%; margin-top:14px;">Login</button>
+
+        <div style="margin-top:12px; text-align:right;">
+            <a class="link-muted" href="{% url 'password_reset' %}">Forgot password?</a>
+        </div>
+
+        {% if next %}
+            <input type="hidden" name="next" value="{{ next }}">
+        {% endif %}
+    </form>
+</div>
+{% endblock %}

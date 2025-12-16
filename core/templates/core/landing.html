@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Welcome{% endblock %}
+{% block container_class %}container--narrow{% endblock %}
+
+{% block content %}
+<div class="card" style="text-align:center;">
+    <div class="avatar" style="width:58px; height:58px; margin:0 auto 12px auto;"></div>
+    <h1 class="page-title">Welcome to LegalTrack</h1>
+    <p class="page-subtitle">Use your staff account to log in. (Public tracking portal can be placed here later.)</p>
+    <a class="btn btn-primary" href="{% url 'login' %}">Staff Login</a>
+</div>
+
+<div class="card">
+    <h2 class="page-title" style="font-size:1.1rem; margin-bottom:6px;">Account Activation</h2>
+    <p class="muted">New staff accounts start as <strong>Pending Activation</strong>. Activate using the link (expires in 1 hour) and set a new strong password.</p>
+</div>
+{% endblock %}

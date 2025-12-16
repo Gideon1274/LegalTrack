@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}User Management{% endblock %}
+
+{% block content %}
+<h1 class="page-title">Manage Users</h1>
+<div class="subtabs" aria-hidden="true">
+    <span class="active">Users</span>
+    <span>Groups</span>
+    <span>Organization</span>
+</div>
+
+<div class="card" style="margin-top:14px;">
+    <form method="get" class="searchbar">
+        <div class="grow">
+            <label for="id_q">Search</label>
+            {{ search_form.q }}
+        </div>
+        <div style="min-width:220px;">
+            <label for="id_role">Role</label>
+            {{ search_form.role }}
+        </div>
+        <div>
+            <button class="btn btn-secondary" type="submit">Search</button>
+        </div>
+        <div style="margin-left:auto;">
+            <a class="btn btn-primary" href="{% url 'create_staff_account' %}">+ Add New User</a>
+        </div>
+    </form>
+</div>
+
+<div class="card card--flat">
+    {% if page_obj.object_list %}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th style="width:160px;">Staff ID</th>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th style="width:190px;">Role</th>
+                    <th style="width:170px;">Status</th>
+                    <th style="width:210px;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for u in page_obj.object_list %}
+                <tr>
+                    <td><strong>{{ u.username }}</strong></td>
+                    <td>{{ u.full_name|default:"—" }}</td>
+                    <td class="muted">{{ u.email }}</td>
+                    <td>{{ u.get_role_display }}</td>
+                    <td class="muted">{{ u.get_account_status_display }}</td>
+                    <td>
+                        <a class="btn btn-secondary btn-sm" href="{% url 'edit_staff_account' u.id %}" title="Edit">✎</a>
+                        <form method="post" action="{% url 'toggle_staff_active' u.id %}" style="display:inline;">
+                            {% csrf_token %}
+                            {% if u.account_status == 'active' %}
+                                <button class="btn btn-danger btn-sm" type="submit">Deactivate</button>
+                            {% elif u.account_status == 'inactive' %}
+                                <button class="btn btn-primary btn-sm" type="submit">Reactivate</button>
+                            {% else %}
+                                <button class="btn btn-secondary btn-sm" type="submit" disabled>Pending</button>
+                            {% endif %}
+                        </form>
+
+                        {% if u.account_status == 'pending' %}
+                            <form method="post" action="{% url 'resend_activation' u.id %}" style="display:inline;">
+                                {% csrf_token %}
+                                <button class="btn btn-secondary btn-sm" type="submit">Resend</button>
+                            </form>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="pagination">
+            {% if page_obj.has_previous %}
+                <a class="pagepill" href="?page={{ page_obj.previous_page_number }}&q={{ request.GET.q }}&role={{ request.GET.role }}">Previous</a>
+            {% else %}
+                <span class="pagepill" style="opacity:.5;">Previous</span>
+            {% endif %}
+
+            {% for p in page_obj.paginator.page_range %}
+                {% if p == page_obj.number %}
+                    <span class="pagepill active">{{ p }}</span>
+                {% else %}
+                    <a class="pagepill" href="?page={{ p }}&q={{ request.GET.q }}&role={{ request.GET.role }}">{{ p }}</a>
+                {% endif %}
+            {% endfor %}
+
+            {% if page_obj.has_next %}
+                <a class="pagepill" href="?page={{ page_obj.next_page_number }}&q={{ request.GET.q }}&role={{ request.GET.role }}">Next</a>
+            {% else %}
+                <span class="pagepill" style="opacity:.5;">Next</span>
+            {% endif %}
+        </div>
+    {% else %}
+        <div class="card__body">
+            <p class="muted"><em>No users found.</em></p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

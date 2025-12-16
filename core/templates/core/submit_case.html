@@ -1,12 +1,195 @@
 {% extends "base.html" %}
-{% block title %}Submit New Case{% endblock %}
+{% block title %}{% if case %}Request {{ case.tracking_id }}{% else %}New Request{% endif %}{% endblock %}
 
 {% block content %}
-<h2>Submit New Case</h2>
-<form method="post">
-    {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit">Create Case</button>
-</form>
-<a href="{% url 'dashboard' %}">Back to Dashboard</a>
+<div class="card">
+    <h2 class="page-title">New Request Form</h2>
+    <p class="page-subtitle">Complete the steps to submit your request to the Capitol.</p>
+
+    {% if case %}
+        <p><strong>Tracking Number:</strong> {{ case.tracking_id }}</p>
+    {% else %}
+        <p class="muted">A tracking number will be generated after Step 1.</p>
+    {% endif %}
+
+    <div class="subtabs" aria-label="Steps">
+        <span class="{% if step == 1 %}active{% endif %}">1. Details</span>
+        <span class="{% if step == 2 %}active{% endif %}">2. Checklist & Uploads</span>
+        <span class="{% if step == 3 %}active{% endif %}">3. Review & Submit</span>
+    </div>
+</div>
+
+{% if step == 1 %}
+    <form class="card" method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+            <div class="msg error">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <div class="form-grid">
+            <div>
+                <label for="{{ form.client_name.id_for_label }}">Client Name</label>
+                {{ form.client_name }}
+                {{ form.client_name.errors }}
+            </div>
+            <div>
+                <label for="{{ form.client_contact.id_for_label }}">Client Contact</label>
+                {{ form.client_contact }}
+                {{ form.client_contact.errors }}
+            </div>
+            <div class="span-2">
+                <label for="{{ form.endorsement_letter.id_for_label }}">Endorsement Letter (optional upload)</label>
+                {{ form.endorsement_letter }}
+                {{ form.endorsement_letter.errors }}
+                <p class="muted" style="margin:8px 0 0 0;">You can also upload this in Step 2.</p>
+            </div>
+        </div>
+
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:14px;">
+            <a class="btn btn-secondary" href="{% url 'dashboard' %}">Cancel</a>
+            <button class="btn btn-primary" type="submit">Save & Continue</button>
+        </div>
+    </form>
+{% elif step == 2 %}
+    <form class="card" method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        {{ formset.management_form }}
+
+        {% if formset.non_form_errors %}
+            <div class="msg error">{{ formset.non_form_errors }}</div>
+        {% endif %}
+
+        <div class="card card--flat">
+            <div class="card__header">
+                <strong>Document Checklist</strong>
+                <span class="muted">Add rows as needed; upload scanned files per document type.</span>
+            </div>
+            <div class="card__body" style="padding:0;">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th style="width:34%">Document Type</th>
+                            <th style="width:12%">Required</th>
+                            <th>Upload Scan</th>
+                            <th style="width:10%">Remove</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for f in formset %}
+                            <tr>
+                                <td>
+                                    {{ f.doc_type }}
+                                    {% if f.doc_type.errors %}<div class="muted">{{ f.doc_type.errors }}</div>{% endif %}
+                                </td>
+                                <td>{{ f.required }}</td>
+                                <td>
+                                    {{ f.file }}
+                                    {% if f.file.errors %}<div class="muted">{{ f.file.errors }}</div>{% endif %}
+                                </td>
+                                <td>{{ f.delete }}</td>
+                            </tr>
+                            {% if f.non_field_errors %}
+                                <tr><td colspan="4"><div class="msg error">{{ f.non_field_errors }}</div></td></tr>
+                            {% endif %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div style="display:flex; gap:10px; justify-content:space-between; margin-top:14px;">
+            <a class="btn btn-secondary" href="{% url 'case_wizard' case.tracking_id 1 %}">Back</a>
+            <button class="btn btn-primary" type="submit">Save & Continue</button>
+        </div>
+    </form>
+
+    {% if documents %}
+        <div class="card">
+            <h3 style="margin:0 0 10px 0;">Uploaded Documents</h3>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Document Type</th>
+                        <th>File</th>
+                        <th>Uploaded</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for doc in documents %}
+                        <tr>
+                            <td>{{ doc.doc_type }}</td>
+                            <td><a href="{{ doc.file.url }}" target="_blank" rel="noopener">{{ doc.file.name|cut:"cases/" }}</a></td>
+                            <td class="muted">{{ doc.uploaded_at|date:"M d, Y H:i" }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+
+{% else %}
+    <div class="card">
+        <h3 style="margin:0 0 12px 0;">Review</h3>
+        <div class="form-grid">
+            <div>
+                <label>Client Name</label>
+                <div><strong>{{ case.client_name }}</strong></div>
+            </div>
+            <div>
+                <label>Client Contact</label>
+                <div>{{ case.client_contact|default:"—" }}</div>
+            </div>
+            <div class="span-2">
+                <label>Checklist</label>
+                {% if checklist %}
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Document</th>
+                                <th style="width:16%">Required</th>
+                                <th style="width:18%">Uploaded</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in checklist %}
+                                <tr>
+                                    <td>{{ item.doc_type }}</td>
+                                    <td>{{ item.required|yesno:"Yes,No" }}</td>
+                                    <td>{{ item.uploaded|yesno:"Yes,No" }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <p class="muted" style="margin:0;">No checklist items yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {% if documents %}
+        <div class="card">
+            <h3 style="margin:0 0 10px 0;">Uploaded Documents</h3>
+            <ul style="margin:0; padding-left:18px;">
+                {% for doc in documents %}
+                    <li>
+                        <strong>{{ doc.doc_type }}</strong> —
+                        <a href="{{ doc.file.url }}" target="_blank" rel="noopener">View file</a>
+                        <span class="muted">({{ doc.uploaded_at|date:"M d, Y H:i" }})</span>
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+    {% endif %}
+
+    <form class="card" method="post">
+        {% csrf_token %}
+        <div style="display:flex; gap:10px; justify-content:space-between;">
+            <a class="btn btn-secondary" href="{% url 'case_wizard' case.tracking_id 2 %}">Back</a>
+            <button class="btn btn-primary" type="submit">Submit Request</button>
+        </div>
+    </form>
+{% endif %}
+
 {% endblock %}

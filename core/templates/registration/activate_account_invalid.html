@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Activation Error{% endblock %}
+{% block container_class %}container--narrow{% endblock %}
+
+{% block content %}
+<div class="card" style="text-align:center;">
+    <h1 class="page-title">Activation Link Problem</h1>
+    <div class="msg error" style="text-align:left;">{{ reason }}</div>
+    <a class="btn btn-secondary" href="{% url 'login' %}">Back to Login</a>
+</div>
+{% endblock %}

@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Edit Staff Account{% endblock %}
+
+{% block content %}
+<h1 class="page-title">Edit Staff Account</h1>
+<p class="page-subtitle">Update staff details. Role changes require a new account.</p>
+
+<div class="card">
+    <div class="form-grid">
+        <div>
+            <label>Staff ID</label>
+            <div><strong>{{ target_user.username }}</strong></div>
+        </div>
+        <div>
+            <label>Email</label>
+            <div class="muted">{{ target_user.email }}</div>
+        </div>
+        <div>
+            <label>Role</label>
+            <div>{{ target_user.get_role_display }}</div>
+        </div>
+        <div>
+            <label>Status</label>
+            <div class="muted">{{ target_user.get_account_status_display }}</div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <form method="post">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+            <div class="msg error">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <div class="form-grid">
+            <div>
+                <label for="{{ form.full_name.id_for_label }}">Full Name</label>
+                {{ form.full_name }}
+                {{ form.full_name.errors }}
+            </div>
+            <div>
+                <label for="{{ form.designation.id_for_label }}">Designation</label>
+                {{ form.designation }}
+                {{ form.designation.errors }}
+            </div>
+            <div class="span-2">
+                <label for="{{ form.position.id_for_label }}">Position</label>
+                {{ form.position }}
+                {{ form.position.errors }}
+            </div>
+        </div>
+
+        <div style="display:flex; gap:10px; margin-top:14px;">
+            <button class="btn btn-primary" type="submit">Save Changes</button>
+            <a class="btn btn-secondary" href="{% url 'user_management' %}">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <p class="muted"><strong>Note:</strong> Role changes are handled by creating a new account (per Module 1 policy) and deactivating the old one.</p>
+</div>
+{% endblock %}

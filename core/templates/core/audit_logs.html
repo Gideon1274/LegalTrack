@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Audit Logs{% endblock %}
+
+{% block content %}
+<h2>Audit Logs</h2>
+
+<div class="card">
+    <form method="get" style="display:flex; gap:10px; flex-wrap:wrap; align-items:end;">
+        <div style="min-width:220px;">
+            <label for="id_action"><strong>Action</strong></label><br>
+            <select name="action" id="id_action">
+                <option value="">All</option>
+                {% for key,label in actions %}
+                    <option value="{{ key }}" {% if key == action_filter %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div style="flex:1; min-width:220px;">
+            <label for="id_q"><strong>Search</strong></label><br>
+            <input type="text" id="id_q" name="q" value="{{ q_filter }}" placeholder="email, object, etc">
+        </div>
+        <div>
+            <button class="btn btn-primary" type="submit">Filter</button>
+        </div>
+        <div style="margin-left:auto;">
+            <a href="{% url 'export_audit_logs_csv' %}?action={{ action_filter }}&q={{ q_filter }}">
+                <button class="btn btn-secondary" type="button">Export CSV</button>
+            </a>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    {% if page_obj.object_list %}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Action</th>
+                    <th>Actor</th>
+                    <th>Target</th>
+                    <th>Object</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for a in page_obj.object_list %}
+                <tr>
+                    <td>{{ a.created_at }}</td>
+                    <td>{{ a.get_action_display }}</td>
+                    <td>{{ a.actor.email|default:"—" }}</td>
+                    <td>{{ a.target_user.email|default:"—" }}</td>
+                    <td>{{ a.target_object|default:"—" }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+
+        <div style="margin-top:12px; display:flex; gap:10px; align-items:center;">
+            {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}&action={{ action_filter }}&q={{ q_filter }}">Prev</a>
+            {% endif %}
+            <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+            {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}&action={{ action_filter }}&q={{ q_filter }}">Next</a>
+            {% endif %}
+        </div>
+    {% else %}
+        <p><em>No audit logs found.</em></p>
+    {% endif %}
+</div>
+{% endblock %}

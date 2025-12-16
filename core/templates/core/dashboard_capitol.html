@@ -2,9 +2,117 @@
 {% block title %}Capitol Staff Dashboard{% endblock %}
 
 {% block content %}
-<h2>{{ capitol_role }} Dashboard</h2>
 <div class="card">
-    <p>Hello {{ user.full_name }} – you are a <strong>{{ capitol_role }}</strong>.</p>
-    <p>Your work queue will be shown here after we build the case model.</p>
+    <h2 class="page-title">{{ capitol_role }} Dashboard</h2>
+    <p class="page-subtitle">{{ user.full_name|default:user.email }}</p>
 </div>
+
+{% if user.role == 'capitol_receiving' %}
+    <div class="card card--flat">
+        <div class="card__header">
+            <strong>Pending Requests</strong>
+            <span class="muted">Not Received / Returned</span>
+        </div>
+        <div class="card__body" style="padding:0;">
+            {% if pending_cases %}
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th style="width:22%">Tracking No.</th>
+                            <th>Client</th>
+                            <th style="width:18%">Status</th>
+                            <th style="width:18%">Created</th>
+                            <th style="width:14%">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for case in pending_cases %}
+                            <tr>
+                                <td><strong><a href="{% url 'case_detail' case.tracking_id %}">{{ case.tracking_id }}</a></strong></td>
+                                <td>{{ case.client_name }}</td>
+                                <td class="muted">{{ case.get_status_display }}</td>
+                                <td class="muted">{{ case.created_at|date:"M d, Y H:i" }}</td>
+                                <td><a class="btn btn-secondary btn-sm" href="{% url 'case_detail' case.tracking_id %}">Open</a></td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <div class="card__body"><p class="muted" style="margin:0;">No pending cases.</p></div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card card--flat">
+        <div class="card__header">
+            <strong>Received</strong>
+            <span class="muted">Unassigned</span>
+        </div>
+        <div class="card__body" style="padding:0;">
+            {% if received_unassigned %}
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th style="width:22%">Tracking No.</th>
+                            <th>Client</th>
+                            <th style="width:18%">Status</th>
+                            <th style="width:20%">Received</th>
+                            <th style="width:14%">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for case in received_unassigned %}
+                            <tr>
+                                <td><strong><a href="{% url 'case_detail' case.tracking_id %}">{{ case.tracking_id }}</a></strong></td>
+                                <td>{{ case.client_name }}</td>
+                                <td class="muted">{{ case.get_status_display }}</td>
+                                <td class="muted">{% if case.received_at %}{{ case.received_at|date:"M d, Y H:i" }}{% else %}—{% endif %}</td>
+                                <td><a class="btn btn-secondary btn-sm" href="{% url 'case_detail' case.tracking_id %}">Open</a></td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <div class="card__body"><p class="muted" style="margin:0;">No received unassigned cases.</p></div>
+            {% endif %}
+        </div>
+    </div>
+
+{% elif user.role == 'capitol_examiner' %}
+    <div class="card card--flat">
+        <div class="card__header">
+            <strong>My Assigned Cases</strong>
+        </div>
+        <div class="card__body" style="padding:0;">
+            {% if my_cases %}
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th style="width:22%">Tracking No.</th>
+                            <th>Client</th>
+                            <th style="width:18%">Status</th>
+                            <th style="width:20%">Assigned</th>
+                            <th style="width:14%">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for case in my_cases %}
+                            <tr>
+                                <td><strong><a href="{% url 'case_detail' case.tracking_id %}">{{ case.tracking_id }}</a></strong></td>
+                                <td>{{ case.client_name }}</td>
+                                <td class="muted">{{ case.get_status_display }}</td>
+                                <td class="muted">{% if case.assigned_at %}{{ case.assigned_at|date:"M d, Y H:i" }}{% else %}—{% endif %}</td>
+                                <td><a class="btn btn-secondary btn-sm" href="{% url 'case_detail' case.tracking_id %}">Open</a></td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <div class="card__body"><p class="muted" style="margin:0;">No assigned cases yet.</p></div>
+            {% endif %}
+        </div>
+    </div>
+{% else %}
+    <div class="card"><p class="muted" style="margin:0;">Your work queue will be shown here after we build your workflow module.</p></div>
+{% endif %}
 {% endblock %}

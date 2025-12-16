@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Staff Account Created{% endblock %}
+
+{% block content %}
+<div style="text-align:center; padding:12px 0 6px 0;">
+    <div class="avatar" style="width:58px; height:58px; margin:0 auto 10px auto;"></div>
+    <h1 class="page-title" style="margin-bottom:6px;">Staff Account Created Successfully</h1>
+    <p class="page-subtitle" style="max-width:720px; margin-left:auto; margin-right:auto;">Share the temporary password with the staff member, then complete activation using the activation link.</p>
+</div>
+
+<div class="card" style="max-width:760px; margin-left:auto; margin-right:auto;">
+    <p><strong>Staff ID:</strong> {{ created_user.username }}</p>
+    <p><strong>Email:</strong> {{ created_user.email }}</p>
+    <p><strong>Role:</strong> {{ created_user.get_role_display }}</p>
+    <p><strong>Temporary Password:</strong> <code>{{ temp_password }}</code></p>
+    <p><strong>Account Status:</strong> Pending Activation</p>
+
+    {% if activation_sent %}
+        <p class="muted"><small>Activation email was sent with a verification link (expires in <strong>1 hour</strong>).</small></p>
+        {% if show_activation_link %}
+            <p class="muted"><small>Dev activation link (temporary):</small></p>
+            <p style="word-break:break-all;"><a href="{{ activation_link }}">{{ activation_link }}</a></p>
+        {% endif %}
+    {% else %}
+        <p class="muted"><small>Email sending is disabled in this environment. Use this activation link (expires in <strong>1 hour</strong>):</small></p>
+        <p style="word-break:break-all;"><a href="{{ activation_link }}">{{ activation_link }}</a></p>
+    {% endif %}
+
+    <p class="muted"><small>Temporary password expires after <strong>7 days</strong>. The user sets a new strong password during activation.</small></p>
+
+    <div style="display:flex; gap:10px; justify-content:center; margin-top:14px;">
+        <a class="btn btn-secondary" href="{% url 'user_management' %}">Back to User Management</a>
+        <a class="btn btn-primary" href="{% url 'create_staff_account' %}">Create Another</a>
+    </div>
+</div>
+{% endblock %}

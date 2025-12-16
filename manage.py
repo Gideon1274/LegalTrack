@@ -6,7 +6,9 @@ import sys
 
 def main():
     """Run administrative tasks."""
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'legaltrack.settings')
+    # Force our settings module even if the environment already defines DJANGO_SETTINGS_MODULE.
+    # This avoids surprising runtime mismatches (e.g., missing MessageMiddleware) when running locally.
+    os.environ['DJANGO_SETTINGS_MODULE'] = 'legaltrack.settings'
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:

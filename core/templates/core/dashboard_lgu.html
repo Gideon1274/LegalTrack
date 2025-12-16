@@ -2,27 +2,55 @@
 {% block title %}LGU Dashboard{% endblock %}
 
 {% block content %}
-<h2>LGU Administrator – {{ user.full_name }}</h2>
-
 <div class="card">
-    <a href="{% url 'submit_case' %}">
-        <button style="padding:10px 20px; font-size:16px;">+ Submit New Case</button>
-    </a>
+    <h2 class="page-title">LGU Administrator</h2>
+    <p class="page-subtitle">{{ user.full_name|default:user.email }}</p>
+
+    <div style="display:flex; justify-content:flex-end;">
+        <a class="btn btn-primary" href="{% url 'submit_case' %}">+ New Request</a>
+    </div>
 </div>
 
-<h3>Your Recent Submissions</h3>
-{% if recent_cases %}
-<ul>
-{% for case in recent_cases %}
-    <li>
-        <a href="{% url 'case_detail' case.tracking_id %}">
-            <strong>{{ case.tracking_id }}</strong> – {{ case.client_name }}
-            <em>({{ case.get_status_display }})</em>
-        </a>
-    </li>
-{% endfor %}
-</ul>
-{% else %}
-<p>No submissions yet. <a href="{% url 'submit_case' %}">Create one</a>.</p>
-{% endif %}
+<div class="card card--flat">
+    <div class="card__header">
+        <strong>Your Recent Submissions</strong>
+        <span class="muted">Last 10</span>
+    </div>
+
+    <div class="card__body" style="padding:0;">
+        {% if recent_cases %}
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th style="width:22%">Tracking No.</th>
+                        <th>Client</th>
+                        <th style="width:18%">Status</th>
+                        <th style="width:18%">Created</th>
+                        <th style="width:16%">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for case in recent_cases %}
+                        <tr>
+                            <td><strong><a href="{% url 'case_detail' case.tracking_id %}">{{ case.tracking_id }}</a></strong></td>
+                            <td>{{ case.client_name }}</td>
+                            <td class="muted">{{ case.get_status_display }}</td>
+                            <td class="muted">{{ case.created_at|date:"M d, Y H:i" }}</td>
+                            <td>
+                                <a class="btn btn-secondary btn-sm" href="{% url 'case_detail' case.tracking_id %}">View</a>
+                                {% if case.status == 'not_received' or case.status == 'returned' %}
+                                    <a class="btn btn-secondary btn-sm" href="{% url 'case_wizard' case.tracking_id 1 %}">Edit</a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <div class="card__body">
+                <p class="muted" style="margin:0;">No submissions yet.</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
 {% endblock %}

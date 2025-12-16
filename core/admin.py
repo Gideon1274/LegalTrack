@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import AuditLog, Case, CustomUser
+from .models import AuditLog, Case, CaseDocument, CustomUser
 from django import forms
 from django.contrib.auth.hashers import make_password
 
@@ -10,7 +10,6 @@ class CustomUserCreationForm(forms.ModelForm):
 
     def save(self, commit=True, created_by=None):
         user = super().save(commit=False)
-        user.created_by = created_by
         if commit:
             user.save(created_by=created_by)
         return user
@@ -50,10 +49,28 @@ class AuditLogAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         return False  # Prevent deletion
 
+
+class CaseDocumentInline(admin.TabularInline):
+    model = CaseDocument
+    extra = 0
+    fields = ('doc_type', 'file', 'uploaded_by', 'uploaded_at')
+    readonly_fields = ('uploaded_by', 'uploaded_at')
+
 @admin.register(Case)
 class CaseAdmin(admin.ModelAdmin):
     list_display = ('tracking_id', 'client_name', 'status', 'submitted_by', 'created_at')
     list_filter = ('status', 'created_at')
     search_fields = ('tracking_id', 'client_name', 'submitted_by__email')
-    readonly_fields = ('tracking_id', 'created_at', 'updated_at', 'received_at')
+    inlines = [CaseDocumentInline]
+    readonly_fields = (
+        'tracking_id',
+        'created_at',
+        'updated_at',
+        'received_at',
+        'received_by',
+        'returned_at',
+        'returned_by',
+        'assigned_to',
+        'assigned_at',
+    )
 

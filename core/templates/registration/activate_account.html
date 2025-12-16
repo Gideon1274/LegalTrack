@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Activate Account{% endblock %}
+{% block container_class %}container--narrow{% endblock %}
+
+{% block content %}
+<div class="card" style="text-align:center;">
+    <div class="avatar" style="width:58px; height:58px; margin:0 auto 12px auto;"></div>
+    <h1 class="page-title">Setup New Password</h1>
+    <p class="page-subtitle">Enter your temporary password and set a new strong password.</p>
+
+    <div class="card" style="text-align:left; background:#fff;">
+        <div class="muted" style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+            <div><strong class="muted">Staff ID:</strong> {{ staff_id }}</div>
+            <div><strong class="muted">Email:</strong> {{ email }}</div>
+        </div>
+    </div>
+
+    <form method="post" style="text-align:left;">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+            <div class="msg error">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <label for="id_temp_password">Temporary Password</label>
+        {{ form.temp_password }}
+        {{ form.temp_password.errors }}
+
+        <label for="id_new_password1" style="margin-top:10px;">New Password</label>
+        {{ form.new_password1 }}
+        {{ form.new_password1.errors }}
+
+        <label for="id_new_password2" style="margin-top:10px;">Confirm New Password</label>
+        {{ form.new_password2 }}
+        {{ form.new_password2.errors }}
+
+        <button class="btn btn-primary" type="submit" style="width:100%; margin-top:14px;">Activate</button>
+    </form>
+</div>
+{% endblock %}
