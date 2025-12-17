@@ -8,6 +8,9 @@
 
     <div style="display:flex; gap:10px; flex-wrap:wrap;">
         <a class="btn btn-secondary btn-sm" href="{% url 'dashboard' %}">Back</a>
+        {% if user.is_authenticated and user.role|slice:":8" == 'capitol_' %}
+            <a class="btn btn-secondary btn-sm" href="{% url 'submissions' %}">Submissions</a>
+        {% endif %}
         {% if can_edit %}
             <a class="btn btn-secondary btn-sm" href="{% url 'case_wizard' case.tracking_id 1 %}">Edit Submission</a>
         {% endif %}
@@ -141,14 +144,147 @@
 {% if can_assign %}
     <form method="post" action="{% url 'assign_case' case.tracking_id %}" class="card">
         {% csrf_token %}
+
         <label for="id_examiner">Assign to Examiner</label>
         <select id="id_examiner" name="examiner_id">
             {% for examiner in examiners %}
-                <option value="{{ examiner.id }}">{{ examiner.full_name }} ({{ examiner.email }})</option>
+                <option value="{{ examiner.id }}">{{ examiner.full_name }} ({{ examiner.email }}) — {{ examiner.active_load }} active</option>
             {% endfor %}
         </select>
         <div style="display:flex; justify-content:flex-end; margin-top:12px;">
             <button class="btn btn-primary" type="submit">Assign</button>
+        </div>
+    </form>
+{% endif %}
+
+{% if can_remark %}
+    <form method="post" action="{% url 'add_case_remark' case.tracking_id %}" class="card">
+        {% csrf_token %}
+        <strong>Internal Remarks</strong>
+        <div class="muted" style="margin:6px 0 10px 0;">Visible to Capitol staff.</div>
+        {{ remark_form.text.label_tag }}
+        {{ remark_form.text }}
+        <div style="display:flex; justify-content:flex-end; margin-top:12px;">
+            <button class="btn btn-primary" type="submit">Add Remark</button>
+        </div>
+    </form>
+{% endif %}
+
+{% if remarks %}
+    <div class="card card--flat">
+        <div class="card__header">
+            <strong>Remarks</strong>
+        </div>
+        <div class="card__body" style="padding:0;">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Remark</th>
+                        <th style="width:22%">By</th>
+                        <th style="width:22%">When</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in remarks %}
+                        <tr>
+                            <td>{{ r.text|linebreaksbr }}</td>
+                            <td class="muted">{{ r.created_by|default:"—" }}</td>
+                            <td class="muted">{{ r.created_at|date:"M d, Y H:i" }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+{% endif %}
+
+{% if history %}
+    <div class="card card--flat">
+        <div class="card__header">
+            <strong>Case History</strong>
+        </div>
+        <div class="card__body" style="padding:0;">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th style="width:22%">When</th>
+                        <th style="width:22%">Action</th>
+                        <th style="width:22%">By</th>
+                        <th>Details</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for h in history %}
+                        <tr>
+                            <td class="muted">{{ h.created_at|date:"M d, Y H:i" }}</td>
+                            <td>{{ h.get_action_display }}</td>
+                            <td class="muted">{{ h.actor|default:"—" }}</td>
+                            <td class="muted">{{ h.details_display|default:"—"|linebreaksbr }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+{% endif %}
+
+{% if can_submit_for_approval %}
+    <form method="post" action="{% url 'submit_for_approval' case.tracking_id %}" class="card">
+        {% csrf_token %}
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+            <div>
+                <strong>Examiner</strong>
+                <div class="muted">Submit this case for approval.</div>
+            </div>
+            <button class="btn btn-primary" type="submit">Submit for Approval</button>
+        </div>
+    </form>
+{% endif %}
+
+{% if can_approve %}
+    <form method="post" action="{% url 'approve_case' case.tracking_id %}" class="card">
+        {% csrf_token %}
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+            <div>
+                <strong>Approver</strong>
+                <div class="muted">Approve and send to numbering.</div>
+            </div>
+            <button class="btn btn-primary" type="submit">Approve</button>
+        </div>
+    </form>
+
+    <form method="post" action="{% url 'return_for_correction' case.tracking_id %}" class="card">
+        {% csrf_token %}
+        <label for="id_approver_reason">Return Reason</label>
+        <textarea id="id_approver_reason" name="reason" rows="3" placeholder="State what needs correction..."></textarea>
+        <div style="display:flex; justify-content:flex-end; margin-top:12px;">
+            <button class="btn btn-danger" type="submit">Return for Correction</button>
+        </div>
+    </form>
+{% endif %}
+
+{% if can_number %}
+    <form method="post" action="{% url 'mark_numbered' case.tracking_id %}" class="card">
+        {% csrf_token %}
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+            <div>
+                <strong>Numbering</strong>
+                <div class="muted">Move this case to For Release.</div>
+            </div>
+            <button class="btn btn-primary" type="submit">Mark as Numbered</button>
+        </div>
+    </form>
+{% endif %}
+
+{% if can_release %}
+    <form method="post" action="{% url 'release_case' case.tracking_id %}" class="card">
+        {% csrf_token %}
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+            <div>
+                <strong>Release</strong>
+                <div class="muted">Mark this case as Released.</div>
+            </div>
+            <button class="btn btn-primary" type="submit">Release</button>
         </div>
     </form>
 {% endif %}

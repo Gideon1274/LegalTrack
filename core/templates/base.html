@@ -99,6 +99,9 @@
             {% if user.is_authenticated %}
                 <nav class="navpills" aria-label="Primary">
                     <a href="{% url 'dashboard' %}" class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">Dashboard</a>
+                    {% if user.role|slice:":8" == 'capitol_' %}
+                        <a href="{% url 'submissions' %}" class="{% if request.resolver_match.url_name == 'submissions' %}active{% endif %}">Submissions</a>
+                    {% endif %}
                     {% if user.role == 'super_admin' %}
                         <a href="{% url 'user_management' %}" class="{% if request.resolver_match.url_name == 'user_management' or request.resolver_match.url_name == 'create_staff_account' or request.resolver_match.url_name == 'edit_staff_account' %}active{% endif %}">User Management</a>
                         <a href="{% url 'audit_logs' %}" class="{% if request.resolver_match.url_name == 'audit_logs' %}active{% endif %}">Audit Logs</a>

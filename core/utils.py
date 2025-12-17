@@ -3,7 +3,6 @@ import binascii
 import os
 from django.utils import timezone
 from datetime import timedelta
-# from .models import CustomUser
 
 def generate_activation_token():
     return binascii.hexlify(os.urandom(20)).decode()

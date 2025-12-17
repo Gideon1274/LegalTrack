@@ -112,6 +112,110 @@
             {% endif %}
         </div>
     </div>
+{% elif user.role == 'capitol_approver' %}
+    <div class="card card--flat">
+        <div class="card__header">
+            <strong>For Approval</strong>
+        </div>
+        <div class="card__body" style="padding:0;">
+            {% if queue_cases %}
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th style="width:22%">Tracking No.</th>
+                            <th>Client</th>
+                            <th style="width:18%">Status</th>
+                            <th style="width:20%">Updated</th>
+                            <th style="width:14%">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for case in queue_cases %}
+                            <tr>
+                                <td><strong><a href="{% url 'case_detail' case.tracking_id %}">{{ case.tracking_id }}</a></strong></td>
+                                <td>{{ case.client_name }}</td>
+                                <td class="muted">{{ case.get_status_display }}</td>
+                                <td class="muted">{{ case.updated_at|date:"M d, Y H:i" }}</td>
+                                <td><a class="btn btn-secondary btn-sm" href="{% url 'case_detail' case.tracking_id %}">Open</a></td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <div class="card__body"><p class="muted" style="margin:0;">No cases for approval.</p></div>
+            {% endif %}
+        </div>
+    </div>
+
+{% elif user.role == 'capitol_numberer' %}
+    <div class="card card--flat">
+        <div class="card__header">
+            <strong>For Numbering</strong>
+        </div>
+        <div class="card__body" style="padding:0;">
+            {% if queue_cases %}
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th style="width:22%">Tracking No.</th>
+                            <th>Client</th>
+                            <th style="width:18%">Status</th>
+                            <th style="width:20%">Updated</th>
+                            <th style="width:14%">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for case in queue_cases %}
+                            <tr>
+                                <td><strong><a href="{% url 'case_detail' case.tracking_id %}">{{ case.tracking_id }}</a></strong></td>
+                                <td>{{ case.client_name }}</td>
+                                <td class="muted">{{ case.get_status_display }}</td>
+                                <td class="muted">{{ case.updated_at|date:"M d, Y H:i" }}</td>
+                                <td><a class="btn btn-secondary btn-sm" href="{% url 'case_detail' case.tracking_id %}">Open</a></td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <div class="card__body"><p class="muted" style="margin:0;">No cases for numbering.</p></div>
+            {% endif %}
+        </div>
+    </div>
+
+{% elif user.role == 'capitol_releaser' %}
+    <div class="card card--flat">
+        <div class="card__header">
+            <strong>For Release</strong>
+        </div>
+        <div class="card__body" style="padding:0;">
+            {% if queue_cases %}
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th style="width:22%">Tracking No.</th>
+                            <th>Client</th>
+                            <th style="width:18%">Status</th>
+                            <th style="width:20%">Updated</th>
+                            <th style="width:14%">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for case in queue_cases %}
+                            <tr>
+                                <td><strong><a href="{% url 'case_detail' case.tracking_id %}">{{ case.tracking_id }}</a></strong></td>
+                                <td>{{ case.client_name }}</td>
+                                <td class="muted">{{ case.get_status_display }}</td>
+                                <td class="muted">{{ case.updated_at|date:"M d, Y H:i" }}</td>
+                                <td><a class="btn btn-secondary btn-sm" href="{% url 'case_detail' case.tracking_id %}">Open</a></td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <div class="card__body"><p class="muted" style="margin:0;">No cases for release.</p></div>
+            {% endif %}
+        </div>
+    </div>
 {% else %}
     <div class="card"><p class="muted" style="margin:0;">Your work queue will be shown here after we build your workflow module.</p></div>
 {% endif %}

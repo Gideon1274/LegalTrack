@@ -3,33 +3,34 @@
 import django.db.models.deletion
 from django.conf import settings
 from django.db import migrations, models
+from typing import ClassVar
 
 
 class Migration(migrations.Migration):
 
-    dependencies = [
-        ('core', '0005_delete_userprofile'),
+    dependencies: ClassVar[list[tuple[str, str]]] = [
+        ("core", "0005_delete_userprofile"),
     ]
 
-    operations = [
+    operations: ClassVar[list] = [
         migrations.AddField(
-            model_name='case',
-            name='received_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='received_cases', to=settings.AUTH_USER_MODEL),
+            model_name="case",
+            name="received_by",
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name="received_cases", to=settings.AUTH_USER_MODEL),
         ),
         migrations.AddField(
-            model_name='case',
-            name='return_reason',
+            model_name="case",
+            name="return_reason",
             field=models.TextField(blank=True),
         ),
         migrations.AddField(
-            model_name='case',
-            name='returned_at',
+            model_name="case",
+            name="returned_at",
             field=models.DateTimeField(blank=True, null=True),
         ),
         migrations.AddField(
-            model_name='case',
-            name='returned_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='returned_cases', to=settings.AUTH_USER_MODEL),
+            model_name="case",
+            name="returned_by",
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name="returned_cases", to=settings.AUTH_USER_MODEL),
         ),
     ]
