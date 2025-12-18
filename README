@@ -25,7 +25,7 @@ E check ra ang .env file. And e uncomment kong onsay gamiton.
 
 current Acc: 
 
-//note: admin ray pwede email e input sa staff-ID
+//note: ang admin ray pwede email e butang sa Staff-ID uban kay Staff-ID jud
 admin
 ID: admin@gmail.com
 pass: 123
