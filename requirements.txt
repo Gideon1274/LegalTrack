@@ -8,5 +8,11 @@ django-rest-passwordreset==1.5.0
 djangorestframework==3.16.1
 psycopg2-binary==2.9.11
 pycparser==2.23
+python-dotenv==1.0.0
 sqlparse==0.5.3
 tzdata==2025.2
+
+# Development / typing stubs
+django-stubs
+djangorestframework-stubs
+pyright

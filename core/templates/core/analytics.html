@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Analytics{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:12px; flex-wrap:wrap;">
+        <div>
+            <h2 class="page-title">Analytics Dashboard</h2>
+            <p class="page-subtitle">{{ role_display }}</p>
+        </div>
+        <div style="display:flex; gap:10px;">
+            <a class="btn btn-secondary" href="{% url 'reports' %}">Reports</a>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="form-grid">
+        <div>
+            <label>Total Users</label>
+            <div style="font-weight:800; font-size:1.4rem;">{{ total_users }}</div>
+        </div>
+        <div>
+            <label>Total Cases</label>
+            <div style="font-weight:800; font-size:1.4rem;">{{ total_cases }}</div>
+        </div>
+        <div class="span-2">
+            <label>Average Processing Time (Created → Released)</label>
+            <div class="muted">{% if avg_days %}{{ avg_days|floatformat:2 }} days{% else %}—{% endif %}</div>
+        </div>
+    </div>
+</div>
+
+<div class="card card--flat">
+    <div class="card__header">
+        <strong>Cases by Status</strong>
+    </div>
+    <div class="card__body card__body--flush">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Status</th>
+                    <th style="width:18%">Count</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in by_status %}
+                    <tr>
+                        <td>{{ row.status }}</td>
+                        <td class="muted">{{ row.count }}</td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="2" class="muted"><em>No data</em></td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

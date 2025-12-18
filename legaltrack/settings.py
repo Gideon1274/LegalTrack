@@ -10,17 +10,93 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 import os
+import importlib
+import sys
+from typing import Mapping, cast
+from urllib.parse import parse_qsl, urlparse
 from pathlib import Path
+import uuid
+import socket
+
+from django.core.exceptions import ImproperlyConfigured
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+DOTENV_PATH = BASE_DIR / ".env"
+
+
+def _parse_dotenv_file(path: Path) -> dict[str, str]:
+    values: dict[str, str] = {}
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except OSError:
+        return values
+
+    for line in raw.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if "=" not in stripped:
+            continue
+        key, value = stripped.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if not key:
+            continue
+        if (value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'")):
+            value = value[1:-1]
+        values[key] = value
+    return values
+
+
+def _load_dotenv_fallback(path: Path, *, override: bool = False) -> None:
+    for key, value in _parse_dotenv_file(path).items():
+        if override or key not in os.environ:
+            os.environ[key] = value
+
+
+_dotenv_values: object | None = None
+_load_dotenv: object | None = None
+try:
+    _dotenv = importlib.import_module("dotenv")
+    _dotenv_values = getattr(_dotenv, "dotenv_values", None)
+    _load_dotenv = getattr(_dotenv, "load_dotenv", None)
+except Exception:
+    _dotenv_values = None
+    _load_dotenv = None
+
+DOTENV_VALUES: dict[str, str] = {}
+if DOTENV_PATH.exists():
+    # In development, prefer `.env` values. This still allows easy toggling
+    # between sqlite/supabase by editing `.env`.
+    if callable(_dotenv_values):
+        raw_values = cast(Mapping[str, str | None], _dotenv_values(str(DOTENV_PATH)))
+        DOTENV_VALUES = {k: v for k, v in raw_values.items() if k and v is not None}
+    else:
+        DOTENV_VALUES = _parse_dotenv_file(DOTENV_PATH)
+
+    if callable(_load_dotenv):
+        try:
+            _load_dotenv(DOTENV_PATH, override=True)
+        except TypeError:
+            _load_dotenv(DOTENV_PATH)
+    else:
+        _load_dotenv_fallback(DOTENV_PATH, override=True)
+
+
+def _env(key: str, default: str | None = None) -> str | None:
+    val = DOTENV_VALUES.get(key)
+    if val is not None and str(val).strip() != "":
+        return str(val)
+    return os.getenv(key) or default
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-x%=xw_2)#@dni+6658!64!4s%(+b_*vor@)&f)+8=m2sibf6v4'
+SECRET_KEY = _env("DJANGO_SECRET_KEY") or uuid.uuid4().hex
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -31,47 +107,47 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
-    'core',
-    'rest_framework',
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+    "core",
+    "rest_framework",
     # 'password_reset',
 ]
 
 MIDDLEWARE = [
-    'django.middleware.security.SecurityMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'core.middleware.SessionTimeoutMiddleware',
-    'core.middleware.ForcePasswordChangeMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    "django.middleware.security.SecurityMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "core.middleware.SessionTimeoutMiddleware",
+    "core.middleware.ForcePasswordChangeMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-ROOT_URLCONF = 'legaltrack.urls'
+ROOT_URLCONF = "legaltrack.urls"
 
 TEMPLATES = [
     {
-        'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [os.path.join(BASE_DIR, 'templates')],
-        'APP_DIRS': True,
-        'OPTIONS': {
-            'context_processors': [
-                'django.template.context_processors.request',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [os.path.join(BASE_DIR, "templates")],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
             ],
         },
     },
 ]
 
-WSGI_APPLICATION = 'legaltrack.wsgi.application'
+WSGI_APPLICATION = "legaltrack.wsgi.application"
 
 
 # Database
@@ -79,65 +155,146 @@ WSGI_APPLICATION = 'legaltrack.wsgi.application'
 
 # Authentication
 AUTHENTICATION_BACKENDS = [
-    'django.contrib.auth.backends.ModelBackend',
+    "core.backends.AdminEmailAliasBackend",
+    "core.backends.StaffIdBackend",
 ]
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
-}
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.postgresql',
-#         'NAME': 'legaltrack_db',
-#         'USER': 'your_postgres_user',
-#         'PASSWORD': 'your_password',
-#         'HOST': 'localhost',
-#         'PORT': '5432',
-#     }
-# }
 
+def _database_from_url(database_url: str) -> dict:
+    parsed = urlparse(database_url)
+
+    scheme = (parsed.scheme or "").lower()
+    if scheme in {"postgres", "postgresql", "postgresql+psycopg2"}:
+        engine = "django.db.backends.postgresql"
+    elif scheme in {"sqlite", "sqlite3"}:
+        engine = "django.db.backends.sqlite3"
+    else:
+        raise ValueError(
+            f"Unsupported DATABASE_URL scheme '{parsed.scheme}'. Use postgres/postgresql or sqlite."
+        )
+
+    if engine == "django.db.backends.sqlite3":
+        name = (parsed.path or "").lstrip("/") or "db.sqlite3"
+        return {"ENGINE": engine, "NAME": str(BASE_DIR / name)}
+
+    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    options = {}
+    if "sslmode" in query:
+        options["sslmode"] = query["sslmode"]
+
+    return {
+        "ENGINE": engine,
+        "NAME": (parsed.path or "").lstrip("/") or os.getenv("DB_NAME", "postgres"),
+        "USER": parsed.username or os.getenv("DB_USER", "postgres"),
+        "PASSWORD": parsed.password or os.getenv("DB_PASSWORD", "CHANGE_ME_PASSWORD"),
+        "HOST": parsed.hostname or os.getenv("DB_HOST", "CHANGE_ME_HOST"),
+        "PORT": str(parsed.port or os.getenv("DB_PORT", "5432")),
+        "OPTIONS": options,
+    }
+
+
+LEGALTRACK_DB_PROVIDER = (_env("LEGALTRACK_DB_PROVIDER", "supabase") or "supabase").strip().lower()
+
+# Keep automated tests hermetic and non-interactive.
+if any(arg == "test" or arg.endswith("manage.py test") for arg in sys.argv):
+    LEGALTRACK_DB_PROVIDER = "sqlite"
+
+if LEGALTRACK_DB_PROVIDER not in {"supabase", "sqlite"}:
+    raise ImproperlyConfigured(
+        "LEGALTRACK_DB_PROVIDER must be 'supabase' or 'sqlite'."
+    )
+
+if LEGALTRACK_DB_PROVIDER == "supabase":
+    database_url = (_env("DATABASE_URL") or "").strip()
+    if not database_url:
+        raise ImproperlyConfigured(
+            "DATABASE_URL is required when LEGALTRACK_DB_PROVIDER=supabase."
+        )
+    # Quick resiliency: if the configured DB host cannot be resolved from this
+    # machine (common on disconnected laptops or networks without IPv6),
+    # fall back to a local SQLite DB for development so commands like
+    # `manage.py migrate` / `runserver` remain usable. This only triggers
+    # when running locally (DEBUG mode); production deployments should
+    # provide a valid reachable DATABASE_URL.
+    try:
+        parsed = urlparse(database_url)
+        hostname = parsed.hostname
+    except Exception:
+        hostname = None
+
+    if hostname:
+        try:
+            # Attempt to resolve either A or AAAA records. If resolution
+            # fails (socket.gaierror), assume host is unreachable from
+            # this environment and fallback to sqlite.
+            socket.getaddrinfo(hostname, None)
+        except Exception:
+            import warnings
+            warnings.warn(
+                f"Database host '{hostname}' is not resolvable from this machine; "
+                "falling back to local SQLite for development.",
+                RuntimeWarning,
+            )
+            LEGALTRACK_DB_PROVIDER = "sqlite"
+
+    # Re-check provider in case we fell back
+    if LEGALTRACK_DB_PROVIDER != "supabase":
+        DATABASES = {
+            "default": {
+                "ENGINE": "django.db.backends.sqlite3",
+                "NAME": ":memory:" if ("test" in sys.argv) else (BASE_DIR / "db.sqlite3"),
+            }
+        }
+    else:
+        DATABASES = {"default": _database_from_url(database_url)}
+    
+else:
+    # SQLite is still allowed explicitly (useful for tests/offline dev).
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": ":memory:" if ("test" in sys.argv) else (BASE_DIR / "db.sqlite3"),
+        }
+    }
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 
-AUTH_USER_MODEL = 'core.CustomUser'
+AUTH_USER_MODEL = "core.CustomUser"
 
 AUTH_PASSWORD_VALIDATORS = [
     {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-        'OPTIONS': {'min_length': 12},
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "OPTIONS": {"min_length": 12},
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
     },
     {
-        'NAME': 'core.validators.StrongPasswordComplexityValidator',
+        "NAME": "core.validators.StrongPasswordComplexityValidator",
     },
 ]
 
 # Security (Module 1): prefer Argon2 password hashing
 PASSWORD_HASHERS = [
-    'django.contrib.auth.hashers.Argon2PasswordHasher',
-    'django.contrib.auth.hashers.PBKDF2PasswordHasher',
-    'django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher',
-    'django.contrib.auth.hashers.BCryptSHA256PasswordHasher',
+    "django.contrib.auth.hashers.Argon2PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher",
+    "django.contrib.auth.hashers.BCryptSHA256PasswordHasher",
 ]
 
 # Module 1: password reset tokens should expire within 24 hours
 PASSWORD_RESET_TIMEOUT = 60 * 60 * 24
 
 # Email (dev default): prints emails to the console. Configure SMTP in production.
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-DEFAULT_FROM_EMAIL = 'no-reply@cebu.gov.ph'
+EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+DEFAULT_FROM_EMAIL = "no-reply@cebu.gov.ph"
 
 # Local/dev convenience toggles.
 # - `LEGALTRACK_SEND_EMAILS`: keep emails enabled (console backend in dev).
@@ -153,12 +310,8 @@ LEGALTRACK_ALLOW_GET_LOGOUT = DEBUG
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
-# LANGUAGE_CODE = 'en-us'
-# TIME_ZONE = 'UTC'
-# USE_I18N = True
-# USE_TZ = True
-LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'Asia/Manila'
+LANGUAGE_CODE = "en-us"
+TIME_ZONE = "Asia/Manila"
 USE_I18N = True
 USE_TZ = True
 
@@ -166,17 +319,17 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = "static/"
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-LOGIN_REDIRECT_URL = 'dashboard'
-LOGOUT_REDIRECT_URL = 'login'
+LOGIN_REDIRECT_URL = "dashboard"
+LOGOUT_REDIRECT_URL = "login"
 
 
 # MEDIA
-MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+MEDIA_URL = "/media/"
+MEDIA_ROOT = os.path.join(BASE_DIR, "media")

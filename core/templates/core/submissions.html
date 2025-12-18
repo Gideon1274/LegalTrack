@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Submissions{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="row-between">
+        <div>
+            <h2 class="page-title">Submissions</h2>
+            <p class="page-subtitle">{{ role_display }}</p>
+        </div>
+        <form method="get" class="searchbar m-0">
+            <div class="grow">
+                <label for="id_q">Search</label>
+                <input id="id_q" name="q" value="{{ q }}" placeholder="Tracking ID, client, email..." />
+            </div>
+            <input type="hidden" name="tab" value="{{ tab }}" />
+            <div>
+                <button class="btn btn-primary" type="submit">Search</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="subtabs" role="tablist" aria-label="Status">
+        {% for key,label in tabs %}
+            <a href="?tab={{ key }}{% if q %}&q={{ q|urlencode }}{% endif %}">
+                <span class="{% if tab == key %}active{% endif %}">{{ label }}</span>
+            </a>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="card card--flat">
+    <div class="card__header">
+        <strong>Cases</strong>
+        <span class="muted">{{ page_obj.paginator.count }} total</span>
+    </div>
+    <div class="card__body card__body--flush">
+        {% if page_obj.object_list %}
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th style="width:22%">Tracking No.</th>
+                        <th>Client</th>
+                        <th style="width:16%">Status</th>
+                        <th style="width:22%">Updated</th>
+                        <th style="width:12%">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for case in page_obj.object_list %}
+                        <tr>
+                            <td><strong><a href="{% url 'case_detail' case.tracking_id %}">{{ case.tracking_id }}</a></strong></td>
+                            <td>
+                                {{ case.client_name }}
+                                <div class="muted mt-4 fs-92">Submitted by: {{ case.submitted_by|default:"—" }}</div>
+                            </td>
+                            <td class="muted">{{ case.get_status_display }}</td>
+                            <td class="muted">{{ case.updated_at|date:"M d, Y H:i" }}</td>
+                            <td><a class="btn btn-secondary btn-sm" href="{% url 'case_detail' case.tracking_id %}">Open</a></td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <div class="card__body"><p class="muted" style="margin:0;">No cases found.</p></div>
+        {% endif %}
+    </div>
+
+    {% if page_obj.paginator.num_pages > 1 %}
+        <div class="pagination">
+            {% if page_obj.has_previous %}
+                <a class="pagepill" href="?tab={{ tab }}&q={{ q|urlencode }}&page={{ page_obj.previous_page_number }}">Prev</a>
+            {% endif %}
+            <span class="pagepill active">{{ page_obj.number }}</span>
+            {% if page_obj.has_next %}
+                <a class="pagepill" href="?tab={{ tab }}&q={{ q|urlencode }}&page={{ page_obj.next_page_number }}">Next</a>
+            {% endif %}
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

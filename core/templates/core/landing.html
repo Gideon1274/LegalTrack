@@ -3,11 +3,26 @@
 {% block container_class %}container--narrow{% endblock %}
 
 {% block content %}
-<div class="card" style="text-align:center;">
-    <div class="avatar" style="width:58px; height:58px; margin:0 auto 12px auto;"></div>
-    <h1 class="page-title">Welcome to LegalTrack</h1>
-    <p class="page-subtitle">Use your staff account to log in. (Public tracking portal can be placed here later.)</p>
-    <a class="btn btn-primary" href="{% url 'login' %}">Staff Login</a>
+<div class="card text-center">
+    <div class="avatar avatar--lg" style="margin:0 auto 12px auto;"></div>
+    <h1 class="page-title">LegalTrack</h1>
+    <p class="page-subtitle">Track your request status using your Tracking Number.</p>
+
+    <form method="get" action="{% url 'track_case' %}" class="searchbar searchbar--center mt-14" style="margin:0;">
+        <div class="grow">
+            <label for="id_tracking" class="muted">Tracking Number</label>
+            <input id="id_tracking" name="q" placeholder="e.g., CEB251200001" />
+        </div>
+        <div>
+            <button class="btn btn-primary" type="submit">Track Request</button>
+        </div>
+    </form>
+
+    <div class="mt-14">
+        <a class="link-muted" href="{% url 'support' %}">Need help?</a>
+        <span class="muted">•</span>
+        <a class="link-muted" href="{% url 'login' %}">Staff Login</a>
+    </div>
 </div>
 
 <div class="card">

@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Not Found{% endblock %}
+{% block container_class %}container--narrow{% endblock %}
+
+{% block content %}
+<div class="card" style="text-align:center;">
+    <h1 class="page-title">Request {{ tracking|default:"" }} Not Found</h1>
+    <p class="page-subtitle">We couldn’t find a request matching that Tracking Number.</p>
+    <div style="display:flex; justify-content:center; gap:10px; flex-wrap:wrap;">
+        <a class="btn btn-secondary" href="{% url 'track_case' %}">Try Again</a>
+        <a class="btn btn-secondary" href="{% url 'support' %}">Need Help?</a>
+    </div>
+</div>
+{% endblock %}

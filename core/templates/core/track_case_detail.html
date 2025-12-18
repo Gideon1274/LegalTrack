@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Request {{ tracking }}{% endblock %}
+{% block container_class %}container--narrow{% endblock %}
+
+{% block content %}
+<div class="card" style="text-align:center;">
+    <h1 class="page-title">Request <span style="font-family:monospace;">{{ tracking }}</span> is <strong>{{ public_status }}</strong></h1>
+    <p class="page-subtitle">Last updated: {{ updated_at|date:"M d, Y H:i" }}</p>
+
+    <div style="display:flex; justify-content:center; gap:10px; flex-wrap:wrap;">
+        <a class="btn btn-secondary" href="{% url 'track_case' %}">Search Another</a>
+        <a class="btn btn-secondary" href="#timeline">View Timeline</a>
+    </div>
+</div>
+
+<div id="timeline" class="card card--flat">
+    <div class="card__header">
+        <strong>Case Timeline</strong>
+        <span class="muted">High-level milestones</span>
+    </div>
+    <div class="card__body card__body--flush">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th style="width:30%">Date</th>
+                    <th>Milestone</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for e in timeline %}
+                    <tr>
+                        <td class="muted">{{ e.when|date:"M d, Y H:i" }}</td>
+                        <td>{{ e.label }}</td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="2" class="muted"><em>No timeline events available yet.</em></td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<p class="muted" style="margin:0;">This page shows public status only. Internal remarks and staff details are not displayed.</p>
+{% endblock %}

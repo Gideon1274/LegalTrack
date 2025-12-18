@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}FAQ{% endblock %}
+{% block container_class %}container--narrow{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h1 class="page-title">Frequently Asked Questions (FAQ)</h1>
+    <p class="page-subtitle">Common questions about tracking and submissions.</p>
+
+    {% if items %}
+        <div style="display:flex; flex-direction:column; gap:10px;">
+            {% for item in items %}
+                <details class="card" style="margin:0;">
+                    <summary style="cursor:pointer; font-weight:700;">{{ item.question }}</summary>
+                    <div class="muted" style="margin-top:10px; white-space:pre-wrap;">{{ item.answer }}</div>
+                </details>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="muted" style="margin:0;">No FAQ items published yet.</p>
+    {% endif %}
+
+    <div style="margin-top:14px;">
+        <a class="btn btn-secondary btn-sm" href="{% url 'support' %}">Back</a>
+        <a class="btn btn-secondary btn-sm" href="{% url 'submit_feedback' %}">Contact Support</a>
+    </div>
+</div>
+{% endblock %}

@@ -1,56 +1,146 @@
 from __future__ import annotations
 
+# pyright: reportAttributeAccessIssue=false, reportArgumentType=false, reportIncompatibleVariableOverride=false
+
 import secrets
 import string
-from datetime import timedelta
+from typing import ClassVar
 
 from django.conf import settings
-from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.models import AbstractUser, UserManager
 from django.core.mail import send_mail
 from django.db import models
 from django.utils import timezone
 from django.utils.text import slugify
 
+
+class CustomUserManager(UserManager):
+    def create_user(self, email: str, password: str | None = None, **extra_fields):
+        if not email:
+            raise ValueError("The Email must be set")
+
+        extra_fields.setdefault("role", "lgu_admin")
+        email = self.normalize_email(email)
+
+        # Allow callers to pass `username` (Staff ID) without conflicting with
+        # our default blank username behavior.
+        username = extra_fields.pop("username", "")
+        user = self.model(email=email, username=username, **extra_fields)
+        if password:
+            user.set_password(password)
+        else:
+            user.set_unusable_password()
+        user.save(using=self._db)
+        return user
+
+    def create_superuser(self, email: str, password: str, **extra_fields):
+        extra_fields.setdefault("role", "super_admin")
+        extra_fields.setdefault("is_staff", True)
+        extra_fields.setdefault("is_superuser", True)
+        extra_fields.setdefault("account_status", "active")
+        extra_fields.setdefault("is_active", True)
+
+        if extra_fields.get("is_staff") is not True:
+            raise ValueError("Superuser must have is_staff=True.")
+        if extra_fields.get("is_superuser") is not True:
+            raise ValueError("Superuser must have is_superuser=True.")
+
+        return self.create_user(email=email, password=password, **extra_fields)
+
 class CustomUser(AbstractUser):
     # roles
-    ROLE_CHOICES = [
-        ('super_admin', 'Super Admin'),
-        ('lgu_admin', 'LGU Admin'),
-        ('capitol_receiving', 'Capitol Receiving Staff'),
-        ('capitol_examiner', 'Capitol Examiner'),
-        ('capitol_approver', 'Capitol Approver'),
-        ('capitol_numberer', 'Capitol Numberer'),
-        ('capitol_releaser', 'Capitol Releaser'),
+    ROLE_CHOICES: ClassVar[list[tuple[str, str]]] = [
+        ("super_admin", "Super Admin"),
+        ("lgu_admin", "LGU Admin"),
+        ("capitol_receiving", "Capitol Receiving Staff"),
+        ("capitol_examiner", "Capitol Examiner"),
+        ("capitol_approver", "Capitol Approver"),
+        ("capitol_numberer", "Capitol Numberer"),
+        ("capitol_releaser", "Capitol Releaser"),
     ]
 
     email = models.EmailField(unique=True, blank=False, null=False)
     full_name = models.CharField(max_length=255, blank=True)
     designation = models.CharField(max_length=120, blank=True)
     position = models.CharField(max_length=120, blank=True)
-    # role = models.CharField(max_length=50, choices=ROLE_CHOICES, blank=False, null=False)
     role = models.CharField(max_length=50, choices=ROLE_CHOICES, null=False)
 
     # Module 1.2: force password change on first login for admin-created accounts
     must_change_password = models.BooleanField(default=False)
 
-    ACCOUNT_STATUS_CHOICES = [
-        ('pending', 'Pending Activation'),
-        ('active', 'Active'),
-        ('inactive', 'Inactive'),
+    ACCOUNT_STATUS_CHOICES: ClassVar[list[tuple[str, str]]] = [
+        ("pending", "Pending Activation"),
+        ("active", "Active"),
+        ("inactive", "Inactive"),
     ]
-    account_status = models.CharField(max_length=20, choices=ACCOUNT_STATUS_CHOICES, default='pending')
-    activation_nonce = models.CharField(max_length=64, blank=True, default='')
+
+    LGU_MUNICIPALITY_CHOICES: ClassVar[list[tuple[str, str]]] = [
+        ("Alcantara", "Alcantara"),
+        ("Alcoy", "Alcoy"),
+        ("Alegria", "Alegria"),
+        ("Aloguinsan", "Aloguinsan"),
+        ("Argao", "Argao"),
+        ("Asturias", "Asturias"),
+        ("Badian", "Badian"),
+        ("Balamban", "Balamban"),
+        ("Bantayan", "Bantayan"),
+        ("Barili", "Barili"),
+        ("Boljoon", "Boljoon"),
+        ("Borbon", "Borbon"),
+        ("Carmen", "Carmen"),
+        ("Catmon", "Catmon"),
+        ("Compostela", "Compostela"),
+        ("Consolacion", "Consolacion"),
+        ("Cordova", "Cordova"),
+        ("Daanbantayan", "Daanbantayan"),
+        ("Dalaguete", "Dalaguete"),
+        ("Dumanjug", "Dumanjug"),
+        ("Ginatilan", "Ginatilan"),
+        ("Liloan", "Liloan"),
+        ("Madridejos", "Madridejos"),
+        ("Malabuyoc", "Malabuyoc"),
+        ("Medellin", "Medellin"),
+        ("Minglanilla", "Minglanilla"),
+        ("Moalboal", "Moalboal"),
+        ("Oslob", "Oslob"),
+        ("Pilar (Camotes)", "Pilar (Camotes)"),
+        ("Pinamungajan", "Pinamungajan"),
+        ("Poro (Camotes)", "Poro (Camotes)"),
+        ("Ronda", "Ronda"),
+        ("Samboan", "Samboan"),
+        ("San Fernando", "San Fernando"),
+        ("San Francisco (Camotes)", "San Francisco (Camotes)"),
+        ("San Remigio", "San Remigio"),
+        ("Santa Fe (Bantayan Island)", "Santa Fe (Bantayan Island)"),
+        ("Santander", "Santander"),
+        ("Sibonga", "Sibonga"),
+        ("Sogod", "Sogod"),
+        ("Tabogon", "Tabogon"),
+        ("Tabuelan", "Tabuelan"),
+        ("Tuburan", "Tuburan"),
+        ("Tudela (Camotes)", "Tudela (Camotes)"),
+    ]
+    account_status = models.CharField(max_length=20, choices=ACCOUNT_STATUS_CHOICES, default="pending")
+    activation_nonce = models.CharField(max_length=64, blank=True, default="")
     activation_sent_at = models.DateTimeField(null=True, blank=True)
     activated_at = models.DateTimeField(null=True, blank=True)
     temp_password_created_at = models.DateTimeField(null=True, blank=True)
+
+    lgu_municipality = models.CharField(
+        max_length=64,
+        blank=True,
+        choices=LGU_MUNICIPALITY_CHOICES,
+        default="",
+    )
 
     # Security (Module 1): account lockout after consecutive failed logins
     failed_login_attempts = models.PositiveSmallIntegerField(default=0)
     lockout_until = models.DateTimeField(null=True, blank=True)
     # Use email for login instead of username
-    USERNAME_FIELD = 'email'
-    # REQUIRED_FIELDS = ['username', 'full_name', 'role'] 
-    REQUIRED_FIELDS = [] 
+    USERNAME_FIELD: ClassVar[str] = "email"
+    REQUIRED_FIELDS: ClassVar[list[str]] = []
+
+    objects = CustomUserManager()
 
     def __str__(self):
         return f"{self.full_name} ({self.email}) - {self.get_role_display()}"
@@ -58,29 +148,30 @@ class CustomUser(AbstractUser):
     class Meta:
         verbose_name = "User"
         verbose_name_plural = "Users"
+
     def generate_staff_id(self, role_prefix):
         """Generate Staff ID: 25-CEB-0001"""
         from .models import CustomUser
         prefix_map = {
-            'super_admin': 'ADM',
-            'lgu_admin': 'LGU',
-            'capitol_receiving': 'REC',
-            'capitol_examiner': 'EXM',
-            'capitol_approver': 'APR',
-            'capitol_numberer': 'NUM',
-            'capitol_releaser': 'REL',
+            "super_admin": "ADM",
+            "lgu_admin": "LGU",
+            "capitol_receiving": "REC",
+            "capitol_examiner": "EXM",
+            "capitol_approver": "APR",
+            "capitol_numberer": "NUM",
+            "capitol_releaser": "REL",
         }
-        prefix = prefix_map.get(role_prefix, 'USR')
+        prefix = prefix_map.get(role_prefix, "USR")
         last_user = CustomUser.objects.filter(
             role=role_prefix
-        ).order_by('id').last()
+        ).order_by("id").last()
         seq = (last_user.id + 1) if last_user else 1
         return f"25-{prefix}-{seq:04d}"
 
     def generate_temp_password(self):
         """Generate strong 12-char temp password"""
         alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
-        return ''.join(secrets.choice(alphabet) for _ in range(12))
+        return "".join(secrets.choice(alphabet) for _ in range(12))
 
     def issue_activation(self, *, request, temp_password: str, send_email: bool | None = None) -> str:
         """Issue a 1-hour activation link and record activation metadata.
@@ -94,24 +185,24 @@ class CustomUser(AbstractUser):
         from django.urls import reverse
 
         now = timezone.now()
-        self.account_status = 'pending'
+        self.account_status = "pending"
         self.is_active = False
         self.activation_sent_at = now
         self.activation_nonce = secrets.token_urlsafe(24)
         if not self.temp_password_created_at:
             self.temp_password_created_at = now
-        self.save(update_fields=['account_status', 'is_active', 'activation_sent_at', 'activation_nonce', 'temp_password_created_at'])
+        self.save(update_fields=["account_status", "is_active", "activation_sent_at", "activation_nonce", "temp_password_created_at"])
 
         token = signing.dumps(
-            {'uid': self.pk, 'nonce': self.activation_nonce},
-            salt='core.activate',
+            {"uid": self.pk, "nonce": self.activation_nonce},
+            salt="core.activate",
         )
-        activation_link = request.build_absolute_uri(reverse('activate_account', kwargs={'token': token}))
+        activation_link = request.build_absolute_uri(reverse("activate_account", kwargs={"token": token}))
 
         if send_email is None:
-            send_email = bool(getattr(settings, 'LEGALTRACK_SEND_EMAILS', True))
+            send_email = bool(getattr(settings, "LEGALTRACK_SEND_EMAILS", True))
 
-        subject = 'Activate Your LegalTrack Account'
+        subject = "Activate Your LegalTrack Account"
         message = (
             f"Hello {self.full_name or self.email},\n\n"
             "Your LegalTrack account has been created.\n\n"
@@ -128,7 +219,7 @@ class CustomUser(AbstractUser):
             send_mail(
                 subject,
                 message,
-                getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@cebu.gov.ph'),
+                getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@cebu.gov.ph"),
                 [self.email],
                 fail_silently=False,
             )
@@ -136,30 +227,45 @@ class CustomUser(AbstractUser):
         return activation_link
 
     def save(self, *args, **kwargs):
-        created_by = kwargs.pop('created_by', None)
+        created_by = kwargs.pop("created_by", None)
         is_new = self.pk is None
+
+        temp_password: str | None = None
+
+        # Keep legacy `full_name` populated when first/last are used.
+        if not (self.full_name or "").strip():
+            computed = f"{(self.first_name or '').strip()} {(self.last_name or '').strip()}".strip()
+            if computed:
+                self.full_name = computed
 
         if is_new:
             # Generate Staff ID
             self.username = self.generate_staff_id(self.role)
 
-            # If password was already set by the creator workflow, keep it.
-            # Otherwise, generate a temp password.
-            temp_password = None
-            if not self.password:
-                temp_password = self.generate_temp_password()
-                self.set_password(temp_password)
-                self.must_change_password = True
+            # Superusers (created via `createsuperuser`) should be active immediately.
+            if self.is_superuser:
+                if not self.role:
+                    self.role = "super_admin"
+                self.account_status = "active"
+                self.is_active = True
+                self.must_change_password = False
+            else:
+                # If password was already set by the creator workflow, keep it.
+                # Otherwise, generate a temp password.
+                if not self.password:
+                    temp_password = self.generate_temp_password()
+                    self.set_password(temp_password)
+                    self.must_change_password = True
 
-            # Module 1: new accounts start in Pending Activation
-            self.account_status = 'pending'
-            self.is_active = False
-            self.temp_password_created_at = self.temp_password_created_at or timezone.now()
+                # Module 1: new accounts start in Pending Activation
+                self.account_status = "pending"
+                self.is_active = False
+                self.temp_password_created_at = self.temp_password_created_at or timezone.now()
 
         # Keep is_active consistent with account_status when not pending.
-        if self.account_status == 'active':
+        if self.account_status == "active":
             self.is_active = True
-        elif self.account_status in {'pending', 'inactive'}:
+        elif self.account_status in {"pending", "inactive"}:
             self.is_active = False
 
         super().save(*args, **kwargs)
@@ -167,23 +273,23 @@ class CustomUser(AbstractUser):
         if is_new:
             # Optional: Log password in console for dev
             if settings.DEBUG and temp_password:
-                print(f"\n=== NEW USER CREATED ===")
+                print("\n=== NEW USER CREATED ===")
                 print(f"Email: {self.email}")
                 print(f"Staff ID: {self.username}")
                 print(f"Password: {temp_password}")
-                print(f"Login: http://127.0.0.1:8000/accounts/login/")
+                print("Login: http://127.0.0.1:8000/accounts/login/")
                 print("========================\n")
 
             # Audit log
             AuditLog.objects.create(
                 actor=created_by,
-                action='create_user',
+                action="create_user",
                 target_user=self,
                 target_object=f"User: {self.email}",
                 details={
-                    'staff_id': self.username,
-                    'role': self.get_role_display(),
-                    'account_status': self.account_status,
+                    "staff_id": self.username,
+                    "role": self.get_role_display(),
+                    "account_status": self.account_status,
                 }
             )
 
@@ -196,41 +302,43 @@ class TimestampedModel(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='%(class)s_created'
+        related_name="%(class)s_created"
     )
 
     class Meta:
         abstract = True
 
 class AuditLog(TimestampedModel):
-    ACTION_CHOICES = [
-        ('login', 'User Login'),
-        ('login_failed', 'User Login Failed'),
-        ('logout', 'User Logout'),
-        ('create_user', 'Create User Account'),
-        ('update_user', 'Update User Account'),
-        ('deactivate_user', 'Deactivate User'),
-        ('reactivate_user', 'Reactivate User'),
-        ('reset_password', 'Reset Password'),
-        ('activation_email_sent', 'Activation Email Sent'),
-        ('activate_account', 'Account Activated'),
-        ('password_reset_request', 'Password Reset Requested'),
-        ('password_reset_complete', 'Password Reset Completed'),
-        ('case_create', 'Case Created'),
-        ('case_update', 'Case Updated'),
-        ('case_status_change', 'Case Status Changed'),
-        ('case_receipt', 'Case Physically Received'),
-        ('case_assignment', 'Case Assigned'),
-        ('case_approval', 'Case Approved'),
-        ('case_rejection', 'Case Rejected'),
-        ('case_release', 'Case Released'),
+    ACTION_CHOICES: ClassVar[list[tuple[str, str]]] = [
+        ("login", "User Login"),
+        ("login_failed", "User Login Failed"),
+        ("logout", "User Logout"),
+        ("create_user", "Create User Account"),
+        ("update_user", "Update User Account"),
+        ("deactivate_user", "Deactivate User"),
+        ("reactivate_user", "Reactivate User"),
+        ("reset_password", "Reset Password"),
+        ("activation_email_sent", "Activation Email Sent"),
+        ("activate_account", "Account Activated"),
+        ("password_reset_request", "Password Reset Requested"),
+        ("password_reset_complete", "Password Reset Completed"),
+        ("case_create", "Case Created"),
+        ("case_update", "Case Updated"),
+        ("case_remark", "Case Remark Added"),
+        ("case_status_change", "Case Status Changed"),
+        ("case_receipt", "Case Physically Received"),
+        ("case_assignment", "Case Assigned"),
+        ("case_approval", "Case Approved"),
+        ("case_rejection", "Case Rejected"),
+        ("case_release", "Case Released"),
+        ("support_feedback", "Support Feedback Submitted"),
     ]
 
     actor = models.ForeignKey(
         CustomUser,
         on_delete=models.SET_NULL,
         null=True,
-        related_name='audit_logs'
+        related_name="audit_logs"
     )
     action = models.CharField(max_length=50, choices=ACTION_CHOICES)
     target_user = models.ForeignKey(
@@ -238,7 +346,7 @@ class AuditLog(TimestampedModel):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='target_audit_logs'
+        related_name="target_audit_logs"
     )
     target_object = models.CharField(max_length=255, blank=True, help_text="e.g., Case ID: CEB-2025...")
     details = models.JSONField(default=dict, blank=True, help_text="Extra context in JSON")
@@ -246,11 +354,11 @@ class AuditLog(TimestampedModel):
     user_agent = models.TextField(blank=True)
 
     class Meta:
-        ordering = ['-created_at']
-        indexes = [
-            models.Index(fields=['action']),
-            models.Index(fields=['created_at']),
-            models.Index(fields=['actor']),
+        ordering: ClassVar[list[str]] = ["-created_at"]
+        indexes: ClassVar[list] = [
+            models.Index(fields=["action"]),
+            models.Index(fields=["created_at"]),
+            models.Index(fields=["actor"]),
         ]
         verbose_name = "Audit Log"
         verbose_name_plural = "Audit Logs"
@@ -265,30 +373,30 @@ class PasswordResetRequest(models.Model):
     ip_address = models.GenericIPAddressField(null=True, blank=True)
 
     class Meta:
-        indexes = [
-            models.Index(fields=['email']),
-            models.Index(fields=['requested_at']),
+        indexes: ClassVar[list] = [
+            models.Index(fields=["email"]),
+            models.Index(fields=["requested_at"]),
         ]
-    
-    
+
+
 class Case(TimestampedModel):
     # ---------- Tracking ID ----------
     tracking_id = models.CharField(max_length=30, unique=True, editable=False)
 
     # ---------- Status ----------
-    STATUS_CHOICES = [
-        ('not_received', 'Not Received'),          # LGU created, still editable
-        ('received', 'Received'),                  # Capitol marked receipt
-        ('in_review', 'In Review'),
-        ('for_approval', 'For Approval'),
-        ('approved', 'Approved'),
-        ('for_numbering', 'For Numbering'),
-        ('for_release', 'For Release'),
-        ('released', 'Released'),
-        ('returned', 'Returned for Correction'),
-        ('withdrawn', 'Withdrawn'),
+    STATUS_CHOICES: ClassVar[list[tuple[str, str]]] = [
+        ("not_received", "Not Received"),          # LGU created, still editable
+        ("received", "Received"),                  # Capitol marked receipt
+        ("in_review", "In Review"),
+        ("for_approval", "For Approval"),
+        ("approved", "Approved"),
+        ("for_numbering", "For Numbering"),
+        ("for_release", "For Release"),
+        ("released", "Released"),
+        ("returned", "Returned for Correction"),
+        ("withdrawn", "Withdrawn"),
     ]
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='not_received')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="not_received")
 
     # ---------- Client info ----------
     client_name = models.CharField(max_length=255)
@@ -299,7 +407,7 @@ class Case(TimestampedModel):
         CustomUser,
         on_delete=models.SET_NULL,
         null=True,
-        related_name='submitted_cases'
+        related_name="submitted_cases"
     )
 
     # ---------- Checklist (JSON) ----------
@@ -318,7 +426,7 @@ class Case(TimestampedModel):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='received_cases'
+        related_name="received_cases"
     )
     received_at = models.DateTimeField(null=True, blank=True)
 
@@ -327,7 +435,7 @@ class Case(TimestampedModel):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='returned_cases'
+        related_name="returned_cases"
     )
     returned_at = models.DateTimeField(null=True, blank=True)
     return_reason = models.TextField(blank=True)
@@ -338,19 +446,25 @@ class Case(TimestampedModel):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='assigned_cases'
+        related_name="assigned_cases"
     )
     assigned_at = models.DateTimeField(null=True, blank=True)
 
     released_at = models.DateTimeField(null=True, blank=True)
+    lgu_submitted_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        ordering = ['-created_at']
+        ordering: ClassVar[list[str]] = ["-created_at"]
+        indexes: ClassVar[list] = [
+            models.Index(fields=["status"]),
+            models.Index(fields=["created_at"]),
+            models.Index(fields=["updated_at"]),
+        ]
         verbose_name = "Case"
         verbose_name_plural = "Cases"
 
     def __str__(self):
-        return f"{self.tracking_id} – {self.client_name}"
+        return f"{self.tracking_id} - {self.client_name}"
 
     # ------------------------------------------------------------------
     # Auto-generate tracking_id: CEB[YY][MM][#####]
@@ -359,15 +473,15 @@ class Case(TimestampedModel):
     # ------------------------------------------------------------------
     def generate_tracking_id(self):
         now = timezone.localtime(timezone.now())
-        yy = now.strftime('%y')
-        mm = now.strftime('%m')
+        yy = now.strftime("%y")
+        mm = now.strftime("%m")
 
         year_prefix = f"CEB{yy}"
         full_prefix = f"CEB{yy}{mm}"
 
         existing_ids = Case.objects.filter(
             tracking_id__startswith=year_prefix
-        ).values_list('tracking_id', flat=True)
+        ).values_list("tracking_id", flat=True)
 
         max_seq = 0
         for tid in existing_ids:
@@ -386,29 +500,67 @@ class Case(TimestampedModel):
 
 
 def case_document_upload_to(instance, filename: str) -> str:
-    tracking = getattr(getattr(instance, 'case', None), 'tracking_id', 'unknown')
-    doc_type = slugify(getattr(instance, 'doc_type', '') or 'document')
+    tracking = getattr(getattr(instance, "case", None), "tracking_id", "unknown")
+    doc_type = slugify(getattr(instance, "doc_type", "") or "document")
     return f"cases/{tracking}/{doc_type}/{filename}"
 
 
 class CaseDocument(TimestampedModel):
-    case = models.ForeignKey('Case', on_delete=models.CASCADE, related_name='documents')
+    case = models.ForeignKey("Case", on_delete=models.CASCADE, related_name="documents")
     doc_type = models.CharField(max_length=120)
     file = models.FileField(upload_to=case_document_upload_to)
     uploaded_by = models.ForeignKey(
-        'CustomUser',
+        "CustomUser",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='uploaded_case_documents',
+        related_name="uploaded_case_documents",
     )
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ['-uploaded_at']
-        constraints = [
-            models.UniqueConstraint(fields=['case', 'doc_type'], name='uniq_case_doc_type'),
+        ordering: ClassVar[list[str]] = ["-uploaded_at"]
+        constraints: ClassVar[list] = [
+            models.UniqueConstraint(fields=["case", "doc_type"], name="uniq_case_doc_type"),
         ]
 
     def __str__(self):
-        return f"{self.case.tracking_id} – {self.doc_type}"
+        return f"{self.case.tracking_id} - {self.doc_type}"
+
+
+class CaseRemark(TimestampedModel):
+    case = models.ForeignKey("Case", on_delete=models.CASCADE, related_name="remarks")
+    text = models.TextField()
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ["-created_at"]
+
+    def __str__(self):
+        author = getattr(self.created_by, "email", "") if self.created_by else ""
+        return f"Remark on {self.case.tracking_id} by {author}"
+
+
+class FAQItem(TimestampedModel):
+    question = models.CharField(max_length=255)
+    answer = models.TextField()
+    is_published = models.BooleanField(default=True)
+    sort_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ["sort_order", "id"]
+
+    def __str__(self):
+        return self.question
+
+
+class SupportFeedback(TimestampedModel):
+    name = models.CharField(max_length=120, blank=True)
+    email = models.EmailField(blank=True)
+    message = models.TextField()
+    resolved = models.BooleanField(default=False)
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ["-created_at"]
+
+    def __str__(self):
+        return f"Feedback {self.id} ({'resolved' if self.resolved else 'open'})"

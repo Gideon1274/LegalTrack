@@ -3,35 +3,36 @@
 import django.db.models.deletion
 from django.conf import settings
 from django.db import migrations, models
+from typing import ClassVar
 
 
 class Migration(migrations.Migration):
 
-    dependencies = [
-        ('core', '0003_userprofile'),
+    dependencies: ClassVar[list[tuple[str, str]]] = [
+        ("core", "0003_userprofile"),
     ]
 
-    operations = [
+    operations: ClassVar[list] = [
         migrations.CreateModel(
-            name='Case',
+            name="Case",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('tracking_id', models.CharField(editable=False, max_length=30, unique=True)),
-                ('status', models.CharField(choices=[('not_received', 'Not Received'), ('received', 'Received'), ('in_review', 'In Review'), ('for_approval', 'For Approval'), ('approved', 'Approved'), ('for_numbering', 'For Numbering'), ('for_release', 'For Release'), ('released', 'Released'), ('returned', 'Returned for Correction'), ('withdrawn', 'Withdrawn')], default='not_received', max_length=20)),
-                ('client_name', models.CharField(max_length=255)),
-                ('client_contact', models.CharField(blank=True, max_length=100)),
-                ('checklist', models.JSONField(default=list, help_text="List of dicts: [{'doc_type': 'Land Title', 'required': True, 'uploaded': False}]")),
-                ('received_at', models.DateTimeField(blank=True, null=True)),
-                ('released_at', models.DateTimeField(blank=True, null=True)),
-                ('created_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_created', to=settings.AUTH_USER_MODEL)),
-                ('submitted_by', models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='submitted_cases', to=settings.AUTH_USER_MODEL)),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("tracking_id", models.CharField(editable=False, max_length=30, unique=True)),
+                ("status", models.CharField(choices=[("not_received", "Not Received"), ("received", "Received"), ("in_review", "In Review"), ("for_approval", "For Approval"), ("approved", "Approved"), ("for_numbering", "For Numbering"), ("for_release", "For Release"), ("released", "Released"), ("returned", "Returned for Correction"), ("withdrawn", "Withdrawn")], default="not_received", max_length=20)),
+                ("client_name", models.CharField(max_length=255)),
+                ("client_contact", models.CharField(blank=True, max_length=100)),
+                ("checklist", models.JSONField(default=list, help_text="List of dicts: [{'doc_type': 'Land Title', 'required': True, 'uploaded': False}]")),
+                ("received_at", models.DateTimeField(blank=True, null=True)),
+                ("released_at", models.DateTimeField(blank=True, null=True)),
+                ("created_by", models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name="%(class)s_created", to=settings.AUTH_USER_MODEL)),
+                ("submitted_by", models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name="submitted_cases", to=settings.AUTH_USER_MODEL)),
             ],
             options={
-                'verbose_name': 'Case',
-                'verbose_name_plural': 'Cases',
-                'ordering': ['-created_at'],
+                "verbose_name": "Case",
+                "verbose_name_plural": "Cases",
+                "ordering": ["-created_at"],
             },
         ),
     ]

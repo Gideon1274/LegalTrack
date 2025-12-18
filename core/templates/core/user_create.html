@@ -15,31 +15,36 @@
 
         <div class="form-grid">
             <div>
+                <label for="{{ form.first_name.id_for_label }}">First Name</label>
+                {{ form.first_name }}
+                {{ form.first_name.errors }}
+            </div>
+            <div>
+                <label for="{{ form.last_name.id_for_label }}">Last Name</label>
+                {{ form.last_name }}
+                {{ form.last_name.errors }}
+            </div>
+
+            <div>
                 <label for="{{ form.email.id_for_label }}">Email</label>
                 {{ form.email }}
                 {{ form.email.errors }}
             </div>
             <div>
-                <label for="{{ form.full_name.id_for_label }}">Full Name</label>
-                {{ form.full_name }}
-                {{ form.full_name.errors }}
+                <label for="{{ form.account_type.id_for_label }}">Role</label>
+                {{ form.account_type }}
+                {{ form.account_type.errors }}
             </div>
 
-            <div>
-                <label for="{{ form.role.id_for_label }}">Role</label>
-                {{ form.role }}
-                {{ form.role.errors }}
+            <div id="capitol-fields" class="span-2">
+                <label for="{{ form.capitol_role.id_for_label }}">Capitol Position</label>
+                {{ form.capitol_role }}
+                {{ form.capitol_role.errors }}
             </div>
-            <div>
-                <label for="{{ form.designation.id_for_label }}">Designation</label>
-                {{ form.designation }}
-                {{ form.designation.errors }}
-            </div>
-
-            <div class="span-2">
-                <label for="{{ form.position.id_for_label }}">Position</label>
-                {{ form.position }}
-                {{ form.position.errors }}
+            <div id="lgu-fields" class="span-2" style="display:none;">
+                <label for="{{ form.lgu_municipality.id_for_label }}">LGU Municipality</label>
+                {{ form.lgu_municipality }}
+                {{ form.lgu_municipality.errors }}
             </div>
         </div>
 
@@ -49,6 +54,28 @@
         </div>
     </form>
 </div>
+
+<script>
+    (function () {
+        var roleSelect = document.getElementById("{{ form.account_type.id_for_label }}");
+        var capitol = document.getElementById("capitol-fields");
+        var lgu = document.getElementById("lgu-fields");
+        function sync() {
+            var v = roleSelect ? roleSelect.value : "capitol";
+            if (v === "lgu") {
+                if (capitol) capitol.style.display = "none";
+                if (lgu) lgu.style.display = "block";
+            } else {
+                if (capitol) capitol.style.display = "block";
+                if (lgu) lgu.style.display = "none";
+            }
+        }
+        if (roleSelect) {
+            roleSelect.addEventListener("change", sync);
+            sync();
+        }
+    })();
+</script>
 
 <div class="card">
     <p><strong>Account Status:</strong> New accounts are created as <strong>Pending Activation</strong> (cannot log in yet).</p>
