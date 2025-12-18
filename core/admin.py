@@ -1,7 +1,7 @@
 from typing import ClassVar
 
 from django.contrib import admin
-from .models import AuditLog, Case, CaseDocument, CustomUser
+from .models import AuditLog, Case, CaseDocument, CustomUser, FAQItem, SupportFeedback
 from django import forms
 
 class CustomUserCreationForm(forms.ModelForm):
@@ -122,4 +122,20 @@ class CaseAdmin(admin.ModelAdmin):
         "assigned_to",
         "assigned_at",
     )
+
+
+@admin.register(FAQItem)
+class FAQItemAdmin(admin.ModelAdmin):
+    list_display = ("question", "is_published", "sort_order", "created_at")
+    list_filter = ("is_published",)
+    search_fields = ("question", "answer")
+    ordering = ("sort_order", "id")
+
+
+@admin.register(SupportFeedback)
+class SupportFeedbackAdmin(admin.ModelAdmin):
+    list_display = ("id", "name", "email", "resolved", "created_at")
+    list_filter = ("resolved", "created_at")
+    search_fields = ("name", "email", "message")
+    readonly_fields = ("created_at", "updated_at", "created_by")
 

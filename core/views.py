@@ -11,6 +11,7 @@ from django.contrib.auth.forms import SetPasswordForm
 from django.conf import settings
 from django import forms
 from django.core.paginator import Paginator
+from django.db import models
 from django.db.models import Q, Count
 from django.utils import timezone
 from django.views.decorators.http import require_POST
@@ -22,17 +23,311 @@ from .forms import (
     CaseDetailsForm,
     CaseRemarkForm,
     ChecklistItemForm,
+    PublicCaseSearchForm,
+    ReportFilterForm,
     StaffAccountCreateForm,
     StaffAccountUpdateForm,
     StaffSearchForm,
+    SupportFeedbackForm,
 )
-from .models import AuditLog, Case, CaseDocument, CaseRemark, CustomUser
+from .models import AuditLog, Case, CaseDocument, CaseRemark, CustomUser, FAQItem, SupportFeedback
 
 
 def landing(request):
     if request.user.is_authenticated:
         return redirect("dashboard")
     return render(request, "core/landing.html")
+
+
+def _public_status_label(case: Case) -> str:
+    # Module 4: Simplified, public-friendly status labels.
+    status = getattr(case, "status", "")
+    mapping = {
+        "not_received": "Pending",
+        "received": "Received",
+        "in_review": "Under Review",
+        "for_approval": "For Approval",
+        "approved": "Approved",
+        "for_numbering": "For Numbering",
+        "for_release": "For Release",
+        "released": "Released",
+        "returned": "Returned for Correction",
+        "withdrawn": "Withdrawn",
+    }
+    return mapping.get(status, "In Progress")
+
+
+def _build_public_timeline(case: Case) -> list[dict[str, object]]:
+    """Public timeline (no internal remarks / no actor identities)."""
+    events: list[dict[str, object]] = []
+
+    def add(label: str, when):
+        if when:
+            events.append({"label": label, "when": when})
+
+    add("Request Created", case.created_at)
+    add("Physically Received", case.received_at)
+    add("Assigned for Review", case.assigned_at)
+
+    # Key transitions from audit logs (exclude remarks and anything sensitive)
+    history_qs = (
+        AuditLog.objects.filter(target_object=f"Case: {case.tracking_id}")
+        .order_by("created_at")
+        .only("action", "created_at", "details")
+    )
+
+    for h in history_qs:
+        action = getattr(h, "action", "")
+        if action in {"case_remark", "login", "login_failed", "logout", "create_user", "update_user"}:
+            continue
+
+        # Prefer status transitions; keep labels public-friendly.
+        if action in {"case_status_change", "case_approval", "case_rejection", "case_release"}:
+            details = getattr(h, "details", {}) or {}
+            new_status = None
+            if isinstance(details, dict):
+                new_status = details.get("new_status")
+            if new_status:
+                label = _public_status_label(type("obj", (), {"status": new_status})())  # tiny adapter
+                add(f"Status: {label}", h.created_at)
+            else:
+                add("Status Updated", h.created_at)
+        elif action == "case_receipt":
+            add("Physically Received", h.created_at)
+        elif action == "case_assignment":
+            add("Assigned for Review", h.created_at)
+        elif action == "case_create":
+            add("Request Created", h.created_at)
+
+    # De-dup by (label, when)
+    seen = set()
+    uniq = []
+    for e in events:
+        key = (e["label"], getattr(e["when"], "isoformat", lambda: str(e["when"]))())
+        if key in seen:
+            continue
+        seen.add(key)
+        uniq.append(e)
+    return uniq
+
+
+def track_case(request):
+    """Module 4.1: Public entry to search by tracking number."""
+    form = PublicCaseSearchForm(request.GET or None)
+    tracking = ""
+    if form.is_valid():
+        tracking = form.cleaned_data["q"]
+        case = Case.objects.filter(tracking_id__iexact=tracking).first()
+        if case:
+            return redirect("track_case_detail", tracking_id=case.tracking_id)
+        return render(request, "core/track_not_found.html", {"tracking": tracking, "form": form}, status=404)
+
+    return render(request, "core/track.html", {"form": form, "tracking": tracking})
+
+
+def track_case_detail(request, tracking_id: str):
+    """Module 4.1: Public view of case status summary + timeline."""
+    tracking = (tracking_id or "").strip().upper()
+    case = Case.objects.filter(tracking_id__iexact=tracking).first()
+    if not case:
+        return render(request, "core/track_not_found.html", {"tracking": tracking}, status=404)
+
+    public_status = _public_status_label(case)
+    timeline = _build_public_timeline(case)
+
+    # Public info: do NOT expose submitter identity, remarks, or documents.
+    return render(request, "core/track_case_detail.html", {
+        "tracking": case.tracking_id,
+        "public_status": public_status,
+        "updated_at": case.updated_at,
+        "timeline": timeline,
+    })
+
+
+def support(request):
+    """Module 4.2: Public support landing page."""
+    return render(request, "core/support.html")
+
+
+def faq(request):
+    items = FAQItem.objects.filter(is_published=True).order_by("sort_order", "id")
+    return render(request, "core/faq.html", {"items": list(items)})
+
+
+def submit_feedback(request):
+    if request.method == "POST":
+        form = SupportFeedbackForm(request.POST)
+        if form.is_valid():
+            fb = SupportFeedback.objects.create(
+                name=(form.cleaned_data.get("name") or "").strip(),
+                email=(form.cleaned_data.get("email") or "").strip(),
+                message=form.cleaned_data["message"],
+            )
+            AuditLog.objects.create(
+                actor=None,
+                action="support_feedback",
+                target_object=f"SupportFeedback: {fb.id}",
+                details={"public": True},
+            )
+            messages.success(request, "Thanks! Your message has been sent.")
+            return redirect("support")
+    else:
+        form = SupportFeedbackForm()
+    return render(request, "core/feedback.html", {"form": form})
+
+
+@login_required
+def analytics_dashboard(request):
+    denial = _require_super_admin(request)
+    if denial:
+        return denial
+
+    # Module 5.1: High-level metrics
+    total_cases = Case.objects.count()
+    total_users = CustomUser.objects.count()
+
+    by_status_raw = list(
+        Case.objects.values("status").annotate(count=Count("id")).order_by("status")
+    )
+    status_labels = dict(Case.STATUS_CHOICES)
+    by_status = [
+        {"status": status_labels.get(r["status"], r["status"]), "count": r["count"]}
+        for r in by_status_raw
+    ]
+
+    released = Case.objects.filter(status="released", released_at__isnull=False)
+    avg_days = None
+    if released.exists():
+        # Average processing time (created -> released) in days.
+        from django.db.models import Avg, ExpressionWrapper, DurationField
+
+        avg_delta = released.annotate(
+            delta=ExpressionWrapper(
+                (models.F("released_at") - models.F("created_at")),
+                output_field=DurationField(),
+            )
+        ).aggregate(avg=Avg("delta"))
+        if avg_delta.get("avg"):
+            avg_days = avg_delta["avg"].total_seconds() / 86400
+
+    return render(request, "core/analytics.html", {
+        "role_display": request.user.get_role_display(),
+        "total_cases": total_cases,
+        "total_users": total_users,
+        "by_status": by_status,
+        "avg_days": avg_days,
+    })
+
+
+@login_required
+def reports(request):
+    denial = _require_super_admin(request)
+    if denial:
+        return denial
+
+    form = ReportFilterForm(request.GET or None)
+    rows = []
+    title = "Reports"
+
+    if form.is_valid():
+        report_type = form.cleaned_data["report_type"]
+        date_from = form.cleaned_data.get("date_from")
+        date_to = form.cleaned_data.get("date_to")
+        status = (form.cleaned_data.get("status") or "").strip()
+        sort = (form.cleaned_data.get("sort") or "-created_at").strip()
+
+        qs = Case.objects.all()
+        if status:
+            qs = qs.filter(status=status)
+        if date_from:
+            qs = qs.filter(created_at__date__gte=date_from)
+        if date_to:
+            qs = qs.filter(created_at__date__lte=date_to)
+        qs = qs.order_by(sort)
+
+        if report_type == "status_breakdown":
+            title = "Status Breakdown"
+            status_labels = dict(Case.STATUS_CHOICES)
+            raw = list(qs.values("status").annotate(count=Count("id")).order_by("status"))
+            rows = [{"status": status_labels.get(r["status"], r["status"]), "count": r["count"]} for r in raw]
+        elif report_type == "monthly_accomplishment":
+            title = "Monthly Accomplishment"
+            # Group by month of created_at
+            from django.db.models.functions import TruncMonth
+
+            rows = list(
+                qs.annotate(month=TruncMonth("created_at"))
+                .values("month")
+                .annotate(total=Count("id"))
+                .order_by("month")
+            )
+        else:
+            title = "Processing Times"
+            # Show released cases with processing time.
+            released = qs.filter(status="released", released_at__isnull=False)
+            rows = list(
+                released.values("tracking_id", "created_at", "released_at")
+            )
+
+    return render(request, "core/reports.html", {
+        "role_display": request.user.get_role_display(),
+        "form": form,
+        "title": title,
+        "rows": rows,
+    })
+
+
+@login_required
+def export_reports_csv(request):
+    denial = _require_super_admin(request)
+    if denial:
+        return denial
+
+    form = ReportFilterForm(request.GET or None)
+    if not form.is_valid():
+        messages.error(request, "Invalid report parameters.")
+        return redirect("reports")
+
+    report_type = form.cleaned_data["report_type"]
+    date_from = form.cleaned_data.get("date_from")
+    date_to = form.cleaned_data.get("date_to")
+    status = (form.cleaned_data.get("status") or "").strip()
+
+    qs = Case.objects.all()
+    if status:
+        qs = qs.filter(status=status)
+    if date_from:
+        qs = qs.filter(created_at__date__gte=date_from)
+    if date_to:
+        qs = qs.filter(created_at__date__lte=date_to)
+
+    import csv
+
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = 'attachment; filename="report.csv"'
+    writer = csv.writer(response)
+
+    if report_type == "status_breakdown":
+        writer.writerow(["status", "count"])
+        for r in qs.values("status").annotate(count=Count("id")).order_by("status"):
+            writer.writerow([dict(Case.STATUS_CHOICES).get(r["status"], r["status"]), r["count"]])
+        return response
+
+    if report_type == "monthly_accomplishment":
+        from django.db.models.functions import TruncMonth
+
+        writer.writerow(["month", "total"])
+        for r in qs.annotate(month=TruncMonth("created_at")).values("month").annotate(total=Count("id")).order_by("month"):
+            writer.writerow([r["month"].date().isoformat() if r["month"] else "", r["total"]])
+        return response
+
+    # processing_times
+    writer.writerow(["tracking_id", "created_at", "released_at", "days"])
+    for c in qs.filter(status="released", released_at__isnull=False).order_by("created_at"):
+        delta = (c.released_at - c.created_at) if c.released_at and c.created_at else None
+        days = round(delta.total_seconds() / 86400, 2) if delta else ""
+        writer.writerow([c.tracking_id, c.created_at.isoformat(), c.released_at.isoformat(), days])
+    return response
 
 
 def _require_super_admin(request):

@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Support{% endblock %}
+{% block container_class %}container--narrow{% endblock %}
+
+{% block content %}
+<div class="card" style="text-align:center;">
+    <h1 class="page-title">How can we help?</h1>
+    <p class="page-subtitle">Find answers, contact support, or send feedback.</p>
+
+    <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:14px;">
+        <a class="btn btn-secondary" href="{% url 'faq' %}">FAQ</a>
+        <a class="btn btn-secondary" href="{% url 'submit_feedback' %}">Contact Support</a>
+        <a class="btn btn-primary" href="{% url 'submit_feedback' %}">Feedback</a>
+    </div>
+
+    <div class="muted" style="margin-top:14px;">
+        You can also track a case from the home page.
+    </div>
+</div>
+{% endblock %}

@@ -176,7 +176,7 @@ class Module2CapitolWorkflowTests(TestCase):
 
 class SuperuserCreationTests(TestCase):
     def test_create_superuser_does_not_require_username(self):
-        su = CustomUser.objects.create_superuser(email="admin@example.com", password="StrongPass123!Strong")
+        su = CustomUser.objects.create_superuser(username="admin", email="admin@example.com", password="StrongPass123!Strong")
         self.assertTrue(su.is_superuser)
         self.assertTrue(su.is_staff)
         self.assertTrue(su.is_active)

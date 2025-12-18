@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Reports{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:12px; flex-wrap:wrap;">
+        <div>
+            <h2 class="page-title">Reports</h2>
+            <p class="page-subtitle">{{ role_display }}</p>
+        </div>
+        <div style="display:flex; gap:10px;">
+            <a class="btn btn-secondary" href="{% url 'analytics_dashboard' %}">Analytics</a>
+        </div>
+    </div>
+
+    <form method="get" class="form-grid" style="margin-top:12px;">
+        <div>
+            {{ form.report_type.label_tag }}
+            {{ form.report_type }}
+        </div>
+        <div>
+            {{ form.status.label_tag }}
+            {{ form.status }}
+        </div>
+        <div>
+            {{ form.date_from.label_tag }}
+            {{ form.date_from }}
+        </div>
+        <div>
+            {{ form.date_to.label_tag }}
+            {{ form.date_to }}
+        </div>
+        <div class="span-2" style="display:flex; justify-content:flex-end; gap:10px; align-items:flex-end;">
+            <div style="min-width:220px;">
+                {{ form.sort.label_tag }}
+                {{ form.sort }}
+            </div>
+            <button class="btn btn-primary" type="submit">Generate</button>
+        </div>
+    </form>
+
+    {% if form.is_bound and not form.is_valid %}
+        <div class="msg error" style="margin-top:12px;">Invalid report parameters.</div>
+    {% endif %}
+</div>
+
+<div class="card card--flat">
+    <div class="card__header">
+        <strong>{{ title }}</strong>
+        {% if form.is_valid %}
+            <a class="btn btn-secondary btn-sm" href="{% url 'export_reports_csv' %}?{{ request.GET.urlencode }}">Export CSV</a>
+        {% endif %}
+    </div>
+    <div class="card__body card__body--flush">
+        {% if rows %}
+            <table class="table">
+                <thead>
+                    {% if title == 'Status Breakdown' %}
+                        <tr><th>Status</th><th style="width:18%">Count</th></tr>
+                    {% elif title == 'Monthly Accomplishment' %}
+                        <tr><th>Month</th><th style="width:18%">Total</th></tr>
+                    {% else %}
+                        <tr><th style="width:22%">Tracking No.</th><th style="width:26%">Created</th><th style="width:26%">Released</th><th>Days</th></tr>
+                    {% endif %}
+                </thead>
+                <tbody>
+                    {% for r in rows %}
+                        {% if title == 'Status Breakdown' %}
+                            <tr><td>{{ r.status }}</td><td class="muted">{{ r.count }}</td></tr>
+                        {% elif title == 'Monthly Accomplishment' %}
+                            <tr><td class="muted">{{ r.month|date:"Y-m" }}</td><td class="muted">{{ r.total }}</td></tr>
+                        {% else %}
+                            <tr>
+                                <td><strong><a href="{% url 'case_detail' r.tracking_id %}">{{ r.tracking_id }}</a></strong></td>
+                                <td class="muted">{{ r.created_at|date:"M d, Y H:i" }}</td>
+                                <td class="muted">{{ r.released_at|date:"M d, Y H:i" }}</td>
+                                <td class="muted">
+                                    {% if r.released_at %}
+                                        {{ r.released_at|timesince:r.created_at }}
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <div class="card__body"><p class="muted" style="margin:0;">No report data yet. Choose parameters and click Generate.</p></div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

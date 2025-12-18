@@ -13,7 +13,7 @@
             <strong>Pending Requests</strong>
             <span class="muted">Not Received / Returned</span>
         </div>
-        <div class="card__body" style="padding:0;">
+        <div class="card__body card__body--flush">
             {% if pending_cases %}
                 <table class="table">
                     <thead>
@@ -48,7 +48,7 @@
             <strong>Received</strong>
             <span class="muted">Unassigned</span>
         </div>
-        <div class="card__body" style="padding:0;">
+        <div class="card__body card__body--flush">
             {% if received_unassigned %}
                 <table class="table">
                     <thead>
@@ -83,7 +83,7 @@
         <div class="card__header">
             <strong>My Assigned Cases</strong>
         </div>
-        <div class="card__body" style="padding:0;">
+        <div class="card__body card__body--flush">
             {% if my_cases %}
                 <table class="table">
                     <thead>
@@ -117,7 +117,7 @@
         <div class="card__header">
             <strong>For Approval</strong>
         </div>
-        <div class="card__body" style="padding:0;">
+        <div class="card__body card__body--flush">
             {% if queue_cases %}
                 <table class="table">
                     <thead>
@@ -152,7 +152,7 @@
         <div class="card__header">
             <strong>For Numbering</strong>
         </div>
-        <div class="card__body" style="padding:0;">
+        <div class="card__body card__body--flush">
             {% if queue_cases %}
                 <table class="table">
                     <thead>
@@ -187,7 +187,7 @@
         <div class="card__header">
             <strong>For Release</strong>
         </div>
-        <div class="card__body" style="padding:0;">
+        <div class="card__body card__body--flush">
             {% if queue_cases %}
                 <table class="table">
                     <thead>

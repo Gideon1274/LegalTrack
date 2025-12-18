@@ -6,7 +6,7 @@
     <h2 class="page-title">Case {{ case.tracking_id }}</h2>
     <p class="page-subtitle">Status: <strong>{{ case.get_status_display }}</strong></p>
 
-    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+    <div class="row">
         <a class="btn btn-secondary btn-sm" href="{% url 'dashboard' %}">Back</a>
         {% if user.is_authenticated and user.role|slice:":8" == 'capitol_' %}
             <a class="btn btn-secondary btn-sm" href="{% url 'submissions' %}">Submissions</a>
@@ -21,7 +21,7 @@
     <div class="card__header">
         <strong>Case Information</strong>
     </div>
-    <div class="card__body" style="padding:0;">
+    <div class="card__body card__body--flush">
         <table class="table">
             <tbody>
                 <tr><td style="width:22%" class="muted"><strong>Client</strong></td><td>{{ case.client_name }}</td></tr>
@@ -39,18 +39,10 @@
     </div>
 </div>
 
-{% if case.received_at %}
-    <p><strong>Received:</strong> {{ case.received_at|date:"M d, Y H:i" }}{% if case.received_by %} (by {{ case.received_by.full_name }}){% endif %}</p>
-{% endif %}
-
-{% if case.assigned_to %}
-    <p><strong>Assigned to:</strong> {{ case.assigned_to.full_name }}{% if case.assigned_at %} ({{ case.assigned_at|date:"M d, Y H:i" }}){% endif %}</p>
-{% endif %}
-
 {% if case.status == 'returned' and case.return_reason %}
     <div class="card">
-        <h3 style="margin:0 0 8px 0;">Returned for Correction</h3>
-        <p style="margin:0;"><strong>Reason:</strong> {{ case.return_reason }}</p>
+        <h3 class="m-0" style="margin-bottom:8px;">Returned for Correction</h3>
+        <p class="m-0"><strong>Reason:</strong> {{ case.return_reason }}</p>
         {% if case.returned_at %}
             <p class="muted" style="margin:8px 0 0 0;">Returned: {{ case.returned_at|date:"M d, Y H:i" }}</p>
         {% endif %}
@@ -61,7 +53,7 @@
     <div class="card__header">
         <strong>Document Checklist</strong>
     </div>
-    <div class="card__body" style="padding:0;">
+    <div class="card__body card__body--flush">
         <table class="table">
             <thead>
                 <tr>
@@ -90,7 +82,7 @@
         <div class="card__header">
             <strong>Uploaded Documents</strong>
         </div>
-        <div class="card__body" style="padding:0;">
+        <div class="card__body card__body--flush">
             <table class="table">
                 <thead>
                     <tr>
@@ -198,35 +190,7 @@
     </div>
 {% endif %}
 
-{% if history %}
-    <div class="card card--flat">
-        <div class="card__header">
-            <strong>Case History</strong>
-        </div>
-        <div class="card__body" style="padding:0;">
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th style="width:22%">When</th>
-                        <th style="width:22%">Action</th>
-                        <th style="width:22%">By</th>
-                        <th>Details</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for h in history %}
-                        <tr>
-                            <td class="muted">{{ h.created_at|date:"M d, Y H:i" }}</td>
-                            <td>{{ h.get_action_display }}</td>
-                            <td class="muted">{{ h.actor|default:"—" }}</td>
-                            <td class="muted">{{ h.details_display|default:"—"|linebreaksbr }}</td>
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-{% endif %}
+{# Case history moved to the bottom so action controls appear above it #}
 
 {% if can_submit_for_approval %}
     <form method="post" action="{% url 'submit_for_approval' case.tracking_id %}" class="card">
@@ -287,5 +251,35 @@
             <button class="btn btn-primary" type="submit">Release</button>
         </div>
     </form>
+{% endif %}
+
+{% if history %}
+    <div class="card card--flat">
+        <div class="card__header">
+            <strong>Case History</strong>
+        </div>
+        <div class="card__body" style="padding:0;">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th style="width:22%">When</th>
+                        <th style="width:22%">Action</th>
+                        <th style="width:22%">By</th>
+                        <th>Details</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for h in history %}
+                        <tr>
+                            <td class="muted">{{ h.created_at|date:"M d, Y H:i" }}</td>
+                            <td>{{ h.get_action_display }}</td>
+                            <td class="muted">{{ h.actor|default:"—" }}</td>
+                            <td class="muted">{{ h.details_display|default:"—"|linebreaksbr }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
 {% endif %}
 {% endblock %}

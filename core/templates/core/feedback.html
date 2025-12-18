@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Contact Support{% endblock %}
+{% block container_class %}container--narrow{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h1 class="page-title">Contact Support</h1>
+    <p class="page-subtitle">Send a message to the LegalTrack support team.</p>
+
+    <form method="post" action="{% url 'submit_feedback' %}">
+        {% csrf_token %}
+        <div class="form-grid">
+            <div>
+                <label for="id_name">Name (optional)</label>
+                <input id="id_name" name="name" value="{{ form.data.name|default:'' }}" />
+            </div>
+            <div>
+                <label for="id_email">Email (optional)</label>
+                <input id="id_email" name="email" value="{{ form.data.email|default:'' }}" />
+            </div>
+            <div class="span-2">
+                {{ form.message.label_tag }}
+                {{ form.message }}
+                {% if form.message.errors %}
+                    <div class="msg error" style="margin-top:10px;">{{ form.message.errors|striptags }}</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:12px;">
+            <a class="btn btn-secondary" href="{% url 'support' %}">Cancel</a>
+            <button class="btn btn-primary" type="submit">Send</button>
+        </div>
+    </form>
+
+    <p class="muted" style="margin:14px 0 0 0;">Note: Do not include passwords or sensitive information.</p>
+</div>
+{% endblock %}

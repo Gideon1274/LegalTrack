@@ -3,12 +3,12 @@
 
 {% block content %}
 <div class="card">
-    <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:12px; flex-wrap:wrap;">
+    <div class="row-between">
         <div>
             <h2 class="page-title">Submissions</h2>
             <p class="page-subtitle">{{ role_display }}</p>
         </div>
-        <form method="get" class="searchbar" style="margin:0;">
+        <form method="get" class="searchbar m-0">
             <div class="grow">
                 <label for="id_q">Search</label>
                 <input id="id_q" name="q" value="{{ q }}" placeholder="Tracking ID, client, email..." />
@@ -22,7 +22,7 @@
 
     <div class="subtabs" role="tablist" aria-label="Status">
         {% for key,label in tabs %}
-            <a href="?tab={{ key }}{% if q %}&q={{ q|urlencode }}{% endif %}" style="text-decoration:none;">
+            <a href="?tab={{ key }}{% if q %}&q={{ q|urlencode }}{% endif %}">
                 <span class="{% if tab == key %}active{% endif %}">{{ label }}</span>
             </a>
         {% endfor %}
@@ -34,7 +34,7 @@
         <strong>Cases</strong>
         <span class="muted">{{ page_obj.paginator.count }} total</span>
     </div>
-    <div class="card__body" style="padding:0;">
+    <div class="card__body card__body--flush">
         {% if page_obj.object_list %}
             <table class="table">
                 <thead>
@@ -52,7 +52,7 @@
                             <td><strong><a href="{% url 'case_detail' case.tracking_id %}">{{ case.tracking_id }}</a></strong></td>
                             <td>
                                 {{ case.client_name }}
-                                <div class="muted" style="margin-top:4px; font-size:0.92rem;">Submitted by: {{ case.submitted_by|default:"—" }}</div>
+                                <div class="muted mt-4 fs-92">Submitted by: {{ case.submitted_by|default:"—" }}</div>
                             </td>
                             <td class="muted">{{ case.get_status_display }}</td>
                             <td class="muted">{{ case.updated_at|date:"M d, Y H:i" }}</td>

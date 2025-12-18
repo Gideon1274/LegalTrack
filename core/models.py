@@ -22,7 +22,10 @@ class CustomUserManager(UserManager):
         extra_fields.setdefault("role", "lgu_admin")
         email = self.normalize_email(email)
 
-        user = self.model(email=email, username="", **extra_fields)
+        # Allow callers to pass `username` (Staff ID) without conflicting with
+        # our default blank username behavior.
+        username = extra_fields.pop("username", "")
+        user = self.model(email=email, username=username, **extra_fields)
         if password:
             user.set_password(password)
         else:
@@ -328,6 +331,7 @@ class AuditLog(TimestampedModel):
         ("case_approval", "Case Approved"),
         ("case_rejection", "Case Rejected"),
         ("case_release", "Case Released"),
+        ("support_feedback", "Support Feedback Submitted"),
     ]
 
     actor = models.ForeignKey(
@@ -451,6 +455,11 @@ class Case(TimestampedModel):
 
     class Meta:
         ordering: ClassVar[list[str]] = ["-created_at"]
+        indexes: ClassVar[list] = [
+            models.Index(fields=["status"]),
+            models.Index(fields=["created_at"]),
+            models.Index(fields=["updated_at"]),
+        ]
         verbose_name = "Case"
         verbose_name_plural = "Cases"
 
@@ -529,3 +538,29 @@ class CaseRemark(TimestampedModel):
     def __str__(self):
         author = getattr(self.created_by, "email", "") if self.created_by else ""
         return f"Remark on {self.case.tracking_id} by {author}"
+
+
+class FAQItem(TimestampedModel):
+    question = models.CharField(max_length=255)
+    answer = models.TextField()
+    is_published = models.BooleanField(default=True)
+    sort_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ["sort_order", "id"]
+
+    def __str__(self):
+        return self.question
+
+
+class SupportFeedback(TimestampedModel):
+    name = models.CharField(max_length=120, blank=True)
+    email = models.EmailField(blank=True)
+    message = models.TextField()
+    resolved = models.BooleanField(default=False)
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ["-created_at"]
+
+    def __str__(self):
+        return f"Feedback {self.id} ({'resolved' if self.resolved else 'open'})"

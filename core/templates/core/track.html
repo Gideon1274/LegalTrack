@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Track Request{% endblock %}
+{% block container_class %}container--narrow{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h1 class="page-title">Track Request</h1>
+    <p class="page-subtitle">Enter your Tracking Number to view the current status and timeline.</p>
+
+    <form method="get" action="{% url 'track_case' %}" class="searchbar" style="margin:0;">
+        <div class="grow">
+            {{ form.q.label_tag }}
+            {{ form.q }}
+            {% if form.q.errors %}
+                <div class="msg error" style="margin-top:10px;">{{ form.q.errors|striptags }}</div>
+            {% endif %}
+        </div>
+        <div>
+            <button class="btn btn-primary" type="submit">Search</button>
+        </div>
+    </form>
+
+    <div style="margin-top:14px;">
+        <a class="link-muted" href="{% url 'support' %}">Support</a>
+        <span class="muted">•</span>
+        <a class="link-muted" href="{% url 'landing' %}">Back to Home</a>
+    </div>
+</div>
+{% endblock %}

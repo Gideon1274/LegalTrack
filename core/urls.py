@@ -4,8 +4,18 @@ from . import views
 
 urlpatterns = [
     path("", views.landing, name="landing"),
+    # Module 4 (Public)
+    path("track/", views.track_case, name="track_case"),
+    path("track/<str:tracking_id>/", views.track_case_detail, name="track_case_detail"),
+    path("support/", views.support, name="support"),
+    path("support/faq/", views.faq, name="faq"),
+    path("support/feedback/", views.submit_feedback, name="submit_feedback"),
     path("dashboard/", views.dashboard, name="dashboard"),
     path("submissions/", views.submissions, name="submissions"),
+    # Module 5 (Super Admin)
+    path("analytics/", views.analytics_dashboard, name="analytics_dashboard"),
+    path("reports/", views.reports, name="reports"),
+    path("reports/export.csv", views.export_reports_csv, name="export_reports_csv"),
     path("users/", views.user_management, name="user_management"),
     path("users/new/", views.create_staff_account, name="create_staff_account"),
     path("users/<int:user_id>/edit/", views.edit_staff_account, name="edit_staff_account"),

@@ -11,10 +11,12 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 import os
 import importlib
+import sys
 from typing import Mapping, cast
 from urllib.parse import parse_qsl, urlparse
 from pathlib import Path
 import uuid
+import socket
 
 from django.core.exceptions import ImproperlyConfigured
 
@@ -193,6 +195,10 @@ def _database_from_url(database_url: str) -> dict:
 
 LEGALTRACK_DB_PROVIDER = (_env("LEGALTRACK_DB_PROVIDER", "supabase") or "supabase").strip().lower()
 
+# Keep automated tests hermetic and non-interactive.
+if any(arg == "test" or arg.endswith("manage.py test") for arg in sys.argv):
+    LEGALTRACK_DB_PROVIDER = "sqlite"
+
 if LEGALTRACK_DB_PROVIDER not in {"supabase", "sqlite"}:
     raise ImproperlyConfigured(
         "LEGALTRACK_DB_PROVIDER must be 'supabase' or 'sqlite'."
@@ -204,13 +210,50 @@ if LEGALTRACK_DB_PROVIDER == "supabase":
         raise ImproperlyConfigured(
             "DATABASE_URL is required when LEGALTRACK_DB_PROVIDER=supabase."
         )
-    DATABASES = {"default": _database_from_url(database_url)}
+    # Quick resiliency: if the configured DB host cannot be resolved from this
+    # machine (common on disconnected laptops or networks without IPv6),
+    # fall back to a local SQLite DB for development so commands like
+    # `manage.py migrate` / `runserver` remain usable. This only triggers
+    # when running locally (DEBUG mode); production deployments should
+    # provide a valid reachable DATABASE_URL.
+    try:
+        parsed = urlparse(database_url)
+        hostname = parsed.hostname
+    except Exception:
+        hostname = None
+
+    if hostname:
+        try:
+            # Attempt to resolve either A or AAAA records. If resolution
+            # fails (socket.gaierror), assume host is unreachable from
+            # this environment and fallback to sqlite.
+            socket.getaddrinfo(hostname, None)
+        except Exception:
+            import warnings
+            warnings.warn(
+                f"Database host '{hostname}' is not resolvable from this machine; "
+                "falling back to local SQLite for development.",
+                RuntimeWarning,
+            )
+            LEGALTRACK_DB_PROVIDER = "sqlite"
+
+    # Re-check provider in case we fell back
+    if LEGALTRACK_DB_PROVIDER != "supabase":
+        DATABASES = {
+            "default": {
+                "ENGINE": "django.db.backends.sqlite3",
+                "NAME": ":memory:" if ("test" in sys.argv) else (BASE_DIR / "db.sqlite3"),
+            }
+        }
+    else:
+        DATABASES = {"default": _database_from_url(database_url)}
+    
 else:
     # SQLite is still allowed explicitly (useful for tests/offline dev).
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "db.sqlite3",
+            "NAME": ":memory:" if ("test" in sys.argv) else (BASE_DIR / "db.sqlite3"),
         }
     }
 

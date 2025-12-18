@@ -250,3 +250,66 @@ class StaffAccountUpdateForm(forms.ModelForm):
     def clean_full_name(self):
         cleaned = self.cleaned_data or {}
         return (cleaned.get("full_name") or "").strip()
+
+
+class PublicCaseSearchForm(forms.Form):
+    q = forms.CharField(
+        label="Tracking Number",
+        required=True,
+        widget=forms.TextInput(attrs={"placeholder": "e.g., CEB251200001"}),
+    )
+
+    def clean_q(self):
+        cleaned = self.cleaned_data or {}
+        q = (cleaned.get("q") or "").strip().upper()
+        if not q:
+            raise ValidationError("Tracking number is required.")
+        return q
+
+
+class SupportFeedbackForm(forms.Form):
+    name = forms.CharField(required=False, max_length=120)
+    email = forms.EmailField(required=False)
+    message = forms.CharField(
+        required=True,
+        widget=forms.Textarea(attrs={"rows": 5, "placeholder": "Describe your concern..."}),
+    )
+
+    def clean_message(self):
+        cleaned = self.cleaned_data or {}
+        msg = (cleaned.get("message") or "").strip()
+        if not msg:
+            raise ValidationError("Message is required.")
+        return msg
+
+
+class ReportFilterForm(forms.Form):
+    REPORT_CHOICES: ClassVar[list[tuple[str, str]]] = [
+        ("status_breakdown", "Status Breakdown"),
+        ("monthly_accomplishment", "Monthly Accomplishment"),
+        ("processing_times", "Processing Times"),
+    ]
+
+    report_type = forms.ChoiceField(choices=REPORT_CHOICES, required=True)
+    date_from = forms.DateField(required=False, widget=forms.DateInput(attrs={"type": "date"}))
+    date_to = forms.DateField(required=False, widget=forms.DateInput(attrs={"type": "date"}))
+    status = forms.ChoiceField(
+        required=False,
+        choices=[("", "All Statuses"), *Case.STATUS_CHOICES],
+    )
+    sort = forms.ChoiceField(
+        required=False,
+        choices=[
+            ("-created_at", "Newest"),
+            ("created_at", "Oldest"),
+            ("-updated_at", "Recently Updated"),
+        ],
+    )
+
+    def clean(self):
+        cleaned = super().clean() or {}
+        d1 = cleaned.get("date_from")
+        d2 = cleaned.get("date_to")
+        if d1 and d2 and d1 > d2:
+            raise ValidationError("Date From must be on or before Date To.")
+        return cleaned
