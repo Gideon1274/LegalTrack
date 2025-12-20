@@ -27,11 +27,6 @@
             "dest": "/api/wsgi.py"
         }
     ],
-    "env": {
-        "DJANGO_SETTINGS_MODULE": "Capstone.settings",
-        "SECRET_KEY": "@DJANGO_SECRET",
-        "DATABASE_URL": "@DATABASE_URL"
-    },
     "build": {
         "env": {
             "PYTHONUNBUFFERED": "1"
