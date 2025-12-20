@@ -100,13 +100,39 @@ def _env(key: str, default: str | None = None) -> str | None:
 SECRET_KEY = (
     _env("DJANGO_SECRET_KEY")
     or _env("DJANGO_SECRET")
+    or _env("SECRET_KEY")
     or uuid.uuid4().hex
 )
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+def _truthy(value: str | None) -> bool:
+    return str(value or "").strip().lower() in {"1", "true", "yes", "y", "on"}
 
-ALLOWED_HOSTS = []
+
+# Default DEBUG:
+# - local dev: True when a .env file is present
+# - production (Vercel): False
+DEBUG = _truthy(_env("DJANGO_DEBUG") or ("true" if DOTENV_PATH.exists() else "false"))
+
+
+def _split_csv(value: str | None) -> list[str]:
+    if not value:
+        return []
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+_default_hosts = ["localhost", "127.0.0.1", ".vercel.app"]
+ALLOWED_HOSTS = _split_csv(_env("DJANGO_ALLOWED_HOSTS")) or _default_hosts
+
+# Required on Vercel (proxy terminates TLS).
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    CSRF_COOKIE_SECURE = True
+    SESSION_COOKIE_SECURE = True
+    # Allow Vercel preview/prod domains by default.
+    CSRF_TRUSTED_ORIGINS = _split_csv(_env("DJANGO_CSRF_TRUSTED_ORIGINS")) or [
+        "https://*.vercel.app",
+    ]
 
 
 # Application definition
@@ -327,7 +353,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 # Existing static URL plus deploy prep
-STATIC_URL = "static/"
+STATIC_URL = "/static/"
 
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
