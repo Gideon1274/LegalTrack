@@ -1,0 +1,16 @@
+# Minimal dependencies for Vercel (Linux) deployments.
+# Keep this small to avoid platform-specific wheels failing the build.
+
+Django==5.2.6
+whitenoise==6.11.0
+psycopg2-binary==2.9.11
+python-dotenv==1.2.1
+
+# App deps used by this project
+djangorestframework==3.16.1
+django-filter==25.2
+django-auditlog==3.3.0
+
+# Security/password hashing used in settings.py
+argon2-cffi==25.1.0
+bcrypt==5.0.0
