@@ -127,7 +127,6 @@ python-decouple==3.8
 python-dotenv==1.2.1
 pytweening==1.2.0
 pytz==2025.2
-pywin32==311
 PyYAML==6.0.3
 redis==5.2.1
 referencing==0.37.0
