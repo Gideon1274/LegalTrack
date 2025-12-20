@@ -96,7 +96,12 @@ def _env(key: str, default: str | None = None) -> str | None:
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = _env("DJANGO_SECRET_KEY") or uuid.uuid4().hex
+# Support multiple env var names to avoid deploy-time mismatches across hosts.
+SECRET_KEY = (
+    _env("DJANGO_SECRET_KEY")
+    or _env("DJANGO_SECRET")
+    or uuid.uuid4().hex
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
