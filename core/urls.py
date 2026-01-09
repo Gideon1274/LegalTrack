@@ -24,6 +24,7 @@ urlpatterns = [
     path("audit-logs/", views.audit_logs, name="audit_logs"),
     path("audit-logs/export.csv", views.export_audit_logs_csv, name="export_audit_logs_csv"),
     path("accounts/set-password/", views.set_password_view, name="set_password"),
+    path("profile/", views.profile, name="profile"),
     path("submit/", views.submit_case, name="submit_case"),
     path("case/<str:tracking_id>/step/<int:step>/", views.case_wizard, name="case_wizard"),
     path("case/<str:tracking_id>/edit/", views.edit_case, name="edit_case"),
@@ -35,6 +36,7 @@ urlpatterns = [
     path("case/<str:tracking_id>/submit-for-approval/", views.submit_for_approval, name="submit_for_approval"),
     path("case/<str:tracking_id>/approve/", views.approve_case, name="approve_case"),
     path("case/<str:tracking_id>/return-for-correction/", views.return_for_correction, name="return_for_correction"),
+    path("case/<str:tracking_id>/return-to-receiving/", views.return_to_receiving, name="return_to_receiving"),
     path("case/<str:tracking_id>/mark-numbered/", views.mark_numbered, name="mark_numbered"),
     path("case/<str:tracking_id>/release/", views.release_case, name="release_case"),
 ]

@@ -14,6 +14,8 @@ from django.core.paginator import Paginator
 from django.db import models
 from django.db.models import Q, Count
 from django.utils import timezone
+from django.utils.dateparse import parse_date
+from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
 from django.shortcuts import get_object_or_404, redirect, render
 from django.http import HttpResponse
@@ -23,6 +25,7 @@ from .forms import (
     CaseDetailsForm,
     CaseRemarkForm,
     ChecklistItemForm,
+    ProfileUpdateForm,
     PublicCaseSearchForm,
     ReportFilterForm,
     StaffAccountCreateForm,
@@ -31,6 +34,61 @@ from .forms import (
     SupportFeedbackForm,
 )
 from .models import AuditLog, Case, CaseDocument, CaseRemark, CustomUser, FAQItem, SupportFeedback
+
+
+def _case_type_requirements(case_type: str) -> list[str]:
+    """Minimal requirements list per case type (dropdown + initial checklist)."""
+    mapping: dict[str, list[str]] = {
+        "land_first_time": [
+            "Letter-request (Municipal/Provincial Assessor)",
+            "Technical Description / Sketch Plan (GE) and DENR-approved Survey Plan",
+            "CENRO Certification (alienable and disposable area)",
+            "Affidavit of Ownership (long, continuous possession)",
+            "Barangay Captain Certification (possession/occupancy, no controversy)",
+            "Affidavit of adjoining owners",
+            "Ocular inspection/investigation report (Assessor/Staff)",
+        ],
+        "building_improvements": [
+            "Letter-request (Municipal/Provincial Assessor)",
+            "Approved building permit + building plan / Certificate of Completion / Occupancy permit",
+            "Affidavit of Ownership / Sworn Statement of Market Value (if no building permit)",
+            "Affidavit of Consent from land owner (if land owned by another)",
+            "Inspection report / FAAS of building/structure (Assessor/Staff)",
+            "Registration from Municipal Engineer (machineries)",
+        ],
+        "subdivision_consolidation": [
+            "Letter request (subdivision/consolidation)",
+            "Inspection report + endorsement (Assessor/Staff)",
+            "Approved subdivision / survey plan",
+            "Tax Clearance (current)",
+        ],
+        "reassessment_reclassification": [
+            "Letter request (re-assessment/re-classification)",
+            "Inspection report + endorsement (Assessor/Staff)",
+            "DAR Clearance / MARO Certification (as applicable)",
+            "Tax Clearance (current)",
+            "Tax Declaration (photocopy)",
+        ],
+        "area_increase_decrease": [
+            "Letter request (correction of area)",
+            "Inspection report + endorsement (Assessor/Staff)",
+            "Approved Survey Plan / Technical Description",
+            "Affidavit of adjoining owners (if increase)",
+            "Tax Clearance (current)",
+            "DENR Certification (alienable and disposable area)",
+        ],
+        "transfer_ownership_tax_decl": [
+            "Letter request (transfer of ownership of tax declaration)",
+            "Endorsement from Municipal Assessor",
+            "Deed of Conveyance (Registry of Deeds)",
+            "Tax Clearance (current)",
+            "Certificate Authorizing Registration (CAR)",
+            "Subdivision / Consolidation Plan",
+            "Transfer Tax / Transfer Fee Receipt",
+            "Certified true copy / machine copy of title (if titled)",
+        ],
+    }
+    return mapping.get((case_type or "").strip(), [])
 
 
 def landing(request):
@@ -403,9 +461,16 @@ def dashboard(request):
 
     elif user.role == "lgu_admin":
         recent_cases = user.submitted_cases.all()[:10]
+        raw = list(user.submitted_cases.values("status").annotate(count=Count("id")).order_by("status"))
+        status_labels = dict(Case.STATUS_CHOICES)
+        status_counts = [
+            {"status": status_labels.get(r["status"], r["status"]), "count": r["count"]}
+            for r in raw
+        ]
         context.update({
             "section": "lgu_admin",
             "recent_cases": recent_cases,
+            "status_counts": status_counts,
         })
         template = "core/dashboard_lgu.html"
 
@@ -416,7 +481,7 @@ def dashboard(request):
         })
 
         if user.role == "capitol_receiving":
-            pending_cases = Case.objects.filter(status="not_received").order_by("-created_at")[:25]
+            pending_cases = Case.objects.filter(status__in=["not_received", "returned"]).order_by("-created_at")[:25]
             received_unassigned = Case.objects.filter(status="received", assigned_to__isnull=True).order_by("-received_at")[:25]
             context.update({
                 "pending_cases": pending_cases,
@@ -424,7 +489,7 @@ def dashboard(request):
             })
 
         elif user.role == "capitol_examiner":
-            my_cases = Case.objects.filter(assigned_to=user).order_by("-assigned_at")[:50]
+            my_cases = Case.objects.filter(assigned_to=user, status="in_review").order_by("-assigned_at")[:50]
             context.update({"my_cases": my_cases})
 
         elif user.role == "capitol_approver":
@@ -432,8 +497,36 @@ def dashboard(request):
             context.update({"queue_cases": queue_cases})
 
         elif user.role == "capitol_numberer":
-            queue_cases = Case.objects.filter(status="for_numbering").order_by("-updated_at")[:50]
-            context.update({"queue_cases": queue_cases})
+            queue_cases = Case.objects.filter(status="for_numbering").select_related("submitted_by").order_by("-updated_at")
+
+            lgu = (request.GET.get("lgu") or "").strip()
+            date_from_raw = (request.GET.get("date_from") or "").strip()
+            date_to_raw = (request.GET.get("date_to") or "").strip()
+            number_q = (request.GET.get("number") or "").strip()
+
+            date_from = parse_date(date_from_raw) if date_from_raw else None
+            date_to = parse_date(date_to_raw) if date_to_raw else None
+
+            if lgu:
+                queue_cases = queue_cases.filter(submitted_by__lgu_municipality=lgu)
+            if date_from:
+                queue_cases = queue_cases.filter(created_at__date__gte=date_from)
+            if date_to:
+                queue_cases = queue_cases.filter(created_at__date__lte=date_to)
+            if number_q:
+                queue_cases = queue_cases.filter(
+                    Q(numbering_number__icontains=number_q) |
+                    Q(tracking_id__icontains=number_q)
+                )
+
+            context.update({
+                "queue_cases": queue_cases[:50],
+                "numberer_lgu_choices": CustomUser.LGU_MUNICIPALITY_CHOICES,
+                "filter_lgu": lgu,
+                "filter_date_from": date_from_raw,
+                "filter_date_to": date_to_raw,
+                "filter_number": number_q,
+            })
 
         elif user.role == "capitol_releaser":
             queue_cases = Case.objects.filter(status="for_release").order_by("-updated_at")[:50]
@@ -787,9 +880,37 @@ def set_password_view(request):
     })
 
 
+@login_required
+def profile(request):
+    if request.method == "POST":
+        form = ProfileUpdateForm(request.POST, instance=request.user, user=request.user)
+        if form.is_valid():
+            form.save()
+            AuditLog.objects.create(
+                actor=request.user,
+                action="update_user",
+                target_user=request.user,
+                target_object=f"User: {request.user.email}",
+                details={"self_service": True},
+            )
+            messages.success(request, "Profile updated.")
+            return redirect("profile")
+    else:
+        form = ProfileUpdateForm(
+            instance=request.user,
+            user=request.user,
+            initial={"email_verify": request.user.email},
+        )
+
+    return render(request, "core/profile.html", {
+        "role_display": request.user.get_role_display(),
+        "form": form,
+    })
+
+
 def _lgu_owns_case(user, case: Case) -> bool:
     return bool(
-        getattr(user, "role", None) == "lgu_admin" and
+        getattr(user, "role", None) in {"lgu_admin", "capitol_receiving"} and
         getattr(case, "submitted_by_id", None) == user.id
     )
 
@@ -863,28 +984,69 @@ def _upsert_case_document(*, case: Case, doc_type: str, uploaded_file, actor: Cu
     return doc
 
 @login_required
+@never_cache
 def submit_case(request):
-    if request.user.role != "lgu_admin":
-        messages.error(request, "Only LGU Admins can submit cases.")
+    if request.user.role not in {"lgu_admin", "capitol_receiving"}:
+        messages.error(request, "Only LGU Admins and Capitol Receiver can create a new request.")
         return redirect("dashboard")
 
     if request.method == "POST":
         form = CaseDetailsForm(request.POST, request.FILES)
         if form.is_valid():
+            cleaned = form.cleaned_data
+
+            # Prevent accidental duplicate drafts (e.g., browser back + re-submit).
+            recent_window = timezone.now() - timedelta(minutes=2)
+            existing = (
+                Case.objects.filter(
+                    submitted_by=request.user,
+                    created_at__gte=recent_window,
+                    lgu_submitted_at__isnull=True,
+                    status__in=["not_received", "returned"],
+                    client_first_name=(cleaned.get("client_first_name") or "").strip(),
+                    client_last_name=(cleaned.get("client_last_name") or "").strip(),
+                    client_middle_name=(cleaned.get("client_middle_name") or "").strip(),
+                    client_suffix=(cleaned.get("client_suffix") or "").strip(),
+                    case_type=(cleaned.get("case_type") or ""),
+                )
+                .order_by("-created_at")
+                .first()
+            )
+
+            if existing:
+                case = existing
+                for field in CaseDetailsForm.Meta.fields:
+                    setattr(case, field, cleaned.get(field))
+                case.save(update_fields=[*CaseDetailsForm.Meta.fields, "updated_at"])
+                messages.info(request, f"Continuing your existing draft: {case.tracking_id}.")
+                return redirect("case_wizard", tracking_id=case.tracking_id, step=2)
+
             case = form.save(commit=False)
             case.submitted_by = request.user
             case.save()
 
-            endorsement = form.cleaned_data.get("endorsement_letter")
-            if endorsement:
-                _upsert_case_document(case=case, doc_type="Endorsement Letter", uploaded_file=endorsement, actor=request.user)
-                _ensure_checklist_item(case, doc_type="Endorsement Letter", required=True)
+            # Seed checklist requirements (uploads happen in Step 2 only).
+            requirements = ["Endorsement Letter", *_case_type_requirements(getattr(case, "case_type", ""))]
+            seen = set()
+            seeded = []
+            for r in requirements:
+                r = (r or "").strip()
+                if not r:
+                    continue
+                k = r.lower()
+                if k in seen:
+                    continue
+                seen.add(k)
+                seeded.append({"doc_type": r, "required": True, "uploaded": False})
+            if seeded:
+                case.checklist = seeded
+                case.save(update_fields=["checklist", "updated_at"])
 
             AuditLog.objects.create(
                 actor=request.user,
                 action="case_create",
                 target_object=f"Case: {case.tracking_id}",
-                details={"client": case.client_name}
+                details={"client": case.client_name, "case_type": case.case_type}
             )
 
             messages.success(request, f"Draft created: {case.tracking_id}. Continue uploading documents.")
@@ -913,8 +1075,8 @@ def edit_case(request, tracking_id):
 def case_wizard(request, tracking_id, step: int):
     case = get_object_or_404(Case, tracking_id=tracking_id)
 
-    if request.user.role != "lgu_admin":
-        messages.error(request, "Only LGU Admins can edit submissions.")
+    if request.user.role not in {"lgu_admin", "capitol_receiving"}:
+        messages.error(request, "Only LGU Admins and Capitol Receiver can edit submissions.")
         return redirect("dashboard")
 
     if not _lgu_can_edit_details(request.user, case):
@@ -930,11 +1092,6 @@ def case_wizard(request, tracking_id, step: int):
             form = CaseDetailsForm(request.POST, request.FILES, instance=case)
             if form.is_valid():
                 form.save()
-
-                endorsement = form.cleaned_data.get("endorsement_letter")
-                if endorsement:
-                    _upsert_case_document(case=case, doc_type="Endorsement Letter", uploaded_file=endorsement, actor=request.user)
-                    _ensure_checklist_item(case, doc_type="Endorsement Letter", required=True)
 
                 AuditLog.objects.create(
                     actor=request.user,
@@ -960,29 +1117,78 @@ def case_wizard(request, tracking_id, step: int):
             messages.error(request, "Document uploads can only be changed after the case is returned by Capitol Receiving.")
             return redirect("case_detail", tracking_id=case.tracking_id)
 
-        FormSet = forms.formset_factory(ChecklistItemForm, extra=5)
+        requirements = ["Endorsement Letter", *_case_type_requirements(getattr(case, "case_type", ""))]
+        existing_checklist_types = [
+            (i.get("doc_type") or "").strip()
+            for i in (case.checklist or [])
+            if isinstance(i, dict)
+        ]
+        existing_doc_types = [d.doc_type for d in case.documents.all()]
+        doc_type_choices = list(dict.fromkeys([
+            *requirements,
+            *existing_checklist_types,
+            *existing_doc_types,
+            "Endorsement Letter",
+        ]))
+
+        FormSet = forms.formset_factory(ChecklistItemForm, extra=0)
 
         initial = []
-        for item in (case.checklist or []):
-            if isinstance(item, dict):
-                initial.append({
-                    "doc_type": item.get("doc_type", ""),
-                    "required": bool(item.get("required", False)),
-                })
+        if case.checklist:
+            for item in (case.checklist or []):
+                if isinstance(item, dict):
+                    initial.append({
+                        "doc_type": item.get("doc_type", ""),
+                        "required": bool(item.get("required", False)),
+                    })
+        else:
+            for req in requirements:
+                initial.append({"doc_type": req, "required": True})
 
         if request.method == "POST":
-            formset = FormSet(request.POST, request.FILES)
+            if "add_row" in request.POST:
+                data = request.POST.copy()
+                try:
+                    total = int(data.get("form-TOTAL_FORMS") or "0")
+                except ValueError:
+                    total = 0
+                data["form-TOTAL_FORMS"] = str(total + 1)
+                formset = FormSet(data, request.FILES, form_kwargs={"doc_type_choices": doc_type_choices})
+                return render(request, "core/submit_case.html", {
+                    "step": 2,
+                    "formset": formset,
+                    "case": case,
+                    "is_edit": True,
+                    "documents": list(case.documents.all()),
+                    "case_type_requirements": requirements,
+                })
+
+            formset = FormSet(request.POST, request.FILES, form_kwargs={"doc_type_choices": doc_type_choices})
             if formset.is_valid():
                 new_checklist = []
+                seen = set()
+
                 for f in formset:
                     cd = f.cleaned_data
                     if not cd:
                         continue
-                    if cd.get("delete"):
-                        continue
+
                     doc_type = (cd.get("doc_type") or "").strip()
                     if not doc_type:
                         continue
+
+                    key = doc_type.lower()
+                    if key in seen:
+                        messages.error(request, f"Duplicate document type: {doc_type}")
+                        return render(request, "core/submit_case.html", {
+                            "step": 2,
+                            "formset": formset,
+                            "case": case,
+                            "is_edit": True,
+                            "documents": list(case.documents.all()),
+                            "case_type_requirements": requirements,
+                        })
+                    seen.add(key)
 
                     uploaded_file = cd.get("file")
                     if uploaded_file:
@@ -998,6 +1204,9 @@ def case_wizard(request, tracking_id, step: int):
                 if CaseDocument.objects.filter(case=case, doc_type="Endorsement Letter").exists():
                     if not any((i.get("doc_type") == "Endorsement Letter") for i in new_checklist):
                         new_checklist.insert(0, {"doc_type": "Endorsement Letter", "required": True, "uploaded": True})
+                else:
+                    if not any((i.get("doc_type") == "Endorsement Letter") for i in new_checklist):
+                        new_checklist.insert(0, {"doc_type": "Endorsement Letter", "required": True, "uploaded": False})
 
                 case.checklist = new_checklist
                 if case.status == "returned":
@@ -1015,7 +1224,7 @@ def case_wizard(request, tracking_id, step: int):
                 messages.success(request, "Checklist and uploads saved.")
                 return redirect("case_wizard", tracking_id=case.tracking_id, step=3)
         else:
-            formset = FormSet(initial=initial)
+            formset = FormSet(initial=initial, form_kwargs={"doc_type_choices": doc_type_choices})
 
         return render(request, "core/submit_case.html", {
             "step": 2,
@@ -1023,6 +1232,7 @@ def case_wizard(request, tracking_id, step: int):
             "case": case,
             "is_edit": True,
             "documents": list(case.documents.all()),
+            "case_type_requirements": requirements,
         })
 
     # Wizard step 3
@@ -1095,7 +1305,8 @@ def case_detail(request, tracking_id):
 
     can_return = (
         request.user.role == "capitol_receiving" and
-        case.status == "not_received"
+        case.status in {"not_received", "received"} and
+        case.assigned_to_id is None
     )
 
     can_assign = (
@@ -1105,6 +1316,12 @@ def case_detail(request, tracking_id):
     )
 
     can_submit_for_approval = (
+        request.user.role == "capitol_examiner" and
+        case.status == "in_review" and
+        case.assigned_to_id == request.user.id
+    )
+
+    can_return_to_receiving = (
         request.user.role == "capitol_examiner" and
         case.status == "in_review" and
         case.assigned_to_id == request.user.id
@@ -1157,6 +1374,7 @@ def case_detail(request, tracking_id):
         "can_return": can_return,
         "can_assign": can_assign,
         "can_submit_for_approval": can_submit_for_approval,
+        "can_return_to_receiving": can_return_to_receiving,
         "can_approve": can_approve,
         "can_number": can_number,
         "can_release": can_release,
@@ -1197,12 +1415,19 @@ def add_case_remark(request, tracking_id):
 
 @login_required
 def submissions(request):
-    if not _is_capitol_staff(request.user):
+    if not (_is_capitol_staff(request.user) or request.user.role == "super_admin"):
         messages.error(request, "Not authorized.")
         return redirect("dashboard")
 
     tab = (request.GET.get("tab") or "").strip().lower() or "all"
     q = (request.GET.get("q") or "").strip()
+    case_type = (request.GET.get("case_type") or "").strip()
+    lgu = (request.GET.get("lgu") or "").strip()
+    date_from_raw = (request.GET.get("date_from") or "").strip()
+    date_to_raw = (request.GET.get("date_to") or "").strip()
+
+    date_from = parse_date(date_from_raw) if date_from_raw else None
+    date_to = parse_date(date_to_raw) if date_to_raw else None
 
     qs = Case.objects.all().select_related("submitted_by", "assigned_to").order_by("-created_at")
 
@@ -1233,9 +1458,32 @@ def submissions(request):
         qs = qs.filter(
             Q(tracking_id__icontains=q) |
             Q(client_name__icontains=q) |
+            Q(client_first_name__icontains=q) |
+            Q(client_last_name__icontains=q) |
+            Q(client_middle_name__icontains=q) |
+            Q(client_email__icontains=q) |
+            Q(client_number__icontains=q) |
             Q(client_contact__icontains=q) |
             Q(submitted_by__email__icontains=q)
         )
+
+    if case_type:
+        qs = qs.filter(case_type=case_type)
+    if lgu:
+        qs = qs.filter(submitted_by__lgu_municipality=lgu)
+    if date_from:
+        qs = qs.filter(created_at__date__gte=date_from)
+    if date_to:
+        qs = qs.filter(created_at__date__lte=date_to)
+
+    query = request.GET.copy()
+    with contextlib.suppress(Exception):
+        query.pop("page")
+
+    query_no_tab = request.GET.copy()
+    with contextlib.suppress(Exception):
+        query_no_tab.pop("page")
+        query_no_tab.pop("tab")
 
     paginator = Paginator(qs, 15)
     page_obj = paginator.get_page(request.GET.get("page") or 1)
@@ -1257,6 +1505,14 @@ def submissions(request):
         "tab": tab,
         "q": q,
         "tabs": tabs,
+        "filter_case_type": case_type,
+        "filter_lgu": lgu,
+        "filter_date_from": date_from_raw,
+        "filter_date_to": date_to_raw,
+        "case_type_choices": list(getattr(Case, "CASE_TYPE_CHOICES", [])),
+        "lgu_choices": list(getattr(CustomUser, "LGU_MUNICIPALITY_CHOICES", [])),
+        "qs_params": query.urlencode(),
+        "qs_params_no_tab": query_no_tab.urlencode(),
     })
 
 
@@ -1266,7 +1522,7 @@ def receive_case(request, tracking_id):
     case = get_object_or_404(Case, tracking_id=tracking_id)
 
     if request.user.role != "capitol_receiving":
-        messages.error(request, "Only Capitol Receiving Staff can receive cases.")
+        messages.error(request, "Only Capitol Receiver can receive cases.")
         return redirect("case_detail", tracking_id=case.tracking_id)
 
     if case.status not in {"not_received", "returned"}:
@@ -1295,11 +1551,15 @@ def return_case(request, tracking_id):
     case = get_object_or_404(Case, tracking_id=tracking_id)
 
     if request.user.role != "capitol_receiving":
-        messages.error(request, "Only Capitol Receiving Staff can return cases.")
+        messages.error(request, "Only Capitol Receiver can return cases.")
         return redirect("case_detail", tracking_id=case.tracking_id)
 
-    if case.status != "not_received":
-        messages.error(request, "Only pending cases can be returned to the LGU.")
+    if case.status not in {"not_received", "received"}:
+        messages.error(request, "Only pending/received cases can be returned to the LGU.")
+        return redirect("case_detail", tracking_id=case.tracking_id)
+
+    if case.assigned_to_id is not None:
+        messages.error(request, "This case is assigned and cannot be returned right now.")
         return redirect("case_detail", tracking_id=case.tracking_id)
 
     reason = (request.POST.get("reason") or "").strip()
@@ -1331,7 +1591,7 @@ def assign_case(request, tracking_id):
     case = get_object_or_404(Case, tracking_id=tracking_id)
 
     if request.user.role != "capitol_receiving":
-        messages.error(request, "Only Capitol Receiving Staff can assign cases.")
+        messages.error(request, "Only Capitol Receiver can assign cases.")
         return redirect("case_detail", tracking_id=case.tracking_id)
 
     if case.status != "received" or case.assigned_to_id is not None:
@@ -1464,6 +1724,52 @@ def return_for_correction(request, tracking_id):
 
 @login_required
 @require_POST
+def return_to_receiving(request, tracking_id):
+    case = get_object_or_404(Case, tracking_id=tracking_id)
+
+    if request.user.role != "capitol_examiner":
+        messages.error(request, "Only Capitol Examiners can return cases to Receiving.")
+        return redirect("case_detail", tracking_id=case.tracking_id)
+
+    if case.status != "in_review" or case.assigned_to_id != request.user.id:
+        messages.error(request, "This case is not eligible for return to Receiving.")
+        return redirect("case_detail", tracking_id=case.tracking_id)
+
+    reason = (request.POST.get("reason") or "").strip()
+    if not reason:
+        messages.error(request, "Return reason is required.")
+        return redirect("case_detail", tracking_id=case.tracking_id)
+
+    old_status = case.status
+    case.status = "received"
+    case.return_reason = reason
+    case.returned_at = timezone.now()
+    case.returned_by = request.user
+    case.assigned_to = None
+    case.assigned_at = None
+    case.save(update_fields=[
+        "status",
+        "return_reason",
+        "returned_at",
+        "returned_by",
+        "assigned_to",
+        "assigned_at",
+        "updated_at",
+    ])
+
+    AuditLog.objects.create(
+        actor=request.user,
+        action="case_status_change",
+        target_object=f"Case: {case.tracking_id}",
+        details={"old_status": old_status, "new_status": case.status, "reason": reason, "to": "capitol_receiving"},
+    )
+
+    messages.success(request, f"Case {case.tracking_id} returned to Receiving.")
+    return redirect("case_detail", tracking_id=case.tracking_id)
+
+
+@login_required
+@require_POST
 def mark_numbered(request, tracking_id):
     case = get_object_or_404(Case, tracking_id=tracking_id)
 
@@ -1475,15 +1781,26 @@ def mark_numbered(request, tracking_id):
         messages.error(request, "This case is not eligible for numbering.")
         return redirect("case_detail", tracking_id=case.tracking_id)
 
+    numbering_number = (request.POST.get("numbering_number") or "").strip()
+    if not numbering_number:
+        messages.error(request, "Number is required.")
+        return redirect("case_detail", tracking_id=case.tracking_id)
+
+    dupe = Case.objects.filter(numbering_number__iexact=numbering_number).exclude(id=case.id).exists()
+    if dupe:
+        messages.error(request, "Duplicate number detected. Please use a unique number.")
+        return redirect("case_detail", tracking_id=case.tracking_id)
+
     old_status = case.status
+    case.numbering_number = numbering_number
     case.status = "for_release"
-    case.save(update_fields=["status", "updated_at"])
+    case.save(update_fields=["numbering_number", "status", "updated_at"])
 
     AuditLog.objects.create(
         actor=request.user,
         action="case_status_change",
         target_object=f"Case: {case.tracking_id}",
-        details={"old_status": old_status, "new_status": case.status}
+        details={"old_status": old_status, "new_status": case.status, "number": numbering_number}
     )
 
     messages.success(request, f"Case {case.tracking_id} moved to For Release.")

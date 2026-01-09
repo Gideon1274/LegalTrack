@@ -51,29 +51,69 @@ class CaseSubmissionForm(forms.ModelForm):
 
 
 class CaseDetailsForm(forms.ModelForm):
-    endorsement_letter = forms.FileField(required=False)
-
     class Meta:
         model = Case
-        fields: ClassVar[list[str]] = ["client_name", "client_contact"]
+        fields: ClassVar[list[str]] = [
+            "client_first_name",
+            "client_last_name",
+            "client_middle_name",
+            "client_suffix",
+            "client_number",
+            "client_email",
+            "case_type",
+        ]
         widgets: ClassVar[dict] = {
-            "client_name": forms.TextInput(attrs={"placeholder": "Full name"}),
-            "client_contact": forms.TextInput(attrs={"placeholder": "Phone number or email"}),
+            "client_first_name": forms.TextInput(attrs={"placeholder": "First name"}),
+            "client_last_name": forms.TextInput(attrs={"placeholder": "Last name"}),
+            "client_middle_name": forms.TextInput(attrs={"placeholder": "Middle name"}),
+            "client_suffix": forms.TextInput(attrs={"placeholder": "Suffix (optional)"}),
+            "client_number": forms.TextInput(attrs={"placeholder": "Client number"}),
+            "client_email": forms.EmailInput(attrs={"placeholder": "Client email"}),
+            "case_type": forms.Select(),
         }
-
-
-class ChecklistItemForm(forms.Form):
-    doc_type = forms.CharField(max_length=120, required=False)
-    required = forms.BooleanField(required=False)
-    file = forms.FileField(required=False)
-    delete = forms.BooleanField(required=False)
 
     def clean(self):
         cleaned = super().clean() or {}
-        doc_type = (cleaned.get("doc_type") or "").strip()
-        if cleaned.get("delete"):
-            return cleaned
-        if not doc_type and (cleaned.get("required") or cleaned.get("file")):
+        # Enforce required fields for the new request form.
+        if not (cleaned.get("client_first_name") or "").strip():
+            self.add_error("client_first_name", "First name is required.")
+        if not (cleaned.get("client_last_name") or "").strip():
+            self.add_error("client_last_name", "Last name is required.")
+        if not (cleaned.get("case_type") or "").strip():
+            self.add_error("case_type", "Type of case is required.")
+        return cleaned
+
+
+class ChecklistItemForm(forms.Form):
+    doc_type = forms.ChoiceField(required=False, choices=[("", "— Select —")])
+    custom_doc_type = forms.CharField(max_length=120, required=False)
+    required = forms.BooleanField(required=False)
+    file = forms.FileField(required=False)
+
+    def __init__(self, *args, doc_type_choices=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        choices = [("", "— Select —")]
+        for c in (doc_type_choices or []):
+            label = str(c).strip()
+            if not label:
+                continue
+            choices.append((label, label))
+        choices.append(("__custom__", "Other (type manually)"))
+        self.fields["doc_type"].choices = choices
+        self.fields["custom_doc_type"].widget.attrs.setdefault("placeholder", "Type document name")
+
+    def clean(self):
+        cleaned = super().clean() or {}
+        selected = (cleaned.get("doc_type") or "").strip()
+        custom = (cleaned.get("custom_doc_type") or "").strip()
+
+        doc_type = ""
+        if selected == "__custom__":
+            doc_type = custom
+        else:
+            doc_type = selected
+
+        if not doc_type and (cleaned.get("required") or cleaned.get("file") or selected == "__custom__"):
             raise forms.ValidationError("Document type is required for this row.")
         cleaned["doc_type"] = doc_type
         return cleaned
@@ -107,7 +147,7 @@ class StaffAccountCreateForm(forms.ModelForm):
     capitol_role = forms.ChoiceField(
         required=False,
         choices=[
-            ("capitol_receiving", "Capitol Receiving Staff"),
+            ("capitol_receiving", "Capitol Receiver"),
             ("capitol_examiner", "Capitol Examiner"),
             ("capitol_approver", "Capitol Approver"),
             ("capitol_numberer", "Capitol Numberer"),
@@ -115,6 +155,7 @@ class StaffAccountCreateForm(forms.ModelForm):
         ],
         widget=forms.Select(),
     )
+
     lgu_municipality = forms.ChoiceField(
         required=False,
         choices=CustomUser.LGU_MUNICIPALITY_CHOICES,
@@ -173,6 +214,40 @@ class StaffAccountCreateForm(forms.ModelForm):
         if commit:
             user.save()
         return user
+
+
+class ProfileUpdateForm(forms.ModelForm):
+    email_verify = forms.EmailField(
+        label="Confirm your email",
+        help_text="Enter your email to confirm changes.",
+        required=True,
+        widget=forms.EmailInput(attrs={"placeholder": "your@email.com"}),
+    )
+
+    class Meta:
+        model = CustomUser
+        fields: ClassVar[list[str]] = ["username", "position"]
+
+    def __init__(self, *args, user: CustomUser, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._user = user
+
+    def clean_email_verify(self):
+        cleaned = self.cleaned_data or {}
+        email_verify = (cleaned.get("email_verify") or "").strip().lower()
+        if email_verify != (self._user.email or "").strip().lower():
+            raise ValidationError("Email verification does not match your account email.")
+        return email_verify
+
+    def clean_username(self):
+        cleaned = self.cleaned_data or {}
+        username = (cleaned.get("username") or "").strip()
+        if not username:
+            raise ValidationError("Username (Staff ID) is required.")
+        qs = CustomUser.objects.filter(username__iexact=username).exclude(id=self._user.id)
+        if qs.exists():
+            raise ValidationError("This Staff ID is already in use.")
+        return username
 
 
 class StaffSearchForm(forms.Form):
@@ -256,7 +331,7 @@ class PublicCaseSearchForm(forms.Form):
     q = forms.CharField(
         label="Tracking Number",
         required=True,
-        widget=forms.TextInput(attrs={"placeholder": "e.g., CEB251200001"}),
+        widget=forms.TextInput(attrs={"placeholder": "e.g., PAS26010001"}),
     )
 
     def clean_q(self):

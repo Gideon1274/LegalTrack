@@ -22,18 +22,18 @@
         a:hover {text-decoration:underline;}
 
         .topbar {background:#fff; border-bottom:1px solid var(--border);}
-        .topbar__inner {max-width:1100px; margin:0 auto; padding:12px 16px; display:flex; align-items:center; gap:16px; flex-wrap:wrap;}
+        .topbar__inner {max-width:1100px; margin:0 auto; padding:12px 16px; display:flex; align-items:center; gap:14px; flex-wrap:nowrap;}
         .brand {display:flex; align-items:center; gap:10px; font-weight:700;}
         .brand__mark {width:18px; height:18px; border-radius:4px; background:var(--primary); display:inline-block;}
         .brand__text {letter-spacing:.2px;}
 
-        .navpills {display:flex; gap:10px; align-items:center; margin:0 auto; flex-wrap:wrap; justify-content:center;}
-        .navpills a {padding:8px 14px; border-radius:10px; border:1px solid transparent; font-weight:600; color:var(--muted);}
+        .navpills {display:flex; gap:8px; align-items:center; flex-wrap:nowrap; justify-content:center; flex:1; min-width:0; margin:0 auto; white-space:nowrap;}
+        .navpills a {padding:7px 12px; border-radius:10px; border:1px solid transparent; font-weight:700; font-size:0.92rem; color:var(--muted);}
         .navpills a.active {background:var(--primary); color:#fff; text-decoration:none;}
         .navpills a:hover,
         .navpills a:focus-visible {text-decoration:none; background:var(--primary); border-color:var(--primary); color:#fff; outline:none;}
 
-        .topbar__right {display:flex; align-items:center; gap:10px; margin-left:auto;}
+        .topbar__right {display:flex; align-items:center; gap:10px; margin-left:auto; flex:0 0 auto;}
         .userchip {display:flex; align-items:center; gap:8px; color:var(--muted); font-weight:600; font-size:0.92rem;}
         .avatar {width:26px; height:26px; border-radius:999px; background:#e5e7eb; border:1px solid var(--border);}
 
@@ -112,9 +112,13 @@
         .pagepill.active {background:var(--primary); color:#fff; border-color:var(--primary);}
         .pagepill:hover {text-decoration:none; color:var(--text);}
 
-        @media (max-width: 760px) {
+        @media (max-width: 900px) {
+            .topbar__inner {flex-wrap:wrap;}
+            .navpills {width:100%; justify-content:flex-start; flex-wrap:wrap; white-space:normal;}
             .topbar__right {margin-left:0; width:100%; justify-content:space-between;}
-            .navpills {width:100%; justify-content:flex-start;}
+        }
+
+        @media (max-width: 760px) {
             .table {display:block; width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch;}
         }
     </style>
@@ -146,6 +150,7 @@
                         <span class="avatar" aria-hidden="true"></span>
                         <span>{{ user.full_name|default:user.email }}</span>
                     </div>
+                    <a class="btn btn-secondary btn-sm" href="{% url 'profile' %}">Profile</a>
                     <form method="post" action="{% url 'logout' %}" style="margin:0;">
                         {% csrf_token %}
                         <button class="btn btn-secondary btn-sm" type="submit">Logout</button>
@@ -169,5 +174,7 @@
         {% endif %}
         {% block content %}{% endblock %}
     </main>
+
+    {% block extra_js %}{% endblock %}
 </body>
 </html>

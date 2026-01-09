@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Profile{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2 class="page-title">Profile</h2>
+    <p class="page-subtitle">{{ role_display }}</p>
+
+    <div class="form-grid">
+        <div>
+            <label>Email</label>
+            <input value="{{ user.email }}" disabled />
+        </div>
+        <div>
+            <label>Role</label>
+            <input value="{{ user.get_role_display }}" disabled />
+        </div>
+    </div>
+
+    <div class="row-end mt-12">
+        <a class="btn btn-secondary" href="{% url 'set_password' %}">Change Password</a>
+    </div>
+</div>
+
+<form class="card" method="post">
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+        <div class="msg error">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <div class="form-grid">
+        <div>
+            <label for="{{ form.username.id_for_label }}">Username (Staff ID)</label>
+            {{ form.username }}
+            {{ form.username.errors }}
+        </div>
+        <div>
+            <label for="{{ form.position.id_for_label }}">Position</label>
+            {{ form.position }}
+            {{ form.position.errors }}
+        </div>
+        <div class="span-2">
+            <label for="{{ form.email_verify.id_for_label }}">{{ form.email_verify.label }}</label>
+            {{ form.email_verify }}
+            {% if form.email_verify.help_text %}<div class="muted mt-4 fs-92">{{ form.email_verify.help_text }}</div>{% endif %}
+            {{ form.email_verify.errors }}
+        </div>
+    </div>
+
+    <div style="display:flex; justify-content:flex-end; margin-top:14px;">
+        <button class="btn btn-primary" type="submit">Save Changes</button>
+    </div>
+</form>
+{% endblock %}

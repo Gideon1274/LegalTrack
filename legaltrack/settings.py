@@ -243,12 +243,14 @@ if LEGALTRACK_DB_PROVIDER == "supabase":
         raise ImproperlyConfigured(
             "DATABASE_URL is required when LEGALTRACK_DB_PROVIDER=supabase."
         )
-    # Quick resiliency: if the configured DB host cannot be resolved from this
-    # machine (common on disconnected laptops or networks without IPv6),
-    # fall back to a local SQLite DB for development so commands like
-    # `manage.py migrate` / `runserver` remain usable. This only triggers
-    # when running locally (DEBUG mode); production deployments should
-    # provide a valid reachable DATABASE_URL.
+    # Optional resiliency for local dev: if the configured DB host cannot be
+    # resolved from this machine, you may opt-in to falling back to local
+    # SQLite so commands like `manage.py migrate` / `runserver` remain usable.
+    #
+    # IMPORTANT: This fallback is intentionally *disabled by default* so you
+    # don't accidentally think you're using Supabase while actually using
+    # local SQLite.
+    LEGALTRACK_ALLOW_SQLITE_FALLBACK = _truthy(_env("LEGALTRACK_ALLOW_SQLITE_FALLBACK"))
     try:
         parsed = urlparse(database_url)
         hostname = parsed.hostname
@@ -262,13 +264,21 @@ if LEGALTRACK_DB_PROVIDER == "supabase":
             # this environment and fallback to sqlite.
             socket.getaddrinfo(hostname, None)
         except Exception:
-            import warnings
-            warnings.warn(
-                f"Database host '{hostname}' is not resolvable from this machine; "
-                "falling back to local SQLite for development.",
-                RuntimeWarning,
-            )
-            LEGALTRACK_DB_PROVIDER = "sqlite"
+            if LEGALTRACK_ALLOW_SQLITE_FALLBACK and DEBUG:
+                import warnings
+
+                warnings.warn(
+                    f"Database host '{hostname}' is not resolvable from this machine; "
+                    "falling back to local SQLite for development.",
+                    RuntimeWarning,
+                )
+                LEGALTRACK_DB_PROVIDER = "sqlite"
+            else:
+                raise ImproperlyConfigured(
+                    f"Database host '{hostname}' is not resolvable from this machine. "
+                    "Fix your DNS/network or update DATABASE_URL. "
+                    "(To allow local SQLite fallback in dev, set LEGALTRACK_ALLOW_SQLITE_FALLBACK=true.)"
+                )
 
     # Re-check provider in case we fell back
     if LEGALTRACK_DB_PROVIDER != "supabase":
