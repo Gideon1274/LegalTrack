@@ -163,6 +163,36 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
+# Cross-origin frontend support (e.g., Vercel frontend -> self-hosted backend)
+# Enable by setting:
+# - DJANGO_CORS_ALLOWED_ORIGINS=https://your-app.vercel.app
+# - DJANGO_CSRF_TRUSTED_ORIGINS=https://your-app.vercel.app,https://your-backend-domain
+# - LEGALTRACK_CROSS_SITE_COOKIES=true
+try:
+    import corsheaders  # type: ignore  # noqa: F401
+    _has_corsheaders = True
+except Exception:
+    _has_corsheaders = False
+
+if _has_corsheaders and "corsheaders" not in INSTALLED_APPS:
+    INSTALLED_APPS = ["corsheaders", *INSTALLED_APPS]
+    # Must be placed as high as possible, especially before CommonMiddleware
+    if "corsheaders.middleware.CorsMiddleware" not in MIDDLEWARE:
+        MIDDLEWARE = [
+            "corsheaders.middleware.CorsMiddleware",
+            *MIDDLEWARE,
+        ]
+
+    CORS_ALLOWED_ORIGINS = _split_csv(_env("DJANGO_CORS_ALLOWED_ORIGINS"))
+    CORS_ALLOW_CREDENTIALS = True
+
+    # In cross-origin setups, cookies must be SameSite=None; Secure.
+    if _truthy(_env("LEGALTRACK_CROSS_SITE_COOKIES")):
+        CSRF_COOKIE_SAMESITE = "None"
+        SESSION_COOKIE_SAMESITE = "None"
+        CSRF_COOKIE_SECURE = True
+        SESSION_COOKIE_SECURE = True
+
 ROOT_URLCONF = "legaltrack.urls"
 
 TEMPLATES = [
