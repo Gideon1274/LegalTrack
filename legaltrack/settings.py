@@ -236,7 +236,7 @@ AUTHENTICATION_BACKENDS = [
 ]
 
 
-def _database_from_url(database_url: str) -> dict:
+def _database_from_url(database_url: str) -> dict[str, object]:
     parsed = urlparse(database_url)
 
     scheme = (parsed.scheme or "").lower()
@@ -258,7 +258,7 @@ def _database_from_url(database_url: str) -> dict:
     if "sslmode" in query:
         options["sslmode"] = query["sslmode"]
 
-    return {
+    config: dict[str, object] = {
         "ENGINE": engine,
         "NAME": (parsed.path or "").lstrip("/") or os.getenv("DB_NAME", "postgres"),
         "USER": parsed.username or os.getenv("DB_USER", "postgres"),
@@ -267,6 +267,32 @@ def _database_from_url(database_url: str) -> dict:
         "PORT": str(parsed.port or os.getenv("DB_PORT", "5432")),
         "OPTIONS": options,
     }
+
+    # Vercel outbound networking can fail when the DB hostname resolves to IPv6
+    # first. Supabase hosts typically have both A and AAAA records; psycopg2 may
+    # pick IPv6 and error with "Cannot assign requested address".
+    #
+    # On Vercel, prefer IPv4 by resolving an A record and using the IP directly.
+    # sslmode=require does not verify hostnames, so this is safe.
+    if _is_vercel():
+        try:
+            host_val = config.get("HOST")
+            port_val = config.get("PORT")
+
+            host = str(host_val or "").strip()
+            port = int(str(port_val or "5432"))
+            if host and not host.replace(".", "").isdigit():
+                infos = socket.getaddrinfo(host, port, family=socket.AF_INET, type=socket.SOCK_STREAM)
+                if infos:
+                    ipv4 = infos[0][4][0]
+                    if ipv4:
+                        config["HOST"] = ipv4
+        except Exception:
+            # If resolution fails, keep hostname; Django/psycopg2 will error with
+            # a clearer message.
+            pass
+
+    return config
 
 
 LEGALTRACK_DB_PROVIDER = (_env("LEGALTRACK_DB_PROVIDER", "supabase") or "supabase").strip().lower()
