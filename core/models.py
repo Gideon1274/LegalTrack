@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import secrets
 import string
+import uuid
 from typing import ClassVar
+from pathlib import PurePosixPath
 
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser, UserManager
@@ -383,10 +385,14 @@ class PasswordResetRequest(models.Model):
 
 class Case(TimestampedModel):
     # ---------- Tracking ID ----------
-    tracking_id = models.CharField(max_length=30, unique=True, editable=False)
+    tracking_id = models.CharField(max_length=30, unique=True, editable=False, blank=True, null=True)
+
+    # Draft identifier (internal). Drafts do not get a tracking number until submitted.
+    draft_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
 
     # ---------- Status ----------
     STATUS_CHOICES: ClassVar[list[tuple[str, str]]] = [
+        ("draft", "Draft"),
         ("not_received", "Not Received"),          # LGU created, still editable
         ("received", "Received"),                  # Capitol marked receipt
         ("in_review", "In Review"),
@@ -487,7 +493,9 @@ class Case(TimestampedModel):
         verbose_name_plural = "Cases"
 
     def __str__(self):
-        return f"{self.tracking_id} - {self.client_name}"
+        if self.tracking_id:
+            return f"{self.tracking_id} - {self.client_name}"
+        return f"Draft {self.draft_id} - {self.client_name}"
 
     @property
     def client_display_name(self) -> str:
@@ -558,6 +566,11 @@ class Case(TimestampedModel):
         if self.tracking_id:
             return super().save(*args, **kwargs)
 
+        # Drafts (not yet submitted) intentionally have no tracking_id.
+        # Tracking ID is generated only when the case is submitted.
+        if self.lgu_submitted_at is None:
+            return super().save(*args, **kwargs)
+
         # Generate tracking_id on first save. Retry a few times to avoid
         # collisions when multiple cases are created concurrently.
         last_err: Exception | None = None
@@ -575,15 +588,45 @@ class Case(TimestampedModel):
 
 
 def case_document_upload_to(instance, filename: str) -> str:
-    tracking = getattr(getattr(instance, "case", None), "tracking_id", "unknown")
-    doc_type = slugify(getattr(instance, "doc_type", "") or "document")
-    return f"cases/{tracking}/{doc_type}/{filename}"
+    def _safe_filename(name: str, *, max_len: int = 120) -> str:
+        # Browsers sometimes send a fake path (e.g., C:\\fakepath\\file.pdf).
+        # Normalize to a basename and truncate to avoid FileField max_length issues.
+        raw = (name or "").replace("\\", "/")
+        base = PurePosixPath(raw).name
+        if not base:
+            return "upload"
+
+        # Keep extension if present.
+        if "." in base:
+            stem, _, ext = base.rpartition(".")
+            ext = ext.lower()
+            ext_part = f".{ext}" if ext else ""
+            stem = stem or "file"
+        else:
+            stem, ext_part = base, ""
+
+        # Strip odd whitespace; keep characters as-is (storage will handle).
+        stem = " ".join(stem.split()).strip() or "file"
+
+        # Ensure total <= max_len
+        allowed = max(1, max_len - len(ext_part))
+        if len(stem) > allowed:
+            stem = stem[:allowed]
+        return f"{stem}{ext_part}"
+
+    case = getattr(instance, "case", None)
+    tracking = getattr(case, "tracking_id", None)
+    draft_id = getattr(case, "draft_id", None)
+    key = tracking or (str(draft_id) if draft_id else "unknown")
+    doc_type = (slugify(getattr(instance, "doc_type", "") or "document") or "document")[:60]
+    safe_name = _safe_filename(str(filename))
+    return f"cases/{key}/{doc_type}/{safe_name}"
 
 
 class CaseDocument(TimestampedModel):
     case = models.ForeignKey("Case", on_delete=models.CASCADE, related_name="documents")
     doc_type = models.CharField(max_length=120)
-    file = models.FileField(upload_to=case_document_upload_to)
+    file = models.FileField(upload_to=case_document_upload_to, max_length=1024)
     uploaded_by = models.ForeignKey(
         "CustomUser",
         on_delete=models.SET_NULL,
@@ -600,7 +643,8 @@ class CaseDocument(TimestampedModel):
         ]
 
     def __str__(self):
-        return f"{self.case.tracking_id} - {self.doc_type}"
+        key = self.case.tracking_id or str(getattr(self.case, "draft_id", ""))
+        return f"{key} - {self.doc_type}"
 
 
 class CaseRemark(TimestampedModel):
@@ -612,7 +656,8 @@ class CaseRemark(TimestampedModel):
 
     def __str__(self):
         author = getattr(self.created_by, "email", "") if self.created_by else ""
-        return f"Remark on {self.case.tracking_id} by {author}"
+        key = self.case.tracking_id or str(getattr(self.case, "draft_id", ""))
+        return f"Remark on {key} by {author}"
 
 
 class FAQItem(TimestampedModel):

@@ -38,6 +38,27 @@ from .forms import (
 from .models import AuditLog, Case, CaseDocument, CaseRemark, CustomUser, FAQItem, SupportFeedback
 
 
+def _build_checklist_rows(formset, documents: list[CaseDocument]):
+    docs_by_key = {((d.doc_type or "").strip().lower()): d for d in (documents or [])}
+    rows: list[dict[str, object]] = []
+    for f in formset:
+        selected = ((f["doc_type"].value() or "").strip())
+        custom = ((f["custom_doc_type"].value() or "").strip())
+        effective_doc_type = custom if selected == "__custom__" else selected
+        key = (effective_doc_type or "").strip().lower()
+        doc = docs_by_key.get(key)
+        filename = ""
+        if doc and getattr(doc, "file", None):
+            filename = os.path.basename(getattr(doc.file, "name", "") or "")
+        rows.append({
+            "form": f,
+            "doc": doc,
+            "doc_type": effective_doc_type,
+            "filename": filename,
+        })
+    return rows
+
+
 def _case_type_requirements(case_type: str) -> list[str]:
     """Minimal requirements list per case type (dropdown + initial checklist)."""
     mapping: dict[str, list[str]] = {
@@ -177,7 +198,7 @@ def track_case(request):
     tracking = ""
     if form.is_valid():
         tracking = form.cleaned_data["q"]
-        case = Case.objects.filter(tracking_id__iexact=tracking).first()
+        case = Case.objects.filter(tracking_id__iexact=tracking, lgu_submitted_at__isnull=False).first()
         if case:
             return redirect("track_case_detail", tracking_id=case.tracking_id)
         return render(request, "core/track_not_found.html", {"tracking": tracking, "form": form}, status=404)
@@ -188,7 +209,7 @@ def track_case(request):
 def track_case_detail(request, tracking_id: str):
     """Module 4.1: Public view of case status summary + timeline."""
     tracking = (tracking_id or "").strip().upper()
-    case = Case.objects.filter(tracking_id__iexact=tracking).first()
+    case = Case.objects.filter(tracking_id__iexact=tracking, lgu_submitted_at__isnull=False).first()
     if not case:
         return render(request, "core/track_not_found.html", {"tracking": tracking}, status=404)
 
@@ -943,7 +964,7 @@ def _lgu_owns_case(user, case: Case) -> bool:
     )
 
 def _lgu_can_edit_details(user, case: Case) -> bool:
-    return _lgu_owns_case(user, case) and case.status in {"not_received", "returned"}
+    return _lgu_owns_case(user, case) and case.status in {"draft", "not_received", "returned"}
 
 def _lgu_can_edit_documents(user, case: Case) -> bool:
     if not _lgu_can_edit_details(user, case):
@@ -1013,6 +1034,9 @@ def submit_case(request):
         if form.is_valid():
             cleaned = form.cleaned_data
 
+            wants_save_draft = "save_draft" in request.POST
+            wants_continue = "save_continue" in request.POST or not wants_save_draft
+
             # Prevent accidental duplicate drafts (e.g., browser back + re-submit).
             recent_window = timezone.now() - timedelta(minutes=2)
             existing = (
@@ -1020,7 +1044,7 @@ def submit_case(request):
                     submitted_by=request.user,
                     created_at__gte=recent_window,
                     lgu_submitted_at__isnull=True,
-                    status__in=["not_received", "returned"],
+                    status__in=["draft", "not_received", "returned"],
                     client_first_name=(cleaned.get("client_first_name") or "").strip(),
                     client_last_name=(cleaned.get("client_last_name") or "").strip(),
                     client_middle_name=(cleaned.get("client_middle_name") or "").strip(),
@@ -1035,12 +1059,19 @@ def submit_case(request):
                 case = existing
                 for field in CaseDetailsForm.Meta.fields:
                     setattr(case, field, cleaned.get(field))
-                case.save(update_fields=[*CaseDetailsForm.Meta.fields, "updated_at"])
-                messages.info(request, f"Continuing your existing draft: {case.tracking_id}.")
-                return redirect("case_wizard", tracking_id=case.tracking_id, step=2)
+                if case.status != "draft":
+                    case.status = "draft"
+                case.lgu_submitted_at = None
+                case.save(update_fields=[*CaseDetailsForm.Meta.fields, "status", "lgu_submitted_at", "updated_at"])
+                messages.info(request, "Continuing your existing draft.")
+                if wants_save_draft and not wants_continue:
+                    return redirect("drafts")
+                return redirect("draft_wizard", draft_id=case.draft_id, step=2)
 
             case = form.save(commit=False)
             case.submitted_by = request.user
+            case.status = "draft"
+            case.lgu_submitted_at = None
             case.save()
 
             # Seed checklist suggestions (uploads happen in Step 2 only).
@@ -1063,12 +1094,16 @@ def submit_case(request):
             AuditLog.objects.create(
                 actor=request.user,
                 action="case_create",
-                target_object=f"Case: {case.tracking_id}",
+                target_object=f"Draft: {case.draft_id}",
                 details={"client": case.client_name, "case_type": case.case_type}
             )
 
-            messages.success(request, f"Draft created: {case.tracking_id}. Continue uploading documents.")
-            return redirect("case_wizard", tracking_id=case.tracking_id, step=2)
+            if wants_save_draft and not wants_continue:
+                messages.success(request, "Draft saved.")
+                return redirect("drafts")
+
+            messages.success(request, "Draft saved. Continue uploading documents.")
+            return redirect("draft_wizard", draft_id=case.draft_id, step=2)
     else:
         form = CaseDetailsForm()
 
@@ -1172,12 +1207,15 @@ def case_wizard(request, tracking_id, step: int):
                     total = 0
                 data["form-TOTAL_FORMS"] = str(total + 1)
                 formset = FormSet(data, request.FILES, form_kwargs={"doc_type_choices": doc_type_choices})
+                docs = list(case.documents.all())
                 return render(request, "core/submit_case.html", {
                     "step": 2,
                     "formset": formset,
                     "case": case,
                     "is_edit": True,
-                    "documents": list(case.documents.all()),
+                    "documents": docs,
+                    "documents_by_type": {d.doc_type: d for d in docs},
+                    "rows": _build_checklist_rows(formset, docs),
                     "case_type_requirements": requirements,
                 })
 
@@ -1198,12 +1236,15 @@ def case_wizard(request, tracking_id, step: int):
                     key = doc_type.lower()
                     if key in seen:
                         messages.error(request, f"Duplicate document type: {doc_type}")
+                        docs = list(case.documents.all())
                         return render(request, "core/submit_case.html", {
                             "step": 2,
                             "formset": formset,
                             "case": case,
                             "is_edit": True,
-                            "documents": list(case.documents.all()),
+                            "documents": docs,
+                            "documents_by_type": {d.doc_type: d for d in docs},
+                            "rows": _build_checklist_rows(formset, docs),
                             "case_type_requirements": requirements,
                         })
                     seen.add(key)
@@ -1244,12 +1285,16 @@ def case_wizard(request, tracking_id, step: int):
         else:
             formset = FormSet(initial=initial, form_kwargs={"doc_type_choices": doc_type_choices})
 
+        docs = list(case.documents.all())
+
         return render(request, "core/submit_case.html", {
             "step": 2,
             "formset": formset,
             "case": case,
             "is_edit": True,
-            "documents": list(case.documents.all()),
+            "documents": docs,
+            "documents_by_type": {d.doc_type: d for d in docs},
+            "rows": _build_checklist_rows(formset, docs),
             "case_type_requirements": requirements,
         })
 
@@ -1294,6 +1339,276 @@ def case_wizard(request, tracking_id, step: int):
         "documents": list(case.documents.all()),
         "checklist": checklist,
     })
+
+
+@login_required
+def drafts(request):
+    if request.user.role not in {"lgu_admin", "capitol_receiving"}:
+        messages.error(request, "Not authorized.")
+        return redirect("dashboard")
+
+    qs = (
+        Case.objects.filter(
+            submitted_by=request.user,
+            status="draft",
+            lgu_submitted_at__isnull=True,
+        )
+        .order_by("-updated_at")
+    )
+    return render(request, "core/drafts.html", {"drafts": list(qs)})
+
+
+@login_required
+def draft_wizard(request, draft_id, step: int):
+    case = get_object_or_404(Case, draft_id=draft_id)
+
+    # If already submitted, go to the official case page.
+    if case.tracking_id and case.lgu_submitted_at is not None:
+        return redirect("case_detail", tracking_id=case.tracking_id)
+
+    if request.user.role not in {"lgu_admin", "capitol_receiving"}:
+        messages.error(request, "Only LGU Admins and Capitol Receiver can edit drafts.")
+        return redirect("dashboard")
+
+    if not _lgu_can_edit_details(request.user, case):
+        messages.error(request, "This draft can no longer be edited.")
+        return redirect("drafts")
+
+    step = int(step or 1)
+    if step not in (1, 2, 3):
+        return redirect("draft_wizard", draft_id=case.draft_id, step=1)
+
+    if step == 1:
+        if request.method == "POST":
+            form = CaseDetailsForm(request.POST, request.FILES, instance=case)
+            if form.is_valid():
+                case = form.save(commit=False)
+                case.status = "draft"
+                case.lgu_submitted_at = None
+                case.save()
+
+                AuditLog.objects.create(
+                    actor=request.user,
+                    action="case_update",
+                    target_object=f"Draft: {case.draft_id}",
+                    details={"step": 1}
+                )
+                if "save_draft" in request.POST:
+                    messages.success(request, "Draft saved.")
+                    return redirect("drafts")
+
+                messages.success(request, "Draft details saved.")
+                return redirect("draft_wizard", draft_id=case.draft_id, step=2)
+        else:
+            form = CaseDetailsForm(instance=case)
+
+        return render(request, "core/submit_case.html", {
+            "step": 1,
+            "form": form,
+            "case": case,
+            "is_edit": True,
+            "documents": list(case.documents.all()),
+        })
+
+    if step == 2:
+        if not _lgu_can_edit_documents(request.user, case):
+            messages.error(request, "Document uploads can only be changed after the case is returned by Capitol Receiving.")
+            return redirect("draft_wizard", draft_id=case.draft_id, step=1)
+
+        requirements = ["Endorsement Letter", *_case_type_requirements(getattr(case, "case_type", ""))]
+        existing_checklist_types = [
+            (i.get("doc_type") or "").strip()
+            for i in (case.checklist or [])
+            if isinstance(i, dict)
+        ]
+        existing_doc_types = [d.doc_type for d in case.documents.all()]
+        doc_type_choices = list(dict.fromkeys([
+            *requirements,
+            *existing_checklist_types,
+            *existing_doc_types,
+            "Endorsement Letter",
+        ]))
+
+        FormSet = forms.formset_factory(ChecklistItemForm, extra=0)
+
+        initial = []
+        if case.checklist:
+            for item in (case.checklist or []):
+                if isinstance(item, dict):
+                    initial.append({
+                        "doc_type": item.get("doc_type", ""),
+                        "required": False,
+                    })
+        else:
+            for req in requirements:
+                initial.append({"doc_type": req, "required": False})
+
+        if request.method == "POST":
+            if "add_row" in request.POST:
+                data = request.POST.copy()
+                try:
+                    total = int(data.get("form-TOTAL_FORMS") or "0")
+                except ValueError:
+                    total = 0
+                data["form-TOTAL_FORMS"] = str(total + 1)
+                formset = FormSet(data, request.FILES, form_kwargs={"doc_type_choices": doc_type_choices})
+                docs = list(case.documents.all())
+                return render(request, "core/submit_case.html", {
+                    "step": 2,
+                    "formset": formset,
+                    "case": case,
+                    "is_edit": True,
+                    "documents": docs,
+                    "documents_by_type": {d.doc_type: d for d in docs},
+                    "rows": _build_checklist_rows(formset, docs),
+                    "case_type_requirements": requirements,
+                })
+
+            formset = FormSet(request.POST, request.FILES, form_kwargs={"doc_type_choices": doc_type_choices})
+            if formset.is_valid():
+                new_checklist = []
+                seen = set()
+
+                for f in formset:
+                    cd = f.cleaned_data
+                    if not cd:
+                        continue
+
+                    doc_type = (cd.get("doc_type") or "").strip()
+                    if not doc_type:
+                        continue
+
+                    key = doc_type.lower()
+                    if key in seen:
+                        messages.error(request, f"Duplicate document type: {doc_type}")
+                        docs = list(case.documents.all())
+                        return render(request, "core/submit_case.html", {
+                            "step": 2,
+                            "formset": formset,
+                            "case": case,
+                            "is_edit": True,
+                            "documents": docs,
+                            "documents_by_type": {d.doc_type: d for d in docs},
+                            "rows": _build_checklist_rows(formset, docs),
+                            "case_type_requirements": requirements,
+                        })
+                    seen.add(key)
+
+                    uploaded_file = cd.get("file")
+                    if uploaded_file:
+                        _upsert_case_document(case=case, doc_type=doc_type, uploaded_file=uploaded_file, actor=request.user)
+
+                    has_doc = CaseDocument.objects.filter(case=case, doc_type=doc_type).exists()
+                    new_checklist.append({
+                        "doc_type": doc_type,
+                        "required": False,
+                        "uploaded": bool(has_doc),
+                    })
+
+                if CaseDocument.objects.filter(case=case, doc_type="Endorsement Letter").exists():
+                    if not any((i.get("doc_type") == "Endorsement Letter") for i in new_checklist):
+                        new_checklist.insert(0, {"doc_type": "Endorsement Letter", "required": False, "uploaded": True})
+                else:
+                    if not any((i.get("doc_type") == "Endorsement Letter") for i in new_checklist):
+                        new_checklist.insert(0, {"doc_type": "Endorsement Letter", "required": False, "uploaded": False})
+
+                case.checklist = new_checklist
+                case.status = "draft"
+                case.lgu_submitted_at = None
+                case.save(update_fields=["checklist", "status", "updated_at", "lgu_submitted_at"])
+
+                AuditLog.objects.create(
+                    actor=request.user,
+                    action="case_update",
+                    target_object=f"Draft: {case.draft_id}",
+                    details={"step": 2, "items": len(new_checklist)}
+                )
+
+                if "save_draft" in request.POST:
+                    messages.success(request, "Draft saved.")
+                    return redirect("drafts")
+
+                messages.success(request, "Draft checklist and uploads saved.")
+                return redirect("draft_wizard", draft_id=case.draft_id, step=3)
+        else:
+            formset = FormSet(initial=initial, form_kwargs={"doc_type_choices": doc_type_choices})
+
+        docs = list(case.documents.all())
+
+        return render(request, "core/submit_case.html", {
+            "step": 2,
+            "formset": formset,
+            "case": case,
+            "is_edit": True,
+            "documents": docs,
+            "documents_by_type": {d.doc_type: d for d in docs},
+            "rows": _build_checklist_rows(formset, docs),
+            "case_type_requirements": requirements,
+        })
+
+    # Wizard step 3
+    if not _lgu_can_finalize(request.user, case):
+        messages.error(request, "This draft cannot be submitted right now.")
+        return redirect("draft_wizard", draft_id=case.draft_id, step=1)
+
+    checklist = []
+    for item in (case.checklist or []):
+        if not isinstance(item, dict):
+            continue
+        doc_type = (item.get("doc_type") or "").strip()
+        if not doc_type:
+            continue
+        checklist.append({
+            "doc_type": doc_type,
+            "required": False,
+            "uploaded": CaseDocument.objects.filter(case=case, doc_type=doc_type).exists(),
+        })
+
+    if request.method == "POST":
+        if "save_draft" in request.POST:
+            messages.success(request, "Draft saved.")
+            return redirect("drafts")
+
+        case.status = "not_received"
+        case.lgu_submitted_at = timezone.now()
+        case.save(update_fields=["status", "lgu_submitted_at", "updated_at", "tracking_id"])
+
+        AuditLog.objects.create(
+            actor=request.user,
+            action="case_update",
+            target_object=f"Case: {case.tracking_id}",
+            details={"step": 3, "finalized": True}
+        )
+        messages.success(request, f"Case {case.tracking_id} submitted.")
+        return redirect("case_detail", tracking_id=case.tracking_id)
+
+    return render(request, "core/submit_case.html", {
+        "step": 3,
+        "case": case,
+        "is_edit": True,
+        "documents": list(case.documents.all()),
+        "checklist": checklist,
+    })
+
+
+@login_required
+@require_POST
+def delete_draft(request, draft_id):
+    if request.user.role not in {"lgu_admin", "capitol_receiving"}:
+        messages.error(request, "Not authorized.")
+        return redirect("dashboard")
+
+    case = get_object_or_404(
+        Case,
+        draft_id=draft_id,
+        submitted_by=request.user,
+        status="draft",
+        lgu_submitted_at__isnull=True,
+    )
+
+    case.delete()
+    messages.success(request, "Draft deleted.")
+    return redirect("drafts")
 
 
 @login_required
@@ -1437,7 +1752,7 @@ def submissions(request):
     date_from = parse_date(date_from_raw) if date_from_raw else None
     date_to = parse_date(date_to_raw) if date_to_raw else None
 
-    qs = Case.objects.all().select_related("submitted_by", "assigned_to").order_by("-created_at")
+    qs = Case.objects.filter(lgu_submitted_at__isnull=False).select_related("submitted_by", "assigned_to").order_by("-created_at")
 
     if request.user.role == "capitol_examiner":
         qs = qs.filter(assigned_to=request.user)
