@@ -237,6 +237,7 @@ AUTHENTICATION_BACKENDS = [
 
 
 def _database_from_url(database_url: str) -> dict[str, object]:
+    
     parsed = urlparse(database_url)
 
     scheme = (parsed.scheme or "").lower()
