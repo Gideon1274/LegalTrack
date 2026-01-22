@@ -29,20 +29,39 @@
 
         <div class="form-grid">
             <div>
-                <label for="{{ form.client_name.id_for_label }}">Client Name</label>
-                {{ form.client_name }}
-                {{ form.client_name.errors }}
+                <label for="{{ form.client_first_name.id_for_label }}">Client First Name</label>
+                {{ form.client_first_name }}
+                {{ form.client_first_name.errors }}
             </div>
             <div>
-                <label for="{{ form.client_contact.id_for_label }}">Client Contact</label>
-                {{ form.client_contact }}
-                {{ form.client_contact.errors }}
+                <label for="{{ form.client_last_name.id_for_label }}">Client Last Name</label>
+                {{ form.client_last_name }}
+                {{ form.client_last_name.errors }}
+            </div>
+            <div>
+                <label for="{{ form.client_middle_name.id_for_label }}">Client Middle Name</label>
+                {{ form.client_middle_name }}
+                {{ form.client_middle_name.errors }}
+            </div>
+            <div>
+                <label for="{{ form.client_suffix.id_for_label }}">Client Suffix</label>
+                {{ form.client_suffix }}
+                {{ form.client_suffix.errors }}
+            </div>
+            <div>
+                <label for="{{ form.client_number.id_for_label }}">Client Number</label>
+                {{ form.client_number }}
+                {{ form.client_number.errors }}
+            </div>
+            <div>
+                <label for="{{ form.client_email.id_for_label }}">Client Email</label>
+                {{ form.client_email }}
+                {{ form.client_email.errors }}
             </div>
             <div class="span-2">
-                <label for="{{ form.endorsement_letter.id_for_label }}">Endorsement Letter (optional upload)</label>
-                {{ form.endorsement_letter }}
-                {{ form.endorsement_letter.errors }}
-                <p class="muted" style="margin:8px 0 0 0;">You can also upload this in Step 2.</p>
+                <label for="{{ form.case_type.id_for_label }}">Type of Case</label>
+                {{ form.case_type }}
+                {{ form.case_type.errors }}
             </div>
         </div>
 
@@ -63,7 +82,8 @@
         <div class="card card--flat">
             <div class="card__header">
                 <strong>Document Checklist</strong>
-                <span class="muted">Add rows as needed; upload scanned files per document type.</span>
+                <span class="muted">Case type: <strong>{{ case.get_case_type_display|default:"—" }}</strong></span>
+                <span style="margin-left:auto;"><button class="btn btn-secondary btn-sm" type="submit" name="add_row" value="1">+ Add Row</button></span>
             </div>
             <div class="card__body card__body--flush">
                 <table class="table">
@@ -71,8 +91,7 @@
                         <tr>
                             <th style="width:34%">Document Type</th>
                             <th style="width:12%">Required</th>
-                            <th>Upload Scan</th>
-                            <th style="width:10%">Remove</th>
+                            <th>Upload File</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -80,17 +99,20 @@
                             <tr>
                                 <td>
                                     {{ f.doc_type }}
+                                    <div class="mt-4 custom-doc" data-custom-doc style="display:none;">
+                                        {{ f.custom_doc_type }}
+                                    </div>
                                     {% if f.doc_type.errors %}<div class="muted">{{ f.doc_type.errors }}</div>{% endif %}
+                                    {% if f.custom_doc_type.errors %}<div class="muted">{{ f.custom_doc_type.errors }}</div>{% endif %}
                                 </td>
                                 <td>{{ f.required }}</td>
                                 <td>
                                     {{ f.file }}
                                     {% if f.file.errors %}<div class="muted">{{ f.file.errors }}</div>{% endif %}
                                 </td>
-                                <td>{{ f.delete }}</td>
                             </tr>
                             {% if f.non_field_errors %}
-                                <tr><td colspan="4"><div class="msg error">{{ f.non_field_errors }}</div></td></tr>
+                                <tr><td colspan="3"><div class="msg error">{{ f.non_field_errors }}</div></td></tr>
                             {% endif %}
                         {% endfor %}
                     </tbody>
@@ -112,14 +134,16 @@
                     <tr>
                         <th>Document Type</th>
                         <th>File</th>
-                        <th>Uploaded</th>
+                        <th style="width:14%">View File</th>
+                        <th style="width:22%">Uploaded</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for doc in documents %}
                         <tr>
                             <td>{{ doc.doc_type }}</td>
-                            <td><a href="{{ doc.file.url }}" target="_blank" rel="noopener">{{ doc.file.name|cut:"cases/" }}</a></td>
+                            <td class="muted">{{ doc.file.name|cut:"cases/" }}</td>
+                            <td><a class="btn btn-secondary btn-sm" href="{% url 'download_case_document' doc.id %}" target="_blank" rel="noopener">View</a></td>
                             <td class="muted">{{ doc.uploaded_at|date:"M d, Y H:i" }}</td>
                         </tr>
                     {% endfor %}
@@ -133,12 +157,16 @@
         <h3 style="margin:0 0 12px 0;">Review</h3>
         <div class="form-grid">
             <div>
-                <label>Client Name</label>
-                <div><strong>{{ case.client_name }}</strong></div>
+                <label>Client</label>
+                <div><strong>{{ case.client_display_name }}</strong></div>
             </div>
             <div>
-                <label>Client Contact</label>
-                <div>{{ case.client_contact|default:"—" }}</div>
+                <label>Contact</label>
+                <div>{{ case.client_display_contact|default:"—" }}</div>
+            </div>
+            <div>
+                <label>Type of Case</label>
+                <div>{{ case.get_case_type_display|default:"—" }}</div>
             </div>
             <div class="span-2">
                 <label>Checklist</label>
@@ -171,15 +199,26 @@
     {% if documents %}
         <div class="card">
             <h3 style="margin:0 0 10px 0;">Uploaded Documents</h3>
-            <ul style="margin:0; padding-left:18px;">
-                {% for doc in documents %}
-                    <li>
-                        <strong>{{ doc.doc_type }}</strong> —
-                        <a href="{{ doc.file.url }}" target="_blank" rel="noopener">View file</a>
-                        <span class="muted">({{ doc.uploaded_at|date:"M d, Y H:i" }})</span>
-                    </li>
-                {% endfor %}
-            </ul>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Document Type</th>
+                        <th>File</th>
+                        <th style="width:14%">View File</th>
+                        <th style="width:22%">Uploaded</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for doc in documents %}
+                        <tr>
+                            <td>{{ doc.doc_type }}</td>
+                            <td class="muted">{{ doc.file.name|cut:"cases/" }}</td>
+                            <td><a class="btn btn-secondary btn-sm" href="{% url 'download_case_document' doc.id %}" target="_blank" rel="noopener">View</a></td>
+                            <td class="muted">{{ doc.uploaded_at|date:"M d, Y H:i" }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
     {% endif %}
 
@@ -192,4 +231,39 @@
     </form>
 {% endif %}
 
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    (function () {
+        function syncRow(row) {
+            if (!row) return;
+            var select = row.querySelector('select[name$="-doc_type"]');
+            var customWrap = row.querySelector('[data-custom-doc]');
+            if (!select || !customWrap) return;
+            var show = (select.value === '__custom__');
+            customWrap.style.display = show ? '' : 'none';
+            if (!show) {
+                var input = customWrap.querySelector('input');
+                if (input) input.value = '';
+            }
+        }
+
+        function syncAll() {
+            document.querySelectorAll('table.table tbody tr').forEach(function (row) {
+                syncRow(row);
+            });
+        }
+
+        document.addEventListener('change', function (e) {
+            var t = e.target;
+            if (t && t.tagName === 'SELECT' && (t.name || '').endsWith('-doc_type')) {
+                syncRow(t.closest('tr'));
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', syncAll);
+        syncAll();
+    })();
+</script>
 {% endblock %}

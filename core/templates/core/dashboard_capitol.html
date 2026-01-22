@@ -12,6 +12,7 @@
         <div class="card__header">
             <strong>Pending Requests</strong>
             <span class="muted">Not Received / Returned</span>
+            <span style="margin-left:auto;"><a class="btn btn-primary btn-sm" href="{% url 'submit_case' %}">+ New Request</a></span>
         </div>
         <div class="card__body card__body--flush">
             {% if pending_cases %}
@@ -29,7 +30,7 @@
                         {% for case in pending_cases %}
                             <tr>
                                 <td><strong><a href="{% url 'case_detail' case.tracking_id %}">{{ case.tracking_id }}</a></strong></td>
-                                <td>{{ case.client_name }}</td>
+                                <td>{{ case.client_display_name }}</td>
                                 <td class="muted">{{ case.get_status_display }}</td>
                                 <td class="muted">{{ case.created_at|date:"M d, Y H:i" }}</td>
                                 <td><a class="btn btn-secondary btn-sm" href="{% url 'case_detail' case.tracking_id %}">Open</a></td>
@@ -64,7 +65,7 @@
                         {% for case in received_unassigned %}
                             <tr>
                                 <td><strong><a href="{% url 'case_detail' case.tracking_id %}">{{ case.tracking_id }}</a></strong></td>
-                                <td>{{ case.client_name }}</td>
+                                <td>{{ case.client_display_name }}</td>
                                 <td class="muted">{{ case.get_status_display }}</td>
                                 <td class="muted">{% if case.received_at %}{{ case.received_at|date:"M d, Y H:i" }}{% else %}—{% endif %}</td>
                                 <td><a class="btn btn-secondary btn-sm" href="{% url 'case_detail' case.tracking_id %}">Open</a></td>
@@ -99,7 +100,7 @@
                         {% for case in my_cases %}
                             <tr>
                                 <td><strong><a href="{% url 'case_detail' case.tracking_id %}">{{ case.tracking_id }}</a></strong></td>
-                                <td>{{ case.client_name }}</td>
+                                <td>{{ case.client_display_name }}</td>
                                 <td class="muted">{{ case.get_status_display }}</td>
                                 <td class="muted">{% if case.assigned_at %}{{ case.assigned_at|date:"M d, Y H:i" }}{% else %}—{% endif %}</td>
                                 <td><a class="btn btn-secondary btn-sm" href="{% url 'case_detail' case.tracking_id %}">Open</a></td>
@@ -133,7 +134,7 @@
                         {% for case in queue_cases %}
                             <tr>
                                 <td><strong><a href="{% url 'case_detail' case.tracking_id %}">{{ case.tracking_id }}</a></strong></td>
-                                <td>{{ case.client_name }}</td>
+                                <td>{{ case.client_display_name }}</td>
                                 <td class="muted">{{ case.get_status_display }}</td>
                                 <td class="muted">{{ case.updated_at|date:"M d, Y H:i" }}</td>
                                 <td><a class="btn btn-secondary btn-sm" href="{% url 'case_detail' case.tracking_id %}">Open</a></td>
@@ -152,6 +153,34 @@
         <div class="card__header">
             <strong>For Numbering</strong>
         </div>
+        <div class="card__body">
+            <form method="get" class="searchbar m-0">
+                <div class="grow">
+                    <label for="id_lgu">Location (LGU)</label>
+                    <select id="id_lgu" name="lgu">
+                        <option value="">All</option>
+                        {% for v,l in numberer_lgu_choices %}
+                            <option value="{{ v }}" {% if filter_lgu == v %}selected{% endif %}>{{ l }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="id_date_from">From</label>
+                    <input id="id_date_from" type="date" name="date_from" value="{{ filter_date_from }}" />
+                </div>
+                <div>
+                    <label for="id_date_to">To</label>
+                    <input id="id_date_to" type="date" name="date_to" value="{{ filter_date_to }}" />
+                </div>
+                <div class="grow">
+                    <label for="id_number">Number / Tracking</label>
+                    <input id="id_number" name="number" value="{{ filter_number }}" placeholder="Search..." />
+                </div>
+                <div>
+                    <button class="btn btn-primary" type="submit">Filter</button>
+                </div>
+            </form>
+        </div>
         <div class="card__body card__body--flush">
             {% if queue_cases %}
                 <table class="table">
@@ -168,7 +197,7 @@
                         {% for case in queue_cases %}
                             <tr>
                                 <td><strong><a href="{% url 'case_detail' case.tracking_id %}">{{ case.tracking_id }}</a></strong></td>
-                                <td>{{ case.client_name }}</td>
+                                <td>{{ case.client_display_name }}</td>
                                 <td class="muted">{{ case.get_status_display }}</td>
                                 <td class="muted">{{ case.updated_at|date:"M d, Y H:i" }}</td>
                                 <td><a class="btn btn-secondary btn-sm" href="{% url 'case_detail' case.tracking_id %}">Open</a></td>
@@ -203,7 +232,7 @@
                         {% for case in queue_cases %}
                             <tr>
                                 <td><strong><a href="{% url 'case_detail' case.tracking_id %}">{{ case.tracking_id }}</a></strong></td>
-                                <td>{{ case.client_name }}</td>
+                                <td>{{ case.client_display_name }}</td>
                                 <td class="muted">{{ case.get_status_display }}</td>
                                 <td class="muted">{{ case.updated_at|date:"M d, Y H:i" }}</td>
                                 <td><a class="btn btn-secondary btn-sm" href="{% url 'case_detail' case.tracking_id %}">Open</a></td>

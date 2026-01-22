@@ -10,6 +10,8 @@ from django.conf import settings
 from django.contrib.auth.models import AbstractUser, UserManager
 from django.core.mail import send_mail
 from django.db import models
+from django.db import IntegrityError
+from django.db import transaction
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -52,7 +54,7 @@ class CustomUser(AbstractUser):
     ROLE_CHOICES: ClassVar[list[tuple[str, str]]] = [
         ("super_admin", "Super Admin"),
         ("lgu_admin", "LGU Admin"),
-        ("capitol_receiving", "Capitol Receiving Staff"),
+        ("capitol_receiving", "Capitol Receiver"),
         ("capitol_examiner", "Capitol Examiner"),
         ("capitol_approver", "Capitol Approver"),
         ("capitol_numberer", "Capitol Numberer"),
@@ -348,7 +350,7 @@ class AuditLog(TimestampedModel):
         blank=True,
         related_name="target_audit_logs"
     )
-    target_object = models.CharField(max_length=255, blank=True, help_text="e.g., Case ID: CEB-2025...")
+    target_object = models.CharField(max_length=255, blank=True, help_text="e.g., Case: PAS26010001")
     details = models.JSONField(default=dict, blank=True, help_text="Extra context in JSON")
     ip_address = models.GenericIPAddressField(null=True, blank=True)
     user_agent = models.TextField(blank=True)
@@ -401,6 +403,27 @@ class Case(TimestampedModel):
     # ---------- Client info ----------
     client_name = models.CharField(max_length=255)
     client_contact = models.CharField(max_length=100, blank=True)   # phone / email
+
+    client_first_name = models.CharField(max_length=120, blank=True, default="")
+    client_last_name = models.CharField(max_length=120, blank=True, default="")
+    client_middle_name = models.CharField(max_length=120, blank=True, default="")
+    client_suffix = models.CharField(max_length=40, blank=True, default="")
+    client_number = models.CharField(max_length=40, blank=True, default="")
+    client_email = models.EmailField(blank=True, default="")
+
+    CASE_TYPE_CHOICES: ClassVar[list[tuple[str, str]]] = [
+        ("land_first_time", "Land declared for the first-time"),
+        ("building_improvements", "Building and other improvements / Machineries"),
+        ("subdivision_consolidation", "Subdivision or Consolidation"),
+        ("reassessment_reclassification", "Re-assessment / Re-classification"),
+        ("area_increase_decrease", "Increase / Decrease of Area"),
+        ("transfer_ownership_tax_decl", "Transfer of Ownership of Tax Declaration"),
+    ]
+
+    case_type = models.CharField(max_length=64, choices=CASE_TYPE_CHOICES, blank=True, default="")
+
+    # Manual numbering (Capitol Numberer)
+    numbering_number = models.CharField(max_length=40, blank=True, null=True, unique=True)
 
     # ---------- LGU who submitted ----------
     submitted_by = models.ForeignKey(
@@ -466,37 +489,89 @@ class Case(TimestampedModel):
     def __str__(self):
         return f"{self.tracking_id} - {self.client_name}"
 
+    @property
+    def client_display_name(self) -> str:
+        last_name = (self.client_last_name or "").strip()
+        first_name = (self.client_first_name or "").strip()
+        middle_name = (self.client_middle_name or "").strip()
+        suffix = (self.client_suffix or "").strip()
+
+        if last_name or first_name or middle_name or suffix:
+            # Preferred display: Last, First Middle Suffix
+            main = ", ".join([p for p in [last_name, first_name] if p])
+            rest = " ".join([p for p in [middle_name, suffix] if p])
+            return (main + (" " + rest if rest else "")).strip().strip(",")
+
+        return (self.client_name or "").strip()
+
+    @property
+    def client_display_contact(self) -> str:
+        email = (self.client_email or "").strip()
+        number = (self.client_number or "").strip()
+        if email and number:
+            return f"{number} / {email}"
+        return number or email or (self.client_contact or "").strip()
+
     # ------------------------------------------------------------------
-    # Auto-generate tracking_id: CEB[YY][MM][#####]
-    # - Example: CEB251200001
-    # - Serial resets annually (YY)
+    # Auto-generate tracking_id: PAS[YY][MM][####]
+    # - Example: PAS26010001
+    # - Serial resets monthly (YYMM)
     # ------------------------------------------------------------------
-    def generate_tracking_id(self):
+    def generate_tracking_id(self) -> str:
         now = timezone.localtime(timezone.now())
         yy = now.strftime("%y")
         mm = now.strftime("%m")
 
-        year_prefix = f"CEB{yy}"
-        full_prefix = f"CEB{yy}{mm}"
+        full_prefix = f"PAS{yy}{mm}"
 
         existing_ids = Case.objects.filter(
-            tracking_id__startswith=year_prefix
+            tracking_id__startswith=full_prefix
         ).values_list("tracking_id", flat=True)
 
         max_seq = 0
         for tid in existing_ids:
-            if isinstance(tid, str) and len(tid) >= 5 and tid[-5:].isdigit():
-                max_seq = max(max_seq, int(tid[-5:]))
+            if isinstance(tid, str) and len(tid) >= 4 and tid[-4:].isdigit():
+                max_seq = max(max_seq, int(tid[-4:]))
 
-        return f"{full_prefix}{max_seq + 1:05d}"
+        next_seq = max_seq + 1
+        if next_seq > 9999:
+            raise ValueError("Monthly case sequence exceeded 9999")
+
+        return f"{full_prefix}{next_seq:04d}"
 
     # ------------------------------------------------------------------
     #  Save override
     # ------------------------------------------------------------------
     def save(self, *args, **kwargs):
-        if not self.tracking_id:
+        # Keep legacy `client_name` / `client_contact` populated for existing pages/reports.
+        # Prefer explicit client_* fields when present.
+        if not (self.client_name or "").strip():
+            display = (self.client_display_name or "").strip()
+            if display:
+                self.client_name = display
+
+        if not (self.client_contact or "").strip():
+            contact = (self.client_display_contact or "").strip()
+            if contact:
+                self.client_contact = contact
+
+        if self.tracking_id:
+            return super().save(*args, **kwargs)
+
+        # Generate tracking_id on first save. Retry a few times to avoid
+        # collisions when multiple cases are created concurrently.
+        last_err: Exception | None = None
+        for _ in range(10):
             self.tracking_id = self.generate_tracking_id()
-        super().save(*args, **kwargs)
+            try:
+                with transaction.atomic():
+                    return super().save(*args, **kwargs)
+            except IntegrityError as exc:
+                last_err = exc
+                self.tracking_id = ""
+                continue
+
+        raise last_err or IntegrityError("Unable to generate unique tracking_id")
 
 
 def case_document_upload_to(instance, filename: str) -> str:

@@ -24,8 +24,13 @@
     <div class="card__body card__body--flush">
         <table class="table">
             <tbody>
-                <tr><td style="width:22%" class="muted"><strong>Client</strong></td><td>{{ case.client_name }}</td></tr>
-                <tr><td class="muted"><strong>Contact</strong></td><td>{{ case.client_contact|default:"—" }}</td></tr>
+                <tr><td style="width:22%" class="muted"><strong>Client</strong></td><td>{{ case.client_display_name }}</td></tr>
+                <tr><td class="muted"><strong>Client Number</strong></td><td>{{ case.client_number|default:"—" }}</td></tr>
+                <tr><td class="muted"><strong>Client Email</strong></td><td>{{ case.client_email|default:"—" }}</td></tr>
+                <tr><td class="muted"><strong>Type of Case</strong></td><td>{{ case.get_case_type_display|default:"—" }}</td></tr>
+                {% if case.numbering_number %}
+                    <tr><td class="muted"><strong>Number</strong></td><td>{{ case.numbering_number }}</td></tr>
+                {% endif %}
                 <tr><td class="muted"><strong>Submitted by</strong></td><td>{{ case.submitted_by|default:"—" }}</td></tr>
                 <tr><td class="muted"><strong>Created</strong></td><td>{{ case.created_at|date:"M d, Y H:i" }}</td></tr>
                 {% if case.received_at %}
@@ -39,7 +44,7 @@
     </div>
 </div>
 
-{% if case.status == 'returned' and case.return_reason %}
+{% if case.return_reason and case.returned_at %}
     <div class="card">
         <h3 class="m-0" style="margin-bottom:8px;">Returned for Correction</h3>
         <p class="m-0"><strong>Reason:</strong> {{ case.return_reason }}</p>
@@ -88,6 +93,7 @@
                     <tr>
                         <th>Document Type</th>
                         <th>File</th>
+                        <th style="width:14%">View File</th>
                         <th style="width:22%">Uploaded</th>
                     </tr>
                 </thead>
@@ -95,7 +101,8 @@
                     {% for doc in documents %}
                         <tr>
                             <td>{{ doc.doc_type }}</td>
-                            <td><a href="{{ doc.file.url }}" target="_blank" rel="noopener">View file</a></td>
+                            <td class="muted">{{ doc.file.name|cut:"cases/" }}</td>
+                            <td><a class="btn btn-secondary btn-sm" href="{% url 'download_case_document' doc.id %}" target="_blank" rel="noopener">View</a></td>
                             <td class="muted">{{ doc.uploaded_at|date:"M d, Y H:i" }}</td>
                         </tr>
                     {% endfor %}
@@ -138,13 +145,17 @@
         {% csrf_token %}
 
         <label for="id_examiner">Assign to Examiner</label>
-        <select id="id_examiner" name="examiner_id">
-            {% for examiner in examiners %}
-                <option value="{{ examiner.id }}">{{ examiner.full_name }} ({{ examiner.email }}) — {{ examiner.active_load }} active</option>
-            {% endfor %}
-        </select>
-        <div style="display:flex; justify-content:flex-end; margin-top:12px;">
-            <button class="btn btn-primary" type="submit">Assign</button>
+        <div class="row" style="align-items:end;">
+            <div style="flex:1; min-width:260px;">
+                <select id="id_examiner" name="examiner_id">
+                    {% for examiner in examiners %}
+                        <option value="{{ examiner.id }}">{{ examiner.full_name }} — {{ examiner.active_load }} active</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <button class="btn btn-primary" type="submit">Assign</button>
+            </div>
         </div>
     </form>
 {% endif %}
@@ -205,6 +216,17 @@
     </form>
 {% endif %}
 
+{% if can_return_to_receiving %}
+    <form method="post" action="{% url 'return_to_receiving' case.tracking_id %}" class="card">
+        {% csrf_token %}
+        <label for="id_examiner_reason">Return Reason</label>
+        <textarea id="id_examiner_reason" name="reason" rows="3" placeholder="State what needs correction...">{{ case.return_reason|default:"" }}</textarea>
+        <div style="display:flex; justify-content:flex-end; margin-top:12px;">
+            <button class="btn btn-danger" type="submit">Return to Receiving</button>
+        </div>
+    </form>
+{% endif %}
+
 {% if can_approve %}
     <form method="post" action="{% url 'approve_case' case.tracking_id %}" class="card">
         {% csrf_token %}
@@ -230,7 +252,9 @@
 {% if can_number %}
     <form method="post" action="{% url 'mark_numbered' case.tracking_id %}" class="card">
         {% csrf_token %}
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+        <label for="id_numbering_number">Number</label>
+        <input id="id_numbering_number" name="numbering_number" value="{{ case.numbering_number|default:'' }}" placeholder="Enter number" />
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-top:12px;">
             <div>
                 <strong>Numbering</strong>
                 <div class="muted">Move this case to For Release.</div>

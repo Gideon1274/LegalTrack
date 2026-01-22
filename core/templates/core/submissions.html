@@ -13,16 +13,45 @@
                 <label for="id_q">Search</label>
                 <input id="id_q" name="q" value="{{ q }}" placeholder="Tracking ID, client, email..." />
             </div>
+            <div style="min-width:220px;">
+                <label for="id_case_type">Case Type</label>
+                <select id="id_case_type" name="case_type">
+                    <option value="">All</option>
+                    {% for v,l in case_type_choices %}
+                        <option value="{{ v }}" {% if filter_case_type == v %}selected{% endif %}>{{ l }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div style="min-width:220px;">
+                <label for="id_lgu">LGU</label>
+                <select id="id_lgu" name="lgu">
+                    <option value="">All</option>
+                    {% for v,l in lgu_choices %}
+                        <option value="{{ v }}" {% if filter_lgu == v %}selected{% endif %}>{{ l }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div style="display:flex; gap:10px; align-items:end; min-width:340px;">
+                <div style="min-width:160px; flex:1;">
+                    <label for="id_date_from">From</label>
+                    <input id="id_date_from" type="date" name="date_from" value="{{ filter_date_from }}" />
+                </div>
+                <div style="min-width:160px; flex:1;">
+                    <label for="id_date_to">To</label>
+                    <input id="id_date_to" type="date" name="date_to" value="{{ filter_date_to }}" />
+                </div>
+            </div>
+
             <input type="hidden" name="tab" value="{{ tab }}" />
             <div>
-                <button class="btn btn-primary" type="submit">Search</button>
+                <button class="btn btn-primary" type="submit">Filter</button>
             </div>
         </form>
     </div>
 
     <div class="subtabs" role="tablist" aria-label="Status">
         {% for key,label in tabs %}
-            <a href="?tab={{ key }}{% if q %}&q={{ q|urlencode }}{% endif %}">
+            <a href="?tab={{ key }}{% if qs_params_no_tab %}&{{ qs_params_no_tab }}{% endif %}">
                 <span class="{% if tab == key %}active{% endif %}">{{ label }}</span>
             </a>
         {% endfor %}
@@ -51,7 +80,7 @@
                         <tr>
                             <td><strong><a href="{% url 'case_detail' case.tracking_id %}">{{ case.tracking_id }}</a></strong></td>
                             <td>
-                                {{ case.client_name }}
+                                {{ case.client_display_name }}
                                 <div class="muted mt-4 fs-92">Submitted by: {{ case.submitted_by|default:"—" }}</div>
                             </td>
                             <td class="muted">{{ case.get_status_display }}</td>
@@ -69,11 +98,11 @@
     {% if page_obj.paginator.num_pages > 1 %}
         <div class="pagination">
             {% if page_obj.has_previous %}
-                <a class="pagepill" href="?tab={{ tab }}&q={{ q|urlencode }}&page={{ page_obj.previous_page_number }}">Prev</a>
+                <a class="pagepill" href="?{% if qs_params %}{{ qs_params }}&{% endif %}page={{ page_obj.previous_page_number }}">Prev</a>
             {% endif %}
             <span class="pagepill active">{{ page_obj.number }}</span>
             {% if page_obj.has_next %}
-                <a class="pagepill" href="?tab={{ tab }}&q={{ q|urlencode }}&page={{ page_obj.next_page_number }}">Next</a>
+                <a class="pagepill" href="?{% if qs_params %}{{ qs_params }}&{% endif %}page={{ page_obj.next_page_number }}">Next</a>
             {% endif %}
         </div>
     {% endif %}

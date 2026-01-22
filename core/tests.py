@@ -23,46 +23,70 @@ class Module2CaseWizardTests(TestCase):
         self.client.login(username=self.lgu.username, password="StrongPass123!")  # noqa: S106
 
     def test_wizard_creates_case_and_allows_uploads(self):
-        endorsement = SimpleUploadedFile("endorsement.txt", b"endorsement", content_type="text/plain")
-
         resp = self.client.post(
             reverse("submit_case"),
             {
-                "client_name": "Juan Dela Cruz",
-                "client_contact": "09123456789",
-                "endorsement_letter": endorsement,
+                "client_first_name": "Juan",
+                "client_last_name": "Dela Cruz",
+                "client_middle_name": "",
+                "client_suffix": "",
+                "client_number": "",
+                "client_email": "",
+                "case_type": "subdivision_consolidation",
             },
         )
         self.assertEqual(resp.status_code, 302)
 
-        case = Case.objects.get(client_name="Juan Dela Cruz")
+        case = Case.objects.get(client_first_name="Juan", client_last_name="Dela Cruz")
         self.assertEqual(case.submitted_by_id, self.lgu.id)
-        self.assertTrue(CaseDocument.objects.filter(case=case, doc_type="Endorsement Letter").exists())
 
         url_step2 = reverse("case_wizard", kwargs={"tracking_id": case.tracking_id, "step": 2})
 
-        land_title = SimpleUploadedFile("land_title.pdf", b"%PDF-1.4 test", content_type="application/pdf")
-        tax_decl = SimpleUploadedFile("tax_declaration.pdf", b"%PDF-1.4 test", content_type="application/pdf")
+        # Upload required documents in Step 2 only.
+        requirements = [
+            "Endorsement Letter",
+            "Letter request (subdivision/consolidation)",
+            "Inspection report + endorsement (Assessor/Staff)",
+            "Approved subdivision / survey plan",
+            "Tax Clearance (current)",
+        ]
+
+        files = [
+            SimpleUploadedFile(f"doc_{i}.txt", f"file{i}".encode("utf-8"), content_type="text/plain")
+            for i in range(len(requirements))
+        ]
+
         resp2 = self.client.post(
             url_step2,
             {
-                "form-TOTAL_FORMS": "5",
+                # initial forms (5 requirements) + extra forms (5)
+                "form-TOTAL_FORMS": "10",
                 "form-INITIAL_FORMS": "0",
                 "form-MIN_NUM_FORMS": "0",
                 "form-MAX_NUM_FORMS": "1000",
-                "form-0-doc_type": "Land Title",
+                "form-0-doc_type": requirements[0],
                 "form-0-required": "on",
-                "form-0-file": land_title,
-                "form-1-doc_type": "Tax Declaration",
+                "form-0-file": files[0],
+                "form-1-doc_type": requirements[1],
                 "form-1-required": "on",
-                "form-1-file": tax_decl,
+                "form-1-file": files[1],
+                "form-2-doc_type": requirements[2],
+                "form-2-required": "on",
+                "form-2-file": files[2],
+                "form-3-doc_type": requirements[3],
+                "form-3-required": "on",
+                "form-3-file": files[3],
+                "form-4-doc_type": requirements[4],
+                "form-4-required": "on",
+                "form-4-file": files[4],
             },
         )
         self.assertEqual(resp2.status_code, 302)
 
         case.refresh_from_db()
-        self.assertTrue(any(i.get("doc_type") == "Land Title" for i in case.checklist))
-        self.assertTrue(CaseDocument.objects.filter(case=case, doc_type="Land Title").exists())
+        self.assertTrue(any(i.get("doc_type") == "Endorsement Letter" for i in case.checklist))
+        self.assertTrue(CaseDocument.objects.filter(case=case, doc_type="Endorsement Letter").exists())
+        self.assertTrue(CaseDocument.objects.filter(case=case, doc_type="Tax Clearance (current)").exists())
 
         url_step3 = reverse("case_wizard", kwargs={"tracking_id": case.tracking_id, "step": 3})
         resp3 = self.client.post(url_step3)
@@ -147,10 +171,14 @@ class Module2CapitolWorkflowTests(TestCase):
 
         self.client.logout()
         self.client.login(username=self.numberer.username, password="StrongPass123!")  # noqa: S106
-        resp = self.client.post(reverse("mark_numbered", kwargs={"tracking_id": case.tracking_id}))
+        resp = self.client.post(
+            reverse("mark_numbered", kwargs={"tracking_id": case.tracking_id}),
+            {"numbering_number": "CEB-NUM-0001"},
+        )
         self.assertEqual(resp.status_code, 302)
         case.refresh_from_db()
         self.assertEqual(case.status, "for_release")
+        self.assertEqual(case.numbering_number, "CEB-NUM-0001")
 
         self.client.logout()
         self.client.login(username=self.releaser.username, password="StrongPass123!")  # noqa: S106
@@ -172,6 +200,53 @@ class Module2CapitolWorkflowTests(TestCase):
         case.refresh_from_db()
         self.assertEqual(case.status, "returned")
         self.assertEqual(case.return_reason, "Missing document")
+
+
+class DocumentAccessTests(TestCase):
+    def setUp(self):
+        self.lgu1 = CustomUser(email="lgu1@example.com", role="lgu_admin", full_name="LGU One", lgu_municipality="Alcantara")
+        self.lgu1.set_password("StrongPass123!")
+        self.lgu1.save()
+        self.lgu1.account_status = "active"
+        self.lgu1.save(update_fields=["account_status", "is_active"])
+
+        self.lgu2 = CustomUser(email="lgu2@example.com", role="lgu_admin", full_name="LGU Two", lgu_municipality="Alcantara")
+        self.lgu2.set_password("StrongPass123!")
+        self.lgu2.save()
+        self.lgu2.account_status = "active"
+        self.lgu2.save(update_fields=["account_status", "is_active"])
+
+        self.case = Case.objects.create(client_name="Juan", client_contact="0912", submitted_by=self.lgu1)
+        self.doc = CaseDocument.objects.create(
+            case=self.case,
+            doc_type="Endorsement Letter",
+            file=SimpleUploadedFile("doc.txt", b"hello", content_type="text/plain"),
+            uploaded_by=self.lgu1,
+        )
+
+    def test_download_requires_auth_and_enforces_owner(self):
+        url = reverse("download_case_document", kwargs={"doc_id": self.doc.id})
+
+        # Not logged in: should redirect to login
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 302)
+
+        # Wrong LGU user: should 404
+        self.client.login(username=self.lgu2.username, password="StrongPass123!")  # noqa: S106
+        resp2 = self.client.get(url)
+        self.assertEqual(resp2.status_code, 404)
+
+        # Owner LGU user: should succeed
+        self.client.logout()
+        self.client.login(username=self.lgu1.username, password="StrongPass123!")  # noqa: S106
+        resp3 = self.client.get(url)
+        self.assertEqual(resp3.status_code, 200)
+
+    def test_case_detail_is_not_visible_to_other_lgu(self):
+        url = reverse("case_detail", kwargs={"tracking_id": self.case.tracking_id})
+        self.client.login(username=self.lgu2.username, password="StrongPass123!")  # noqa: S106
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 404)
 
 
 class SuperuserCreationTests(TestCase):

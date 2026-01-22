@@ -57,6 +57,14 @@ class LegalTrackLoginView(LoginView):
         posted_identifier = (self.request.POST.get("username") or "").strip()
         now = timezone.now()
 
+        # UX guidance: by default, this system authenticates via Staff ID.
+        # Avoid giving away whether an email exists; keep it generic.
+        if posted_identifier and "@" in posted_identifier and posted_identifier.lower() != "admin@gmail.com":
+            messages.error(
+                self.request,
+                "Use your Staff ID (not email) to log in. If your account is pending activation, activate it first.",
+            )
+
         user = None
         if posted_identifier:
             if posted_identifier.lower() == "admin@gmail.com":
@@ -65,6 +73,18 @@ class LegalTrackLoginView(LoginView):
                 user = CustomUser.objects.filter(username__iexact=posted_identifier).first()
 
         if user:
+            # Provide a helpful message for common states.
+            if user.account_status == "pending":
+                messages.error(
+                    self.request,
+                    "This account is pending activation. Check your email for the activation link or contact the Super Admin.",
+                )
+            elif user.account_status == "inactive" or not user.is_active:
+                messages.error(
+                    self.request,
+                    "This account is inactive. Contact the Super Admin to reactivate it.",
+                )
+
             # If already locked, do not increment attempts further.
             if user.lockout_until and user.lockout_until > now:
                 AuditLog.objects.create(

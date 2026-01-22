@@ -10,7 +10,7 @@
 </div>
 
 <div class="card" style="margin-top:14px;">
-    <form method="get" class="searchbar">
+    <form method="get" class="searchbar" id="user-search-form">
         <div class="grow">
             <label for="id_q">Search</label>
             {{ search_form.q }}
@@ -101,4 +101,18 @@
         </div>
     {% endif %}
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        var form = document.getElementById('user-search-form');
+        var roleSelect = document.getElementById('id_role');
+        if (!form || !roleSelect) return;
+
+        roleSelect.addEventListener('change', function () {
+            form.submit();
+        });
+    });
+</script>
 {% endblock %}
