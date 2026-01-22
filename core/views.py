@@ -3,6 +3,8 @@
 import contextlib
 from datetime import timedelta
 import json
+import mimetypes
+import os
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -18,7 +20,7 @@ from django.utils.dateparse import parse_date
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
 from django.shortcuts import get_object_or_404, redirect, render
-from django.http import HttpResponse
+from django.http import FileResponse, Http404, HttpResponse
 from django.utils.html import format_html
 
 from .forms import (
@@ -399,6 +401,32 @@ def _require_super_admin(request):
 
 def _is_capitol_staff(user) -> bool:
     return bool(getattr(user, "role", "").startswith("capitol_"))
+
+
+def _user_can_view_case(user: CustomUser, case: Case) -> bool:
+    role = getattr(user, "role", "") or ""
+    if role == "super_admin" or _is_capitol_staff(user):
+        return True
+    if role == "lgu_admin":
+        return getattr(case, "submitted_by_id", None) == getattr(user, "id", None)
+    return False
+
+
+@login_required
+def download_case_document(request, doc_id: int):
+    doc = get_object_or_404(CaseDocument.objects.select_related("case"), id=doc_id)
+    if not _user_can_view_case(request.user, doc.case):
+        raise Http404()
+    if not doc.file:
+        raise Http404()
+
+    filename = os.path.basename(doc.file.name or "document")
+    response = FileResponse(doc.file.open("rb"), as_attachment=False, filename=filename)
+    guessed, _ = mimetypes.guess_type(filename)
+    if guessed:
+        response["Content-Type"] = guessed
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
 
 
 def _format_audit_details(details) -> str:
@@ -1295,6 +1323,10 @@ def case_wizard(request, tracking_id, step: int):
 @login_required
 def case_detail(request, tracking_id):
     case = get_object_or_404(Case, tracking_id=tracking_id)
+
+    # Prevent LGU users (and any non-capitol role) from viewing cases they don't own.
+    if not _user_can_view_case(request.user, case):
+        raise Http404()
 
     can_edit = _lgu_can_edit_details(request.user, case)
 

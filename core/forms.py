@@ -2,7 +2,10 @@ from __future__ import annotations
 
 # pyright: reportAttributeAccessIssue=false, reportOperatorIssue=false
 
+import os
+
 from django import forms
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.contrib.auth.password_validation import validate_password
 from django.utils import timezone
@@ -117,6 +120,27 @@ class ChecklistItemForm(forms.Form):
             raise forms.ValidationError("Document type is required for this row.")
         cleaned["doc_type"] = doc_type
         return cleaned
+
+    def clean_file(self):
+        f = self.cleaned_data.get("file")
+        if not f:
+            return f
+
+        max_mb = int(getattr(settings, "MAX_UPLOAD_SIZE_MB", 25) or 25)
+        max_bytes = max_mb * 1024 * 1024
+        if getattr(f, "size", 0) and f.size > max_bytes:
+            raise ValidationError(f"File too large. Maximum allowed is {max_mb}MB.")
+
+        allowed = getattr(
+            settings,
+            "ALLOWED_UPLOAD_EXTENSIONS",
+            {".pdf", ".png", ".jpg", ".jpeg", ".doc", ".docx", ".xls", ".xlsx", ".txt"},
+        )
+        name = getattr(f, "name", "") or ""
+        ext = os.path.splitext(name)[1].lower()
+        if ext and ext not in set(allowed):
+            raise ValidationError("Unsupported file type.")
+        return f
 
 
 class CaseRemarkForm(forms.Form):

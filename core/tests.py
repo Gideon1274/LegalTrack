@@ -202,6 +202,53 @@ class Module2CapitolWorkflowTests(TestCase):
         self.assertEqual(case.return_reason, "Missing document")
 
 
+class DocumentAccessTests(TestCase):
+    def setUp(self):
+        self.lgu1 = CustomUser(email="lgu1@example.com", role="lgu_admin", full_name="LGU One", lgu_municipality="Alcantara")
+        self.lgu1.set_password("StrongPass123!")
+        self.lgu1.save()
+        self.lgu1.account_status = "active"
+        self.lgu1.save(update_fields=["account_status", "is_active"])
+
+        self.lgu2 = CustomUser(email="lgu2@example.com", role="lgu_admin", full_name="LGU Two", lgu_municipality="Alcantara")
+        self.lgu2.set_password("StrongPass123!")
+        self.lgu2.save()
+        self.lgu2.account_status = "active"
+        self.lgu2.save(update_fields=["account_status", "is_active"])
+
+        self.case = Case.objects.create(client_name="Juan", client_contact="0912", submitted_by=self.lgu1)
+        self.doc = CaseDocument.objects.create(
+            case=self.case,
+            doc_type="Endorsement Letter",
+            file=SimpleUploadedFile("doc.txt", b"hello", content_type="text/plain"),
+            uploaded_by=self.lgu1,
+        )
+
+    def test_download_requires_auth_and_enforces_owner(self):
+        url = reverse("download_case_document", kwargs={"doc_id": self.doc.id})
+
+        # Not logged in: should redirect to login
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 302)
+
+        # Wrong LGU user: should 404
+        self.client.login(username=self.lgu2.username, password="StrongPass123!")  # noqa: S106
+        resp2 = self.client.get(url)
+        self.assertEqual(resp2.status_code, 404)
+
+        # Owner LGU user: should succeed
+        self.client.logout()
+        self.client.login(username=self.lgu1.username, password="StrongPass123!")  # noqa: S106
+        resp3 = self.client.get(url)
+        self.assertEqual(resp3.status_code, 200)
+
+    def test_case_detail_is_not_visible_to_other_lgu(self):
+        url = reverse("case_detail", kwargs={"tracking_id": self.case.tracking_id})
+        self.client.login(username=self.lgu2.username, password="StrongPass123!")  # noqa: S106
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 404)
+
+
 class SuperuserCreationTests(TestCase):
     def test_create_superuser_does_not_require_username(self):
         su = CustomUser.objects.create_superuser(username="admin", email="admin@example.com", password="StrongPass123!Strong")
