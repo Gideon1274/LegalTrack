@@ -90,7 +90,6 @@ class CaseDetailsForm(forms.ModelForm):
 class ChecklistItemForm(forms.Form):
     doc_type = forms.ChoiceField(required=False, choices=[("", "— Select —")])
     custom_doc_type = forms.CharField(max_length=120, required=False)
-    required = forms.BooleanField(required=False)
     file = forms.FileField(required=False)
 
     def __init__(self, *args, doc_type_choices=None, **kwargs):
@@ -116,7 +115,7 @@ class ChecklistItemForm(forms.Form):
         else:
             doc_type = selected
 
-        if not doc_type and (cleaned.get("required") or cleaned.get("file") or selected == "__custom__"):
+        if not doc_type and (cleaned.get("file") or selected == "__custom__" or custom):
             raise forms.ValidationError("Document type is required for this row.")
         cleaned["doc_type"] = doc_type
         return cleaned

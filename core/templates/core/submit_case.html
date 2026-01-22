@@ -83,14 +83,12 @@
             <div class="card__header">
                 <strong>Document Checklist</strong>
                 <span class="muted">Case type: <strong>{{ case.get_case_type_display|default:"—" }}</strong></span>
-                <span style="margin-left:auto;"><button class="btn btn-secondary btn-sm" type="submit" name="add_row" value="1">+ Add Row</button></span>
             </div>
             <div class="card__body card__body--flush">
                 <table class="table">
                     <thead>
                         <tr>
                             <th style="width:34%">Document Type</th>
-                            <th style="width:12%">Required</th>
                             <th>Upload File</th>
                         </tr>
                     </thead>
@@ -105,18 +103,21 @@
                                     {% if f.doc_type.errors %}<div class="muted">{{ f.doc_type.errors }}</div>{% endif %}
                                     {% if f.custom_doc_type.errors %}<div class="muted">{{ f.custom_doc_type.errors }}</div>{% endif %}
                                 </td>
-                                <td>{{ f.required }}</td>
                                 <td>
                                     {{ f.file }}
                                     {% if f.file.errors %}<div class="muted">{{ f.file.errors }}</div>{% endif %}
                                 </td>
                             </tr>
                             {% if f.non_field_errors %}
-                                <tr><td colspan="3"><div class="msg error">{{ f.non_field_errors }}</div></td></tr>
+                                <tr><td colspan="2"><div class="msg error">{{ f.non_field_errors }}</div></td></tr>
                             {% endif %}
                         {% endfor %}
                     </tbody>
                 </table>
+
+                <div style="padding:10px; border-top:1px solid var(--border);">
+                    <button class="btn btn-secondary btn-sm" type="submit" name="add_row" value="1">+ Add Row</button>
+                </div>
             </div>
         </div>
 
@@ -175,7 +176,6 @@
                         <thead>
                             <tr>
                                 <th>Document</th>
-                                <th style="width:16%">Required</th>
                                 <th style="width:18%">Uploaded</th>
                             </tr>
                         </thead>
@@ -183,7 +183,6 @@
                             {% for item in checklist %}
                                 <tr>
                                     <td>{{ item.doc_type }}</td>
-                                    <td>{{ item.required|yesno:"Yes,No" }}</td>
                                     <td>{{ item.uploaded|yesno:"Yes,No" }}</td>
                                 </tr>
                             {% endfor %}

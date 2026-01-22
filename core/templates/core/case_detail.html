@@ -63,7 +63,6 @@
             <thead>
                 <tr>
                     <th>Document</th>
-                    <th style="width:18%">Required</th>
                     <th style="width:18%">Uploaded</th>
                 </tr>
             </thead>
@@ -71,11 +70,10 @@
                 {% for item in case.checklist %}
                     <tr>
                         <td>{{ item.doc_type }}</td>
-                        <td>{{ item.required|yesno:"Yes,No" }}</td>
                         <td>{{ item.uploaded|yesno:"Yes,No" }}</td>
                     </tr>
                 {% empty %}
-                    <tr><td colspan="3" class="muted"><em>No items</em></td></tr>
+                    <tr><td colspan="2" class="muted"><em>No items</em></td></tr>
                 {% endfor %}
             </tbody>
         </table>

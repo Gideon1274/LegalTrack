@@ -960,25 +960,15 @@ def _lgu_can_finalize(user, case: Case) -> bool:
     )
 
 def _required_documents_missing(case: Case) -> list[str]:
-    missing = []
-    for item in (case.checklist or []):
-        if not isinstance(item, dict):
-            continue
-        if not item.get("required"):
-            continue
-        doc_type = (item.get("doc_type") or "").strip()
-        if not doc_type:
-            continue
-        if not CaseDocument.objects.filter(case=case, doc_type=doc_type).exists():
-            missing.append(doc_type)
-    return missing
+    # Checklist items are informational only (nothing is required).
+    return []
 
 
 def _ensure_checklist_item(case: Case, *, doc_type: str, required: bool) -> None:
     items = list(case.checklist or [])
     for item in items:
         if isinstance(item, dict) and (item.get("doc_type") == doc_type):
-            item["required"] = bool(required)
+            item["required"] = False
             item["uploaded"] = CaseDocument.objects.filter(case=case, doc_type=doc_type).exists()
             case.checklist = items
             case.save(update_fields=["checklist", "updated_at"])
@@ -986,7 +976,7 @@ def _ensure_checklist_item(case: Case, *, doc_type: str, required: bool) -> None
 
     items.insert(0, {
         "doc_type": doc_type,
-        "required": bool(required),
+        "required": False,
         "uploaded": CaseDocument.objects.filter(case=case, doc_type=doc_type).exists(),
     })
     case.checklist = items
@@ -1053,7 +1043,7 @@ def submit_case(request):
             case.submitted_by = request.user
             case.save()
 
-            # Seed checklist requirements (uploads happen in Step 2 only).
+            # Seed checklist suggestions (uploads happen in Step 2 only).
             requirements = ["Endorsement Letter", *_case_type_requirements(getattr(case, "case_type", ""))]
             seen = set()
             seeded = []
@@ -1065,7 +1055,7 @@ def submit_case(request):
                 if k in seen:
                     continue
                 seen.add(k)
-                seeded.append({"doc_type": r, "required": True, "uploaded": False})
+                seeded.append({"doc_type": r, "required": False, "uploaded": False})
             if seeded:
                 case.checklist = seeded
                 case.save(update_fields=["checklist", "updated_at"])
@@ -1167,11 +1157,11 @@ def case_wizard(request, tracking_id, step: int):
                 if isinstance(item, dict):
                     initial.append({
                         "doc_type": item.get("doc_type", ""),
-                        "required": bool(item.get("required", False)),
+                        "required": False,
                     })
         else:
             for req in requirements:
-                initial.append({"doc_type": req, "required": True})
+                initial.append({"doc_type": req, "required": False})
 
         if request.method == "POST":
             if "add_row" in request.POST:
@@ -1225,16 +1215,16 @@ def case_wizard(request, tracking_id, step: int):
                     has_doc = CaseDocument.objects.filter(case=case, doc_type=doc_type).exists()
                     new_checklist.append({
                         "doc_type": doc_type,
-                        "required": bool(cd.get("required", False)),
+                        "required": False,
                         "uploaded": bool(has_doc),
                     })
 
                 if CaseDocument.objects.filter(case=case, doc_type="Endorsement Letter").exists():
                     if not any((i.get("doc_type") == "Endorsement Letter") for i in new_checklist):
-                        new_checklist.insert(0, {"doc_type": "Endorsement Letter", "required": True, "uploaded": True})
+                        new_checklist.insert(0, {"doc_type": "Endorsement Letter", "required": False, "uploaded": True})
                 else:
                     if not any((i.get("doc_type") == "Endorsement Letter") for i in new_checklist):
-                        new_checklist.insert(0, {"doc_type": "Endorsement Letter", "required": True, "uploaded": False})
+                        new_checklist.insert(0, {"doc_type": "Endorsement Letter", "required": False, "uploaded": False})
 
                 case.checklist = new_checklist
                 if case.status == "returned":
@@ -1277,25 +1267,11 @@ def case_wizard(request, tracking_id, step: int):
             continue
         checklist.append({
             "doc_type": doc_type,
-            "required": bool(item.get("required", False)),
+            "required": False,
             "uploaded": CaseDocument.objects.filter(case=case, doc_type=doc_type).exists(),
         })
 
     if request.method == "POST":
-        missing_required = _required_documents_missing(case)
-        if missing_required:
-            messages.error(
-                request,
-                f"Missing required documents: {', '.join(missing_required)}. Upload them before submitting."
-            )
-            return render(request, "core/submit_case.html", {
-                "step": 3,
-                "case": case,
-                "is_edit": True,
-                "documents": list(case.documents.all()),
-                "checklist": checklist,
-            })
-
         if case.status == "returned":
             case.status = "not_received"
 
