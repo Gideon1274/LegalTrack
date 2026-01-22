@@ -15,6 +15,10 @@ def _maybe_auto_migrate_sqlite() -> None:
 		if not (os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV")):
 			return
 
+		# Only run in explicit demo-mode fallback.
+		if str(os.environ.get("LEGALTRACK_ENABLE_VERCEL_SQLITE_FALLBACK", "")).strip().lower() not in {"1", "true", "yes", "on"}:
+			return
+
 		# Allow opting out for advanced setups.
 		if str(os.environ.get("LEGALTRACK_AUTO_MIGRATE", "true")).strip().lower() in {"0", "false", "no", "off"}:
 			return

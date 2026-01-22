@@ -404,6 +404,18 @@ LegalTrack/
 
 ## 🔧 Troubleshooting
 
+### Vercel deploy works but you can't login / tracking doesn't find anything
+
+This usually means Vercel is not connected to your real database and/or your secret key is not stable.
+
+- In Vercel Project → Settings → Environment Variables, set:
+  - `DJANGO_SECRET_KEY` (required when `DJANGO_DEBUG=false`)
+  - `LEGALTRACK_DB_PROVIDER=supabase`
+  - `DATABASE_URL` (Supabase Postgres connection string)
+- Redeploy after setting env vars.
+
+Note: there is an optional `LEGALTRACK_ENABLE_VERCEL_SQLITE_FALLBACK=true` demo-mode, but it is not persistent and will break login/tracking across cold starts.
+
 ### PowerShell Script Execution Error
 
 If you get an error activating the virtual environment:
