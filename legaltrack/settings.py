@@ -17,6 +17,7 @@ from urllib.parse import parse_qsl, urlparse
 from pathlib import Path
 import uuid
 import socket
+import tempfile
 
 from django.core.exceptions import ImproperlyConfigured
 
@@ -107,6 +108,11 @@ SECRET_KEY = (
 # SECURITY WARNING: don't run with debug turned on in production!
 def _truthy(value: str | None) -> bool:
     return str(value or "").strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _is_vercel() -> bool:
+    # Vercel sets VERCEL=1 and VERCEL_ENV=production|preview|development
+    return _truthy(os.environ.get("VERCEL")) or bool(os.environ.get("VERCEL_ENV"))
 
 
 # Default DEBUG:
@@ -270,9 +276,14 @@ if LEGALTRACK_DB_PROVIDER not in {"supabase", "sqlite"}:
 if LEGALTRACK_DB_PROVIDER == "supabase":
     database_url = (_env("DATABASE_URL") or "").strip()
     if not database_url:
-        raise ImproperlyConfigured(
-            "DATABASE_URL is required when LEGALTRACK_DB_PROVIDER=supabase."
-        )
+        # On Vercel it's common to forget env vars. Rather than 500 at import-time,
+        # fall back to a temporary SQLite DB so the app can boot.
+        if _is_vercel():
+            LEGALTRACK_DB_PROVIDER = "sqlite"
+        else:
+            raise ImproperlyConfigured(
+                "DATABASE_URL is required when LEGALTRACK_DB_PROVIDER=supabase."
+            )
     # Optional resiliency for local dev: if the configured DB host cannot be
     # resolved from this machine, you may opt-in to falling back to local
     # SQLite so commands like `manage.py migrate` / `runserver` remain usable.
@@ -312,10 +323,13 @@ if LEGALTRACK_DB_PROVIDER == "supabase":
 
     # Re-check provider in case we fell back
     if LEGALTRACK_DB_PROVIDER != "supabase":
+        sqlite_name = ":memory:" if ("test" in sys.argv) else (BASE_DIR / "db.sqlite3")
+        if _is_vercel() and sqlite_name != ":memory:":
+            sqlite_name = Path(tempfile.gettempdir()) / "legaltrack.sqlite3"
         DATABASES = {
             "default": {
                 "ENGINE": "django.db.backends.sqlite3",
-                "NAME": ":memory:" if ("test" in sys.argv) else (BASE_DIR / "db.sqlite3"),
+                "NAME": sqlite_name,
             }
         }
     else:
@@ -323,10 +337,13 @@ if LEGALTRACK_DB_PROVIDER == "supabase":
     
 else:
     # SQLite is still allowed explicitly (useful for tests/offline dev).
+    sqlite_name = ":memory:" if ("test" in sys.argv) else (BASE_DIR / "db.sqlite3")
+    if _is_vercel() and sqlite_name != ":memory:":
+        sqlite_name = Path(tempfile.gettempdir()) / "legaltrack.sqlite3"
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
-            "NAME": ":memory:" if ("test" in sys.argv) else (BASE_DIR / "db.sqlite3"),
+            "NAME": sqlite_name,
         }
     }
 
@@ -397,7 +414,13 @@ STATIC_URL = "/static/"
 
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
-STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+# Vercel serverless builds may not run `collectstatic`. Manifest storage will crash
+# if the manifest is missing, so prefer a non-manifest storage there.
+STATICFILES_STORAGE = (
+    "whitenoise.storage.CompressedStaticFilesStorage"
+    if _is_vercel()
+    else "whitenoise.storage.CompressedManifestStaticFilesStorage"
+)
 
 
 # Default primary key field type
