@@ -98,12 +98,12 @@ def _env(key: str, default: str | None = None) -> str | None:
 
 # SECURITY WARNING: keep the secret key used in production secret!
 # Support multiple env var names to avoid deploy-time mismatches across hosts.
-SECRET_KEY = (
+_secret_from_env = (
     _env("DJANGO_SECRET_KEY")
     or _env("DJANGO_SECRET")
     or _env("SECRET_KEY")
-    or uuid.uuid4().hex
 )
+SECRET_KEY = _secret_from_env or uuid.uuid4().hex
 
 # SECURITY WARNING: don't run with debug turned on in production!
 def _truthy(value: str | None) -> bool:
@@ -119,6 +119,13 @@ def _is_vercel() -> bool:
 # - local dev: True when a .env file is present
 # - production (Vercel): False
 DEBUG = _truthy(_env("DJANGO_DEBUG") or ("true" if DOTENV_PATH.exists() else "false"))
+
+# In production/serverless environments, a random SECRET_KEY per cold start will
+# break logins (sessions/CSRF) across instances. Require an env-provided key.
+if not DEBUG and not _secret_from_env:
+    raise ImproperlyConfigured(
+        "DJANGO_SECRET_KEY must be set when DJANGO_DEBUG=false (production)."
+    )
 
 
 def _split_csv(value: str | None) -> list[str]:
@@ -276,9 +283,10 @@ if LEGALTRACK_DB_PROVIDER not in {"supabase", "sqlite"}:
 if LEGALTRACK_DB_PROVIDER == "supabase":
     database_url = (_env("DATABASE_URL") or "").strip()
     if not database_url:
-        # On Vercel it's common to forget env vars. Rather than 500 at import-time,
-        # fall back to a temporary SQLite DB so the app can boot.
-        if _is_vercel():
+        # Don't silently fall back in production: that makes the app "work" but
+        # nothing persists (login/tracking will fail). Allow fallback only when
+        # explicitly enabled for demo/debug purposes.
+        if _is_vercel() and _truthy(_env("LEGALTRACK_ENABLE_VERCEL_SQLITE_FALLBACK")):
             LEGALTRACK_DB_PROVIDER = "sqlite"
         else:
             raise ImproperlyConfigured(
