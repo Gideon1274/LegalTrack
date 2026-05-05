@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>PAStrack – {% block title %}{% endblock %}</title>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    {% block extra_head %}{% endblock %}
     <style>
         [x-cloak] { display: none !important; }
         :root {
@@ -372,7 +373,8 @@
                     <div class="msg {{ msg.tags|default:'info' }}">{{ msg }}</div>
                 {% endfor %}
             {% endif %}
-            {% block content %}{% endblock %}
+            {% block auth_content %}
+            {% endblock %}
         </main>
     {% endif %}
 

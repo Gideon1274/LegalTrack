@@ -5,7 +5,7 @@ from datetime import timedelta
 import json
 import mimetypes
 import os
-
+from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import update_session_auth_hash
@@ -20,7 +20,96 @@ from django.utils.dateparse import parse_date
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
 from django.shortcuts import get_object_or_404, redirect, render
-from django.http import FileResponse, Http404, HttpResponse
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse
+
+@login_required
+def system_settings(request):
+    """Renders the System Settings / Profile page for Super Admins"""
+    return render(request, 'settings.html')
+    
+@login_required
+def user_list_api(request):
+    """API endpoint for fetching filtered users for the Super Admin dashboard tabs."""
+    if request.user.role != "super_admin":
+        return JsonResponse({"error": "Unauthorized"}, status=403)
+
+    tab_id = request.GET.get("tab", "total")
+    q = request.GET.get("q", "").strip()
+    role = request.GET.get("role", "")
+    lgu = request.GET.get("lgu", "")
+    page = request.GET.get("page", 1)
+
+    qs = CustomUser.objects.exclude(id=request.user.id).order_by("-date_joined")
+
+    if tab_id == "pending":
+        qs = qs.filter(account_status="pending")
+    elif tab_id == "deactivated":
+        qs = qs.filter(account_status="inactive")
+
+    if q:
+        qs = qs.filter(
+            Q(full_name__icontains=q) |
+            Q(email__icontains=q) |
+            Q(username__icontains=q)
+        )
+    if role:
+        qs = qs.filter(role=role)
+    if lgu:
+        qs = qs.filter(lgu_municipality=lgu)
+
+    total_count = qs.count()
+    paginator = Paginator(qs, 5)
+    page_obj = paginator.get_page(page)
+
+    users = []
+    for user in page_obj:
+        # Determine initials
+        name_parts = (user.full_name or user.email).split()
+        initials = "".join([p[0].upper() for p in name_parts[:2]]) if name_parts else "??"
+
+        # Determine role class/string
+        role_map = {
+            "super_admin": ("role-approver", "Super Admin"),
+            "lgu_admin": ("role-assessor", "LGU Admin"),
+            "capitol_receiving": ("role-receiver", "Receiver"),
+            "capitol_examiner": ("role-examiner", "Examiner"),
+            "capitol_approver": ("role-approver", "Approver"),
+            "capitol_taxmapper": ("role-examiner", "Tax Mapper"),
+            "capitol_numberer": ("role-receiver", "Numberer"),
+            "capitol_releaser": ("role-receiver", "Releaser"),
+        }
+        role_class, role_str = role_map.get(user.role, ("role-receiver", user.get_role_display()))
+
+        # Determine status class/string
+        status_map = {
+            "active": ("status-active", "Active"),
+            "pending": ("status-pending", "Pending"),
+            "inactive": ("status-inactive", "Inactive"),
+        }
+        status_class, status_str = status_map.get(user.account_status, ("status-inactive", user.get_account_status_display()))
+
+        users.append({
+            "id": user.id,
+            "initials": initials,
+            "name": user.full_name or user.email,
+            "email": user.email,
+            "role_class": role_class,
+            "role_str": role_str,
+            "lgu": user.lgu_municipality or "Capitol",
+            "status_class": status_class,
+            "status_str": status_str,
+            "is_pending": user.account_status == "pending",
+            "is_inactive": user.account_status == "inactive",
+        })
+
+    return JsonResponse({
+        "users": users,
+        "total_count": total_count,
+        "current_page": page_obj.number,
+        "has_next": page_obj.has_next(),
+        "has_previous": page_obj.has_previous(),
+        "num_pages": paginator.num_pages,
+    })
 from django.utils.html import format_html
 
 from .forms import (
@@ -531,7 +620,7 @@ def _user_is_current_owner_for_internal_sections(user: CustomUser, case: Case) -
         return getattr(case, "status", "") == "for_release"
     return False
 
-
+@xframe_options_sameorigin
 @login_required
 def download_case_document(request, doc_id: int):
     doc = get_object_or_404(CaseDocument.objects.select_related("case"), id=doc_id)
@@ -770,10 +859,56 @@ def dashboard(request):
     }
 
     if user.role == "super_admin":
-        total_users = CustomUser.objects.exclude(id=user.id).count()
+        # 1. KPIs
+        total_users_count = CustomUser.objects.count()
+        total_lgus_count = CustomUser.objects.filter(role="lgu_admin").values("lgu_municipality").distinct().count()
+        active_cases_count = Case.objects.exclude(status__in=["released", "withdrawn", "returned", "draft"]).count()
+        
+        seven_days_ago = timezone.now() - timedelta(days=7)
+        new_users_count = CustomUser.objects.filter(date_joined__gte=seven_days_ago).count()
+        
+        pending_users_count = CustomUser.objects.filter(account_status="pending").count()
+        deactivated_users_count = CustomUser.objects.filter(account_status="inactive").count()
+
+        # 2. Recent Logs
+        recent_logs = AuditLog.objects.filter(
+            action__in=["create_user", "deactivate_user", "reactivate_user", "update_user", "reset_password", "login", "logout", "activate_account"]
+        ).select_related("actor", "target_user").order_by("-created_at")[:5]
+
+        # 3. Chart Data (Role Distribution)
+        # Order: ['Municipal Assessor', 'Capitol Receiver', 'Capitol Examiner', 'Capitol Approver', 'Capitol Numberer']
+        role_map = {
+            "lgu_admin": 0,
+            "capitol_receiving": 1,
+            "capitol_examiner": 2,
+            "capitol_approver": 3,
+            "capitol_numberer": 4,
+        }
+        role_distribution_array = [0] * 5
+        role_counts = CustomUser.objects.values("role").annotate(count=Count("id"))
+        for item in role_counts:
+            idx = role_map.get(item["role"])
+            if idx is not None:
+                role_distribution_array[idx] = item["count"]
+
+        # 4. User List (Initial Load - Total Users)
+        users_qs = CustomUser.objects.exclude(id=user.id).order_by("-date_joined")
+        paginator = Paginator(users_qs, 5)
+        page_number = request.GET.get("page", 1)
+        page_obj = paginator.get_page(page_number)
+
         context.update({
-            "section": "super_admin",
-            "total_users": total_users,
+            "total_users_count": total_users_count,
+            "total_lgus_count": total_lgus_count,
+            "active_cases_count": active_cases_count,
+            "new_users_count": new_users_count,
+            "pending_users_count": pending_users_count,
+            "deactivated_users_count": deactivated_users_count,
+            "recent_logs": recent_logs,
+            "role_distribution_array": role_distribution_array,
+            "page_obj": page_obj,
+            "role_choices": CustomUser.ROLE_CHOICES,
+            "lgu_choices": CustomUser.LGU_MUNICIPALITY_CHOICES,
         })
         template = "core/dashboard_superadmin.html"
 

@@ -1,108 +1,174 @@
-{% extends "base.html" %}
-{% block sidebar_class %}sidebar--wide{% endblock %}
-{% block title %}LGU Dashboard{% endblock %}
+{% extends "base_admin.html" %}
+{% block title %}LGU Dashboard | LegalTrack{% endblock %}
+{% block header_title %}LGU Submissions Overview{% endblock %}
+
+{% block extra_css %}
+<style>
+    .dashboard-container { max-width: 1350px; margin: 0 auto; padding: 1.5rem 2rem; }
+    
+    /* Stats Grid Section */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.25rem; margin-bottom: 2rem; }
+    .stat-card { 
+        background: #fff; padding: 1.25rem; border-radius: 12px; border: 1px solid #e2e8f0; 
+        box-shadow: 0 1px 3px rgba(0,0,0,0.02); display: flex; flex-direction: column; gap: 0.5rem;
+    }
+    .stat-label { font-size: 0.75rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.025em; }
+    .stat-value { font-size: 1.5rem; font-weight: 800; color: #1e3a8a; }
+
+    /* Main Content Card */
+    .table-card { background: #fff; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.02); overflow: hidden; }
+    .table-card-header { 
+        padding: 1.25rem 1.5rem; border-bottom: 1px solid #f1f5f9; display: flex; 
+        justify-content: space-between; align-items: center; background: #f8fafc; 
+    }
+    .table-card-title { margin: 0; font-size: 1rem; font-weight: 700; color: #1e293b; }
+
+    /* Tabs Styling */
+    .tab-nav { display: flex; gap: 1rem; padding: 0.75rem 1.5rem; background: #fff; border-bottom: 1px solid #f1f5f9; }
+    .tab-link { 
+        text-decoration: none; font-size: 0.85rem; font-weight: 600; color: #64748b; 
+        padding: 0.5rem 0.75rem; border-radius: 6px; transition: 0.2s; 
+    }
+    .tab-link:hover { background: #f1f5f9; color: #1e3a8a; }
+    .tab-link.active { background: #eff6ff; color: #1d4ed8; }
+
+    /* Modern Table Styling */
+    .modern-table { width: 100%; border-collapse: collapse; text-align: left; }
+    .modern-table th { padding: 0.75rem 1rem; background: #f8fafc; color: #64748b; font-size: 0.75rem; font-weight: 700; border-bottom: 2px solid #e2e8f0; text-transform: uppercase; }
+    .modern-table td { padding: 0.85rem 1rem; border-bottom: 1px solid #f1f5f9; font-size: 0.875rem; color: #1e293b; vertical-align: middle; }
+    .modern-table tr:hover { background: #fcfdfe; }
+    
+    /* Status Pills */
+    .status-pill { 
+        display: inline-flex; padding: 0.2rem 0.6rem; border-radius: 99px; font-size: 0.75rem; font-weight: 700; 
+        background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; 
+    }
+    .status-pill.status-not_received { background: #fef3c7; color: #92400e; border-color: #fde68a; }
+    .status-pill.status-returned { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
+    .status-pill.status-approved { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
+
+    /* Pagination */
+    .pagination-wrap { padding: 1.25rem; display: flex; justify-content: center; gap: 0.5rem; border-top: 1px solid #f1f5f9; }
+    .page-btn { 
+        padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid #cbd5e1; 
+        background: #fff; color: #475569; font-size: 0.8rem; font-weight: 600; text-decoration: none; transition: 0.2s; 
+    }
+    .page-btn:hover { background: #f1f5f9; }
+    .page-btn.active { background: #1e3a8a; color: #fff; border-color: #1e3a8a; }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="card card--flat card-elevated">
-    <div class="card__header" style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+<div class="dashboard-container">
+    
+    <!-- Top Action Row -->
+    <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 1.5rem;">
         <div>
-            <strong style="font-size:1.05rem;">Your Submissions</strong>
-            <div class="muted" style="font-weight:800; margin-top:4px;">{{ user.lgu_municipality|default:"LGU" }}</div>
+            <h2 style="font-size: 1.5rem; font-weight: 800; margin: 0;">{{ user.lgu_municipality|default:"Municipality" }} Dashboard</h2>
+            <p style="color: #64748b; font-size: 0.85rem; margin-top: 0.25rem;">Monitor your submissions and processing status.</p>
         </div>
-        <a class="btn btn-primary btn-sm" href="{% url 'submit_case' %}">+ Create New Transaction</a>
+        <a class="btn btn-primary" href="{% url 'submit_case' %}"><i class="ri-add-line"></i> Create New Transaction</a>
     </div>
-</div>
 
-<div class="card card--flat card-elevated">
-    <div class="card__header">
-        <strong>Your Submissions (Status Breakdown)</strong>
-    </div>
-    <div class="card__body">
+    <!-- Status Breakdown Grid -->
+    <div class="stats-grid">
         {% if status_counts %}
-            <div class="row" style="gap:14px; flex-wrap:wrap;">
-                {% for row in status_counts %}
-                    <div class="msg" style="margin:0;">
-                        <div class="muted" style="font-weight:800;">{{ row.status }}</div>
-                        <div style="font-size:1.2rem; font-weight:800;">{{ row.count }}</div>
-                    </div>
-                {% endfor %}
-            </div>
+            {% for row in status_counts %}
+                <div class="stat-card">
+                    <span class="stat-label">{{ row.status }}</span>
+                    <span class="stat-value">{{ row.count }}</span>
+                </div>
+            {% endfor %}
         {% else %}
-            <p class="muted" style="margin:0;">No submissions yet.</p>
+            <div class="stat-card" style="grid-column: 1 / -1; align-items: center; color: #94a3b8;">
+                <span>No submission data available yet.</span>
+            </div>
         {% endif %}
     </div>
-</div>
 
-<div class="card card--flat card-elevated">
-    <div class="card__header">
-        <strong>Municipality Submissions</strong>
-        <span class="muted">Showing 10 per page</span>
-    </div>
-
-    <div class="card__body card__body--flush">
-        <div class="card__body" style="padding:14px 16px;">
-            <div class="subtabs" aria-label="LGU dashboard tabs">
-                {% for key,label,count in tabs %}
-                    <a href="?tab={{ key }}"><span class="{% if tab == key %}active{% endif %}">{{ label }} ({{ count }})</span></a>
-                {% endfor %}
-            </div>
+    <!-- Main Table Card -->
+    <div class="table-card">
+        <div class="table-card-header">
+            <h3 class="table-card-title">Recent Submissions</h3>
+            <span style="font-size: 0.75rem; color: #94a3b8; font-weight: 600;">Showing 10 per page</span>
         </div>
 
-        {% if page_obj and page_obj.object_list %}
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th style="width:22%">Tracking No.</th>
-                        <th style="width:10%">LGU Code</th>
-                        <th>Owner</th>
-                        <th style="width:18%">Submitted by</th>
-                        <th style="width:18%">Status</th>
-                        <th style="width:18%">Created</th>
-                        <th style="width:16%">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for case in page_obj.object_list %}
-                        <tr>
-                            <td><strong><a href="{% url 'case_detail' case.tracking_id %}">{{ case.tracking_id }}</a></strong></td>
-                            <td class="muted">{{ case.lgu_area_code|default:"—" }}</td>
-                            <td>{{ case.client_display_name }}</td>
-                            <td class="muted">{{ case.submitted_by.full_name|default:case.submitted_by.email|default:"—" }}</td>
-                            <td class="muted">{{ case.get_status_display }}</td>
-                            <td class="muted">{{ case.created_at|date:"M d, Y H:i" }}</td>
-                            <td>
-                                <a class="btn btn-secondary btn-sm" href="{% url 'case_detail' case.tracking_id %}">View</a>
-                                {% if case.status == 'not_received' or case.status == 'returned' or case.status == 'client_correction' %}
-                                    <a class="btn btn-secondary btn-sm" href="{% url 'case_wizard' case.tracking_id 1 %}">Edit</a>
-                                {% endif %}
-                            </td>
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+        <!-- Sub-Tabs -->
+        <div class="tab-nav">
+            {% for key, label, count in tabs %}
+                <a href="?tab={{ key }}" class="tab-link {% if tab == key %}active{% endif %}">
+                    {{ label }} <span style="opacity: 0.6; margin-left: 0.25rem;">({{ count }})</span>
+                </a>
+            {% endfor %}
+        </div>
 
-            {% if page_obj.has_other_pages %}
-                <div class="pagination">
-                    {% if page_obj.has_previous %}
-                        <a class="pagepill" href="?tab={{ tab }}&page={{ page_obj.previous_page_number }}">Prev</a>
-                    {% endif %}
-                    {% for n in page_obj.paginator.page_range %}
-                        {% if n == page_obj.number %}
-                            <span class="pagepill active">{{ n }}</span>
-                        {% elif n <= 10 %}
-                            <a class="pagepill" href="?tab={{ tab }}&page={{ n }}">{{ n }}</a>
+        <!-- Table View -->
+        <div style="overflow-x: auto;">
+            {% if page_obj and page_obj.object_list %}
+                <table class="modern-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 180px;">Tracking No.</th>
+                            <th>Owner</th>
+                            <th>Submitted By</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th style="text-align: right;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for case in page_obj.object_list %}
+                            <tr>
+                                <td><a href="{% url 'case_detail' case.tracking_id %}" style="color: #1e3a8a; font-weight: 700; text-decoration: none;">{{ case.tracking_id }}</a></td>
+                                <td><strong>{{ case.client_display_name }}</strong></td>
+                                <td style="color: #64748b;">{{ case.submitted_by.full_name|default:case.submitted_by.email|default:"—" }}</td>
+                                <td>
+                                    <span class="status-pill status-{{ case.status }}">
+                                        {{ case.get_status_display }}
+                                    </span>
+                                </td>
+                                <td style="color: #94a3b8; font-size: 0.8rem;">{{ case.created_at|date:"M d, Y" }}</td>
+                                <td style="text-align: right;">
+                                    <div style="display: flex; gap: 0.4rem; justify-content: flex-end;">
+                                        <a class="btn btn-secondary btn-sm" href="{% url 'case_detail' case.tracking_id %}">View</a>
+                                        {% if case.status == 'not_received' or case.status == 'returned' or case.status == 'client_correction' %}
+                                            <a class="btn btn-primary btn-sm" href="{% url 'case_wizard' case.tracking_id 1 %}" style="padding: 0.35rem 0.6rem;">Edit</a>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                
+                <!-- Pagination -->
+                {% if page_obj.has_other_pages %}
+                    <div class="pagination-wrap">
+                        {% if page_obj.has_previous %}
+                            <a class="page-btn" href="?tab={{ tab }}&page={{ page_obj.previous_page_number }}">Prev</a>
                         {% endif %}
-                    {% endfor %}
-                    {% if page_obj.has_next %}
-                        <a class="pagepill" href="?tab={{ tab }}&page={{ page_obj.next_page_number }}">Next</a>
-                    {% endif %}
+                        
+                        {% for n in page_obj.paginator.page_range %}
+                            {% if n == page_obj.number %}
+                                <span class="page-btn active">{{ n }}</span>
+                            {% elif n <= 5 %}
+                                <a class="page-btn" href="?tab={{ tab }}&page={{ n }}">{{ n }}</a>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if page_obj.has_next %}
+                            <a class="page-btn" href="?tab={{ tab }}&page={{ page_obj.next_page_number }}">Next</a>
+                        {% endif %}
+                    </div>
+                {% endif %}
+                
+            {% else %}
+                <div style="padding: 3rem; text-align: center; color: #94a3b8;">
+                    <i class="ri-folder-open-line" style="font-size: 2.5rem; display: block; margin-bottom: 1rem;"></i>
+                    No submissions found in the <strong>{{ tab|title }}</strong> category.
                 </div>
             {% endif %}
-        {% else %}
-            <div class="card__body">
-                <p class="muted" style="margin:0;">No submissions found for this tab.</p>
-            </div>
-        {% endif %}
+        </div>
     </div>
 </div>
 {% endblock %}

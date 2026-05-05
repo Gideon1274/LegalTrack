@@ -4,6 +4,7 @@ from . import views
 
 urlpatterns = [
     path("", views.landing, name="landing"),
+    path("settings/", views.system_settings, name="settings"),
     # Module 4 (Public)
     path("track/", views.track_case, name="track_case"),
     path("track/<str:tracking_id>/", views.track_case_detail, name="track_case_detail"),
@@ -22,6 +23,7 @@ urlpatterns = [
     path("users/<int:user_id>/edit/", views.edit_staff_account, name="edit_staff_account"),
     path("users/<int:user_id>/toggle-active/", views.toggle_staff_active, name="toggle_staff_active"),
     path("users/<int:user_id>/resend-activation/", views.resend_activation, name="resend_activation"),
+    path("api/users/", views.user_list_api, name="user_list_api"),
     path("audit-logs/", views.audit_logs, name="audit_logs"),
     path("audit-logs/export.csv", views.export_audit_logs_csv, name="export_audit_logs_csv"),
     path("accounts/set-password/", views.set_password_view, name="set_password"),

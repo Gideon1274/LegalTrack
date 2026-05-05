@@ -1,0 +1,191 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}PAStrack Admin{% endblock %}</title>
+
+    <!-- Fonts & Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root {
+            --bg-body: #f8fafc;
+            --bg-surface: #ffffff;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --text-light: #94a3b8;
+            --primary: #1d4ed8;
+            --primary-hover: #1e3a8a;
+            --primary-light: #eff6ff;
+            --border: #e2e8f0;
+            --border-hover: #cbd5e1;
+            
+            --danger-bg: #fee2e2;
+            --danger-text: #dc2626;
+            --success-bg: #dcfce7;
+            --success-text: #166534;
+            --inactive-bg: #f1f5f9;
+            --inactive-text: #475569;
+            
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.05);
+            
+            --radius-md: 0.5rem;
+            --radius-lg: 0.75rem;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        /* STRICT FULL-SCREEN LOCK */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            display: flex;
+            height: 100vh;           /* Exactly 100% of viewport height */
+            width: 100vw;            /* Exactly 100% of viewport width */
+            overflow: hidden;        /* Prevents the entire browser window from scrolling */
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ===== FIXED SIDEBAR ===== */
+        .sidebar {
+            width: 260px; 
+            background-color: var(--bg-surface);
+            border-right: 1px solid var(--border);
+            display: flex; 
+            flex-direction: column; 
+            padding: 2rem 1.25rem; 
+            z-index: 20;
+            flex-shrink: 0; /* Prevents sidebar from squishing */
+        }
+
+        .brand-logo { 
+            display: flex; align-items: center; 
+            margin-bottom: 3rem; padding-left: 0.5rem;
+            font-size: 1.5rem; font-weight: 800; color: var(--text-main);
+        }
+        .brand-logo i { 
+            font-size: 1.75rem; margin-right: 0.5rem;
+            background: linear-gradient(to bottom, #f59e0b, #dc2626, #2563eb); 
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+
+        .nav-menu { display: flex; flex-direction: column; gap: 0.5rem; width: 100%; }
+        
+        .nav-item {
+            display: flex; align-items: center;
+            color: var(--text-muted); text-decoration: none;
+            padding: 0.75rem 1rem; border-radius: var(--radius-md);
+            cursor: pointer; transition: 0.2s; font-size: 0.9rem; font-weight: 500;
+        }
+        .nav-item i { font-size: 1.25rem; width: 24px; text-align: center; margin-right: 0.75rem; transition: 0.2s; }
+        
+        .nav-item:hover { color: var(--text-main); background: var(--inactive-bg); }
+        .nav-item.active { color: var(--primary); background: var(--primary-light); font-weight: 600; }
+        .nav-item.active i { color: var(--primary); }
+
+        .sidebar-bottom { margin-top: auto; display: flex; flex-direction: column; gap: 0.5rem; }
+        
+        .user-profile-nav {
+            display: flex; align-items: center; padding: 1rem 0.5rem;
+            border-top: 1px solid var(--border); margin-bottom: 0.5rem;
+        }
+        .user-avatar {
+            width: 36px; height: 36px; border-radius: 50%;
+            background-color: var(--primary-light); color: var(--primary);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.75rem; font-weight: 700; flex-shrink: 0;
+        }
+        .user-info-nav { margin-left: 0.75rem; }
+        .user-info-nav strong { display: block; font-size: 0.875rem; color: var(--text-main); font-weight: 600;}
+        .user-info-nav span { font-size: 0.75rem; color: var(--text-muted); }
+
+        .logout-btn {
+            display: flex; align-items: center; color: var(--danger-text); text-decoration: none;
+            padding: 0.75rem 1rem; border-radius: var(--radius-md); cursor: pointer; transition: 0.2s;
+            font-size: 0.9rem; font-weight: 500;
+        }
+        .logout-btn i { font-size: 1.25rem; width: 24px; text-align: center; margin-right: 0.75rem; }
+        .logout-btn:hover { background: var(--danger-bg); }
+
+        /* ===== MAIN CONTENT WRAPPER ===== */
+        .main-content {
+            flex: 1;               /* Fills all remaining space */
+            height: 100vh;         /* Strict 100vh limit */
+            padding: 2.5rem 3rem;
+            overflow-y: auto;      /* Allows ONLY this specific box to scroll if content gets too tall */
+            background-color: var(--bg-body);
+        }
+    </style>
+
+    <!-- Block for page-specific CSS -->
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+
+    <!-- FIXED SIDEBAR -->
+    <aside class="sidebar">
+        <div class="brand-logo">
+            <i class="ri-blaze-fill"></i> PAStrack
+        </div>
+        
+        <nav class="nav-menu">
+            <a href="{% url 'dashboard' %}" class="nav-item {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+                <i class="ri-dashboard-line"></i> Dashboard
+            </a>
+            
+            {% if request.user.role == "super_admin" %}
+            <a href="{% url 'user_management' %}" class="nav-item {% if 'user' in request.resolver_match.url_name %}active{% endif %}">
+                <i class="ri-team-line"></i> Account Management
+            </a>
+            
+            <a href="{% url 'audit_logs' %}" class="nav-item {% if 'log' in request.resolver_match.url_name %}active{% endif %}">
+                <i class="ri-history-line"></i> Activity Logs
+            </a>
+            {% endif %}
+
+            <a href="{% if request.user.role == 'super_admin' %}{% url 'staff_reports' %}{% else %}{% url 'reports' %}{% endif %}" class="nav-item {% if 'report' in request.resolver_match.url_name %}active{% endif %}">
+                <i class="ri-file-chart-line"></i> System Reports
+            </a>
+
+            <a href="{% url 'profile' %}" class="nav-item {% if request.resolver_match.url_name == 'profile' %}active{% endif %}">
+                <i class="ri-settings-4-line"></i> Settings
+            </a>
+        </nav>
+
+        <div class="sidebar-bottom">
+            <div class="user-profile-nav">
+                <div class="user-avatar">
+                    {{ request.user.first_name|slice:":2"|upper|default:"AD" }}
+                </div>
+                <div class="user-info-nav">
+                    <strong>{{ request.user.first_name|default:"Super Admin" }}</strong>
+                    <span>{{ request.user.get_role_display|default:"System Admin" }}</span>
+                </div>
+            </div>
+            
+            <a href="{% url 'logout' %}" class="logout-btn">
+                <i class="ri-logout-box-r-line"></i> Sign Out
+            </a>
+        </div>
+    </aside>
+
+    <!-- MAIN APP FRAME -->
+    <main class="main-content">
+        {% block content %}
+        {% endblock %}
+    </main>
+
+    <!-- Block for page-specific JavaScript -->
+    {% block extra_js %}{% endblock %}
+
+</body>
+</html>
