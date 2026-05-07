@@ -1,110 +1,338 @@
-{% extends "base.html" %}
-{% block title %}Submissions{% endblock %}
+{% extends 'base_new.html' %}
+{% load static %}
+
+{% block title %}Requests Queue | LegalTrack{% endblock %}
+
+{% block extra_css %}
+
+    <style>
+        /* ===== HEADER ===== */
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
+        .greeting h1 { font-size: 1.5rem; font-weight: 700; color: var(--text-main); margin-bottom: 0.25rem; }
+        .greeting span { font-size: 0.875rem; color: var(--text-muted); }
+
+        /* ===== PANELS ===== */
+        .panel {
+            background: var(--bg-surface); border: 1px solid var(--border);
+            border-radius: var(--radius-lg); box-shadow: var(--shadow-sm);
+            margin-bottom: 1.5rem; padding: 1.5rem;
+        }
+
+        /* ===== ADVANCED FILTER TOOLBAR ===== */
+        .filter-toolbar { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; }
+        
+        .search-bar { flex: 1; min-width: 250px; position: relative; }
+        .search-bar input {
+            width: 100%; padding: 0.6rem 1rem 0.6rem 2.5rem;
+            border: 1px solid var(--border); border-radius: var(--radius-md);
+            font-size: 0.875rem; color: var(--text-main); outline: none; transition: 0.2s;
+        }
+        .search-bar input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
+        .search-bar i { position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-light); }
+
+        .filter-select, .filter-date {
+            padding: 0.6rem 1rem; border: 1px solid var(--border); border-radius: var(--radius-md);
+            font-size: 0.875rem; color: var(--text-main); outline: none; background: white;
+        }
+        .filter-select {
+            padding-right: 2rem; appearance: none; cursor: pointer;
+            background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2364748b%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+            background-repeat: no-repeat; background-position: right 0.7rem top 50%; background-size: 0.65rem auto;
+        }
+        .filter-select:hover, .filter-date:hover { border-color: var(--border-hover); }
+
+        .btn-primary {
+            background-color: var(--primary); color: white; border: none;
+            padding: 0.6rem 1.25rem; border-radius: var(--radius-md); font-size: 0.875rem; font-weight: 500; cursor: pointer; transition: 0.2s;
+        }
+        .btn-primary:hover { background-color: var(--primary-hover); }
+
+        .btn-outline {
+            background-color: white; color: var(--text-main); border: 1px solid var(--border);
+            padding: 0.6rem 1rem; border-radius: var(--radius-md); font-size: 0.875rem; font-weight: 500; cursor: pointer; transition: 0.2s; text-decoration: none; display: inline-flex; align-items: center;
+        }
+        .btn-outline:hover { background-color: var(--inactive-bg); border-color: var(--border-hover); }
+
+        /* ===== TABS ===== */
+        .tabs { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+        .tab {
+            font-size: 0.85rem; font-weight: 500; color: var(--text-muted); text-decoration: none;
+            padding: 0.5rem 0.75rem; border-radius: var(--radius-md); transition: 0.2s;
+        }
+        .tab:hover { color: var(--text-main); background: var(--inactive-bg); }
+        .tab.active { background-color: var(--primary-light); color: var(--primary); font-weight: 600; }
+
+        /* ===== TABLE ===== */
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th { font-size: 0.75rem; font-weight: 600; color: var(--text-main); padding: 1rem 0.5rem; border-bottom: 1px solid var(--border); text-transform: uppercase; letter-spacing: 0.05em; }
+        td { padding: 1.2rem 0.5rem; border-bottom: 1px solid var(--border); font-size: 0.875rem; vertical-align: middle; transition: 0.2s; }
+        tbody tr:hover td { background-color: #fafbfc; }
+
+        .tracking-link { color: var(--text-main); font-weight: 700; text-decoration: none; display: flex; align-items: center; gap: 0.5rem; }
+        .tracking-link:hover { color: var(--primary); }
+
+        .owner-info strong { display: block; font-size: 0.875rem; font-weight: 600; color: var(--text-main); margin-bottom: 0.1rem; }
+        .owner-info span { font-size: 0.75rem; color: var(--text-muted); }
+
+        /* Status Pills */
+        .status-pill {
+            display: inline-flex; align-items: center; gap: 0.3rem;
+            padding: 0.25rem 0.75rem; border-radius: 999px;
+            font-size: 0.75rem; font-weight: 600; text-transform: capitalize; border: 1px solid transparent; white-space: nowrap;
+        }
+        .status-pill::before { content: ''; display: block; width: 6px; height: 6px; border-radius: 50%; }
+        
+        .status-not_received, .status-pending { background: #fef3c7; color: #b45309; border-color: #fde68a; }
+        .status-not_received::before, .status-pending::before { background-color: #b45309; }
+        
+        .status-in_review, .status-for_review, .status-under_review { background: #e0f2fe; color: #0369a1; border-color: #bae6fd; }
+        .status-in_review::before, .status-for_review::before, .status-under_review::before { background-color: #0369a1; }
+
+        .status-client_correction, .status-returned { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
+        .status-client_correction::before, .status-returned::before { background-color: #991b1b; }
+        
+        .status-received { background: var(--primary-light); color: var(--primary); border-color: #bfdbfe; }
+        .status-received::before { background-color: var(--primary); }
+        
+        .status-approved, .status-released { background: var(--success-bg); color: var(--success-text); border-color: #bbf7d0; }
+        .status-approved::before, .status-released::before { background-color: var(--success-text); }
+
+        .status-for_taxmapping, .status-for_approval, .status-for_numbering, .status-for_release { background: #f3e8ff; color: #6b21a8; border-color: #e9d5ff; }
+        .status-for_taxmapping::before, .status-for_approval::before, .status-for_numbering::before, .status-for_release::before { background-color: #6b21a8; }
+
+        .action-btn { border: none; background: transparent; cursor: pointer; color: var(--primary); padding: 0.4rem; border-radius: var(--radius-md); transition: 0.2s; font-size: 1.1rem; text-decoration: none;}
+        .action-btn:hover { background: var(--primary-light); color: var(--primary-hover); }
+
+        /* Pagination */
+        .pagination-container { display: flex; justify-content: space-between; align-items: center; margin-top: 1.5rem; font-size: 0.875rem; color: var(--text-muted); }
+        .pagination-controls { display: flex; gap: 0.25rem; align-items: center; }
+        .page-btn { border: 1px solid transparent; background: transparent; color: var(--text-muted); padding: 0.4rem 0.75rem; border-radius: var(--radius-md); cursor: pointer; font-size: 0.875rem; font-weight: 500; transition: 0.2s; text-decoration: none;}
+        .page-btn.active { background: var(--primary); color: white; box-shadow: var(--shadow-sm); }
+        .page-btn:hover:not(.active) { background: var(--border); color: var(--text-main); }
+
+        /* Table Layout Refinements */
+.legal-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.legal-table th {
+    background: #f8fafc;
+    padding: 1rem 1.5rem;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 2px solid var(--border);
+}
+
+.legal-table td {
+    padding: 1.25rem 1.5rem; /* Increased vertical padding for air */
+    vertical-align: middle;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+/* Specific Column Widths */
+.col-case-no { width: 15%; }
+.col-client { width: 30%; }
+.col-origin { width: 15%; }
+.col-date   { width: 15%; }
+.col-status { width: 15%; }
+.col-actions { width: 10%; text-align: right; }
+
+/* Enhanced Action Links */
+.action-group {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    align-items: center;
+}
+
+.action-link {
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-decoration: none;
+    transition: 0.2s;
+}
+
+.action-link.secondary {
+    color: var(--primary);
+    border-bottom: 1px solid transparent;
+}
+
+.action-link.secondary:hover {
+    border-bottom-color: var(--primary);
+}
+
+.action-link.primary {
+    background: var(--primary-light);
+    color: var(--primary);
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+}
+
+.action-link.primary:hover {
+    background: var(--primary);
+    color: white;
+}
+
+/* Tracking ID Styling */
+.tracking-code {
+    font-family: 'Inter', monospace;
+    font-weight: 700;
+    color: var(--text-main);
+    letter-spacing: -0.02em;
+}
+    </style>
+{% endblock %}
 
 {% block content %}
-<div class="card">
-    <div class="row-between">
-        <div>
-            <h2 class="page-title">Submissions</h2>
-            <p class="page-subtitle">{{ role_display }}</p>
+    <div class="header">
+        <div class="greeting">
+            <h1>{{ page_title }}</h1>
+            <span>{{ page_subtitle }} | Access level: <strong>{{ role_display }}</strong></span>
         </div>
-        <form method="get" class="searchbar m-0">
-            <div class="grow">
-                <label for="id_q">Search</label>
-                <input id="id_q" name="q" value="{{ q }}" placeholder="Tracking ID, owner, email..." />
-            </div>
-            <div style="min-width:220px;">
-                <label for="id_case_type">Transaction Type</label>
-                <select id="id_case_type" name="case_type">
-                    <option value="">All</option>
-                    {% for v,l in case_type_choices %}
-                        <option value="{{ v }}" {% if filter_case_type == v %}selected{% endif %}>{{ l }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div style="min-width:220px;">
-                <label for="id_lgu">LGU</label>
-                <select id="id_lgu" name="lgu">
-                    <option value="">All</option>
-                    {% for v,l in lgu_choices %}
-                        <option value="{{ v }}" {% if filter_lgu == v %}selected{% endif %}>{{ l }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div style="display:flex; gap:10px; align-items:end; min-width:340px;">
-                <div style="min-width:160px; flex:1;">
-                    <label for="id_date_from">From</label>
-                    <input id="id_date_from" type="date" name="date_from" value="{{ filter_date_from }}" />
-                </div>
-                <div style="min-width:160px; flex:1;">
-                    <label for="id_date_to">To</label>
-                    <input id="id_date_to" type="date" name="date_to" value="{{ filter_date_to }}" />
-                </div>
+    </div>
+
+    <!-- FILTER TOOLBAR -->
+    <div class="panel" style="padding: 1rem 1.5rem;">
+        <form method="GET" class="filter-toolbar">
+            <!-- Preserve tab and scope state when searching -->
+            <input type="hidden" name="tab" value="{{ tab }}">
+            <input type="hidden" name="scope" value="{{ scope }}">
+            
+            <div class="search-bar">
+                <i class="ri-search-line"></i>
+                <input type="text" name="q" value="{{ q }}" placeholder="Search tracking no, client name, or email...">
             </div>
 
-            <input type="hidden" name="tab" value="{{ tab }}" />
-            <div>
-                <button class="btn btn-primary" type="submit">Filter</button>
-            </div>
+            <!-- Only show advanced filters for Global Transactions -->
+            {% if scope == 'all' %}
+                <select name="lgu" class="filter-select">
+                    <option value="">All LGUs</option>
+                    {% for key, val in lgu_choices %}
+                        <option value="{{ key }}" {% if filter_lgu == key %}selected{% endif %}>{{ val }}</option>
+                    {% endfor %}
+                </select>
+
+                <select name="case_type" class="filter-select">
+                    <option value="">All Transaction Types</option>
+                    {% for key, val in case_type_choices %}
+                        <option value="{{ key }}" {% if filter_case_type == key %}selected{% endif %}>{{ val }}</option>
+                    {% endfor %}
+                </select>
+
+                <input type="date" name="date_from" class="filter-date" value="{{ filter_date_from }}" title="Date From">
+                <input type="date" name="date_to" class="filter-date" value="{{ filter_date_to }}" title="Date To">
+            {% endif %}
+
+            <button type="submit" class="btn-primary">{% if scope == 'me' %}Search Workspace{% else %}Apply Filters{% endif %}</button>
+            
+            <!-- Clear Filters Button -->
+            {% if q or filter_lgu or filter_case_type or filter_date_from or filter_date_to %}
+                <a href="?scope={{ scope }}&tab={{ tab }}" class="btn-outline" title="Clear Filters"><i class="ri-close-line" style="font-size: 1.2rem;"></i></a>
+            {% endif %}
         </form>
     </div>
 
-    <div class="subtabs" role="tablist" aria-label="Status">
-        {% for key,label in tabs %}
-            <a href="?tab={{ key }}{% if qs_params_no_tab %}&{{ qs_params_no_tab }}{% endif %}">
-                <span class="{% if tab == key %}active{% endif %}">{{ label }}</span>
-            </a>
-        {% endfor %}
-    </div>
-</div>
+    <!-- MAIN DATA PANEL -->
+    <div class="panel">
+        
+        <!-- Status Tabs -->
+        <div class="tabs">
+            {% for key, label in tabs %}
+                <!-- Note: qs_params_no_tab preserves your current search/date filters while swapping tabs -->
+                <a href="?tab={{ key }}{% if qs_params_no_tab %}&{{ qs_params_no_tab }}{% endif %}" class="tab {% if tab == key %}active{% endif %}">
+                    {{ label }}
+                </a>
+            {% endfor %}
+        </div>
 
-<div class="card card--flat">
-    <div class="card__header">
-        <strong>Transactions</strong>
-        <span class="muted">{{ page_obj.paginator.count }} total</span>
-    </div>
-    <div class="card__body card__body--flush">
-        {% if page_obj.object_list %}
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th style="width:22%">Tracking No.</th>
-                        <th>Owner</th>
-                        <th style="width:16%">Status</th>
-                        <th style="width:22%">Updated</th>
-                        <th style="width:12%">Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for case in page_obj.object_list %}
-                        <tr>
-                            <td><strong><a href="{% url 'case_detail' case.tracking_id %}">{{ case.tracking_id }}</a></strong></td>
-                            <td>
-                                {{ case.client_display_name }}
-                                <div class="muted mt-4 fs-92">Submitted by: {{ case.submitted_by|default:"—" }}</div>
-                            </td>
-                            <td class="muted">{{ case.get_status_display }}</td>
-                            <td class="muted">{{ case.updated_at|date:"M d, Y H:i" }}</td>
-                            <td><a class="btn btn-secondary btn-sm" href="{% url 'case_detail' case.tracking_id %}">Open</a></td>
-                        </tr>
-                    {% endfor %}
-                </tbody>
+        <!-- Data Table -->
+        <div style="overflow-x: auto;">
+            {% if page_obj and page_obj.object_list %}
+            <table class="legal-table">
+            <thead>
+                <tr>
+                    <th class="col-case-no">Case Number</th>
+                    <th class="col-client">Client & Request</th>
+                    <th class="col-origin">LGU Origin</th>
+                    <th class="col-date">Date Submitted</th>
+                    <th class="col-status">Status</th>
+                    <th class="col-actions">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for case in page_obj %}
+                <tr>
+                    <td>
+                        <span class="tracking-code">{{ case.tracking_id }}</span>
+                    </td>
+                    <td>
+                        <div style="font-weight: 600; color: var(--text-main);">{{ case.client_display_name|default:case.client_name }}</div>
+                        <div style="font-size: 0.75rem; color: var(--text-muted);">{{ case.get_case_type_display }}</div>
+                    </td>
+                    <td>
+                        <span style="color: var(--text-muted);">{{ case.submitted_by.lgu_municipality|default:"—" }}</span>
+                    </td>
+                    <td>
+                        <span style="color: var(--text-muted);">{{ case.created_at|date:"m/d/Y" }}</span>
+                    </td>
+                    <td>
+                        <span class="status-pill status-{{ case.status }}">
+                            {{ case.get_status_display }}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="action-group">
+                            <a href="#" onclick="openQuickView('{{ case.tracking_id }}'); return false;" class="action-link secondary">
+                                Quick View
+                            </a>
+                            <a href="{% url 'case_detail' case.tracking_id %}" class="action-link primary">
+                                Review
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
             </table>
-        {% else %}
-            <div class="card__body"><p class="muted" style="margin:0;">No transactions found.</p></div>
-        {% endif %}
-    </div>
-
-    {% if page_obj.paginator.num_pages > 1 %}
-        <div class="pagination">
-            {% if page_obj.has_previous %}
-                <a class="pagepill" href="?{% if qs_params %}{{ qs_params }}&{% endif %}page={{ page_obj.previous_page_number }}">Prev</a>
-            {% endif %}
-            <span class="pagepill active">{{ page_obj.number }}</span>
-            {% if page_obj.has_next %}
-                <a class="pagepill" href="?{% if qs_params %}{{ qs_params }}&{% endif %}page={{ page_obj.next_page_number }}">Next</a>
+            {% else %}
+                <div style="padding: 4rem 2rem; text-align: center; color: var(--text-muted);">
+                    <i class="ri-inbox-archive-line" style="font-size: 3rem; display: block; margin-bottom: 1rem; opacity: 0.5;"></i>
+                    <p style="margin: 0; font-weight: 500; font-size: 1.1rem; color: var(--text-main);">No transactions found</p>
+                    <p style="font-size: 0.9rem; margin-top: 0.5rem;">There are no records matching your current tab and filter criteria.</p>
+                </div>
             {% endif %}
         </div>
-    {% endif %}
-</div>
+
+        <!-- Pagination -->
+        {% if page_obj.has_other_pages %}
+            <div class="pagination-container">
+                <span>Showing page <strong>{{ page_obj.number }}</strong> of <strong>{{ page_obj.paginator.num_pages }}</strong></span>
+                
+                <div class="pagination-controls">
+                    {% if page_obj.has_previous %}
+                        <!-- Preserve all URL params when paginating -->
+                        <a href="?page={{ page_obj.previous_page_number }}{% if qs_params %}&{{ qs_params }}{% endif %}" class="page-btn"><i class="ri-arrow-left-s-line"></i> Prev</a>
+                    {% endif %}
+                    
+                    {% for n in page_obj.paginator.page_range %}
+                        {% if n == page_obj.number %}
+                            <span class="page-btn active">{{ n }}</span>
+                        {% elif n > page_obj.number|add:'-3' and n < page_obj.number|add:'3' %}
+                            <a href="?page={{ n }}{% if qs_params %}&{{ qs_params }}{% endif %}" class="page-btn">{{ n }}</a>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if page_obj.has_next %}
+                        <a href="?page={{ page_obj.next_page_number }}{% if qs_params %}&{{ qs_params }}{% endif %}" class="page-btn">Next <i class="ri-arrow-right-s-line"></i></a>
+                    {% endif %}
+                </div>
+            </div>
+        {% endif %}
+
+    </div>
 {% endblock %}

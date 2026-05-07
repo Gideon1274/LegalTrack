@@ -1,126 +1,200 @@
-{% extends "base_admin.html" %}
-{% block title %}Transaction {{ case.tracking_id }}{% endblock %}
-{% block header_title %}Transaction Details{% endblock %}
+{% extends "base_new.html" %}
+
+{% block title %}Transaction {{ case.tracking_id }} | LegalTrack{% endblock %}
 
 {% block extra_css %}
 <style>
-    .case-container { 
-        max-width: 1200px; /* Centered and tightened */
-        margin: 0 auto; 
-        padding: 1.25rem; 
+    /* ===== LAYOUT ===== */
+    .case-container {
+        max-width: 1400px; margin: 0 auto;
     }
-
-    .back-link { color: #94a3b8; text-decoration: none; font-size: 0.8rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.25rem; margin-bottom: 0.75rem; transition: 0.2s; }
-    .back-link:hover { color: #1e3a8a; }
-
-    .page-header-main { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; }
-    .page-title { font-size: 1.4rem; font-weight: 800; color: #0f172a; margin: 0; letter-spacing: -0.01em; }
-
-    /* Centered Dashboard Grid */
-    .dashboard-grid { 
-        display: grid; 
-        grid-template-columns: 1.5fr 1fr; /* Narrowed the gap between columns */
-        gap: 1.25rem; 
-    }
-
-    .glass-card { background: #fff; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
-    .card-header { padding: 0.75rem 1.25rem; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; }
-    .card-title { font-size: 0.85rem; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.025em; }
-    .card-body { padding: 1.25rem; }
-
-    /* Compact Info Grid */
-    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem 0.75rem; }
-    .info-item { display: flex; flex-direction: column; }
-    .info-label { font-size: 0.65rem; color: #94a3b8; font-weight: 700; text-transform: uppercase; margin-bottom: 0.15rem; }
-    .info-value { font-size: 0.9rem; color: #1e293b; font-weight: 600; line-height: 1.2; }
     
-    .info-footer { border-top: 1px solid #f1f5f9; margin-top: 1rem; padding-top: 0.75rem; font-size: 0.8rem; color: #64748b; }
+    .header { margin-bottom: 2rem; }
+    .back-link { 
+        color: var(--text-muted); text-decoration: none; font-size: 0.85rem; font-weight: 600; 
+        display: inline-flex; align-items: center; gap: 0.25rem; transition: 0.2s; 
+    }
+    .back-link:hover { color: var(--primary); }
+    
+    .header-main { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 0.5rem; }
+    .title-block { display: flex; align-items: center; gap: 1rem; }
+    .title-block h1 { font-size: 1.75rem; font-weight: 800; color: var(--text-main); margin: 0; }
 
-    /* Document List */
+    .detail-grid {
+        display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; align-items: start;
+    }
+
+    /* ===== PANELS & CARDS ===== */
+    .panel {
+        background: var(--bg-surface); border: 1px solid var(--border);
+        border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); margin-bottom: 1.5rem;
+    }
+    .panel-header { 
+        padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border); 
+        display: flex; justify-content: space-between; align-items: center; 
+    }
+    .panel-title { font-size: 1rem; font-weight: 700; color: var(--text-main); margin: 0; }
+    .panel-body { padding: 1.5rem; }
+
+    /* ===== INFO GRID ===== */
+    .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.25rem 1rem; }
+    .info-item { display: flex; flex-direction: column; gap: 0.25rem; }
+    .info-label { font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .info-value { font-size: 0.95rem; color: var(--text-main); font-weight: 500; }
+
+    /* ===== DOCUMENT CHECKLIST ===== */
     .doc-table { width: 100%; border-collapse: collapse; }
-    .doc-table tr { border-bottom: 1px solid #f8fafc; }
-    .doc-table td { padding: 0.6rem 0; vertical-align: middle; }
-    .doc-name { font-size: 0.85rem; font-weight: 600; color: #1e293b; }
-    .doc-meta { font-size: 0.75rem; color: #94a3b8; }
+    .doc-table tr { border-bottom: 1px solid var(--border); }
+    .doc-table tr:last-child { border-bottom: none; }
+    .doc-table td { padding: 1rem 0; vertical-align: middle; }
+    .doc-icon { width: 40px; color: #dc2626; font-size: 1.5rem; }
+    .doc-name { font-size: 0.9rem; font-weight: 600; color: var(--text-main); }
+    .doc-meta { font-size: 0.75rem; color: var(--text-muted); }
 
-    /* Action Controls */
-    .control-panel { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; margin-bottom: 0.75rem; }
-    .control-title { font-size: 0.9rem; font-weight: 700; margin-bottom: 0.5rem; }
-    .form-control { width: 100%; padding: 0.4rem 0.75rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; margin-bottom: 0.5rem; }
+    /* ===== BUTTONS & BADGES ===== */
+    .btn {
+        padding: 0.6rem 1.25rem; border-radius: var(--radius-md); font-size: 0.875rem; font-weight: 600; 
+        cursor: pointer; transition: 0.2s; border: none; text-decoration: none; 
+        display: inline-flex; align-items: center; gap: 0.5rem; justify-content: center;
+    }
+    .btn-block { width: 100%; display: flex; margin-bottom: 0.5rem; }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-outline { background: white; color: var(--text-main); border: 1px solid var(--border); }
+    .btn-outline:hover { background: var(--inactive-bg); border-color: var(--border-hover); }
+    .btn-danger { background: #fee2e2; color: #dc2626; }
+    .btn-danger:hover { background: #fecaca; }
+    .btn-success { background: var(--success-bg); color: var(--success-text); }
 
-    .btn { padding: 0.5rem 1rem; border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: 0.2s; border: none; text-decoration: none; display: inline-flex; align-items: center; gap: 0.4rem; justify-content: center; }
-    .btn-primary { background: #1e3a8a; color: white; }
-    .btn-secondary { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
-    .status-badge { padding: 0.2rem 0.75rem; border-radius: 99px; font-size: 0.75rem; font-weight: 700; background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+    .status-pill {
+        padding: 0.3rem 0.8rem; border-radius: 99px; font-size: 0.75rem; font-weight: 700; text-transform: capitalize;
+        border: 1px solid transparent; background: var(--inactive-bg); color: var(--text-muted);
+    }
+    .status-in_review, .status-for_review { background: #e0f2fe; color: #0369a1; border-color: #bae6fd; }
+    .status-for_approval { background: #f3e8ff; color: #6b21a8; border-color: #e9d5ff; }
+    .status-client_correction { background: #fee2e2; color: #dc2626; border-color: #fecaca; }
 
-    /* Timeline */
-    .timeline { list-style: none; padding-left: 0.5rem; margin-top: 0.5rem; }
-    .timeline-item { position: relative; padding-left: 1rem; padding-bottom: 0.75rem; border-left: 1px solid #e2e8f0; font-size: 0.8rem; }
-    .timeline-item::before { content: ''; position: absolute; left: -4px; top: 3px; width: 7px; height: 7px; border-radius: 50%; background: #cbd5e1; }
-    .timeline-item:last-child { border-left: none; }
+    /* ===== SIDEBAR & TIMELINE ===== */
+    .sticky-sidebar { position: sticky; top: 1.5rem; }
+    
+    .timeline { position: relative; padding-left: 1.5rem; list-style: none; margin: 0; }
+    .timeline::before { content: ''; position: absolute; left: 0.4rem; top: 0; bottom: 0; width: 2px; background: var(--border); }
+    .timeline-item { position: relative; padding-bottom: 1.5rem; }
+    .timeline-item:last-child { padding-bottom: 0; }
+    .timeline-icon {
+        position: absolute; left: -1.5rem; top: 0; width: 1rem; height: 1rem; border-radius: 50%;
+        background: var(--bg-surface); border: 2px solid var(--primary); z-index: 1;
+    }
+    .timeline-time { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem; display: block; }
+    .timeline-content { background: #f8fafc; padding: 0.75rem; border-radius: var(--radius-md); font-size: 0.85rem; color: var(--text-main); border: 1px solid var(--border); }
+
+    /* ===== IMPROVED REMARKS FIELD ===== */
+    .remarks-input {
+        width: 100%;
+        min-height: 100px;
+        padding: 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        font-family: inherit;
+        font-size: 0.875rem;
+        resize: vertical;
+        outline: none;
+        transition: border-color 0.2s, box-shadow 0.2s;
+        background-color: #fff;
+    }
+
+    .remarks-input:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px var(--primary-light);
+    }
+
+    .btn-submit-note {
+        width: 100%;
+        margin-top: 0.75rem;
+        background-color: var(--primary);
+        color: white;
+        border: none;
+        padding: 0.6rem;
+        border-radius: var(--radius-md);
+        font-weight: 600;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+
+    .btn-submit-note:hover {
+        background-color: var(--primary-hover);
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="case-container">
-    <a href="{% url 'dashboard' %}" class="back-link"><i class="ri-arrow-left-line"></i> Back to Submissions</a>
     
-    <div class="page-header-main">
-        <div style="display: flex; align-items: center; gap: 0.75rem;">
-            <h2 class="page-title">{{ case.tracking_id }}</h2>
-            <div class="status-badge">{{ case.get_status_display }}</div>
-        </div>
-        <div>
-            {% if can_edit %}
-                <a class="btn btn-primary" href="{% url 'case_wizard' case.tracking_id 1 %}"><i class="ri-edit-line"></i> Edit Request</a>
-            {% endif %}
+    <!-- HEADER / IDENTITY STRIP -->
+    <div class="header">
+        <a href="{% url 'submissions' %}?scope=me" class="back-link"><i class="ri-arrow-left-line"></i> Back to Workspace</a>
+        <div class="header-main">
+            <div class="title-block">
+                <h1>{{ case.tracking_id }}</h1>
+                <span class="status-pill status-{{ case.status }}">{{ case.get_status_display }}</span>
+            </div>
+            <div class="header-actions">
+                {% if can_edit %}
+                    <a class="btn btn-outline" href="{% url 'case_wizard' case.tracking_id 1 %}"><i class="ri-edit-line"></i> Edit Data</a>
+                {% endif %}
+            </div>
         </div>
     </div>
 
-    <div class="dashboard-grid">
+    <!-- MAIN GRID -->
+    <div class="detail-grid">
+        
+        <!-- LEFT COLUMN: INFORMATION CORE -->
         <div class="main-column">
-            <!-- Error/Reason Box -->
-            {% if case.return_reason %}
-            <div class="glass-card" style="border-left: 4px solid #dc2626; background: #fff1f2;">
-                <div class="card-body" style="padding: 0.75rem 1.25rem;">
-                    <div class="info-label" style="color: #991b1b;">Return Reason</div>
-                    <div class="info-value" style="color: #991b1b;">{{ case.return_reason }}</div>
+            
+            {% if case.status == 'client_correction' or case.return_reason %}
+            <div class="panel" style="border-left: 4px solid #dc2626; background: #fff5f5;">
+                <div class="panel-body">
+                    <div class="info-label" style="color: #dc2626; margin-bottom: 0.5rem;">Correction Required</div>
+                    <div class="info-value" style="color: #991b1b;">{{ case.return_reason|default:"Case was returned for missing or incorrect information." }}</div>
                 </div>
             </div>
             {% endif %}
 
-            <div class="glass-card">
-                <div class="card-header"><div class="card-title">Transaction Information</div></div>
-                <div class="card-body">
+            <div class="panel">
+                <div class="panel-header"><h2 class="panel-title">Transaction Information</h2></div>
+                <div class="panel-body">
                     <div class="info-grid">
-                        <div class="info-item"><div class="info-label">Owner Name</div><div class="info-value">{{ case.client_display_name }}</div></div>
-                        <div class="info-item"><div class="info-label">Type</div><div class="info-value">{{ case.get_case_type_display }}</div></div>
-                        <div class="info-item"><div class="info-label">Contact</div><div class="info-value">{{ case.client_number|default:"—" }}</div></div>
-                        <div class="info-item"><div class="info-label">Municipality</div><div class="info-value">{{ case.area }}</div></div>
-                        <div class="info-item"><div class="info-label">Tax Mapping</div><div class="info-value">{% if case.needs_taxmapping %}Required{% else %}No{% endif %}</div></div>
-                        {% if case.get_property_title_type_display %}
-                        <div class="info-item"><div class="info-label">Property Title</div><div class="info-value">{{ case.get_property_title_type_display }}</div></div>
-                        {% endif %}
-                    </div>
-                    <div class="info-footer">
-                        Submitted by <strong>{{ case.submitted_by|default:"System" }}</strong> on {{ case.created_at|date:"M d, Y" }}
+                        <div class="info-item"><span class="info-label">Client Name</span><span class="info-value">{{ case.client_display_name }}</span></div>
+                        <div class="info-item"><span class="info-label">Transaction Type</span><span class="info-value">{{ case.get_case_type_display }}</span></div>
+                        <div class="info-item"><span class="info-label">Contact Number</span><span class="info-value">{{ case.client_number|default:"—" }}</span></div>
+                        <div class="info-item"><span class="info-label">Email Address</span><span class="info-value">{{ case.client_email|default:"—" }}</span></div>
+                        <div class="info-item"><span class="info-label">LGU Origin</span><span class="info-value">{{ case.submitted_by.lgu_municipality|default:case.area }}</span></div>
+                        <div class="info-item"><span class="info-label">Date Submitted</span><span class="info-value">{{ case.created_at|date:"M d, Y g:i A" }}</span></div>
                     </div>
                 </div>
             </div>
 
-            <div class="glass-card">
-                <div class="card-header"><div class="card-title">Uploaded Files</div></div>
-                <div class="card-body" style="padding-top: 0;">
+            <div class="panel">
+                <div class="panel-header"><h2 class="panel-title">Documents Checklist</h2></div>
+                <div class="panel-body" style="padding-top: 0; padding-bottom: 0;">
                     <table class="doc-table">
                         {% for doc in documents %}
                         <tr>
+                            <td class="doc-icon"><i class="ri-file-pdf-2-line"></i></td>
                             <td>
                                 <div class="doc-name">{{ doc.doc_type }}</div>
-                                <div class="doc-meta">Uploaded on {{ doc.uploaded_at|date:"M d, Y" }}</div>
+                                <div class="doc-meta">Uploaded {{ doc.uploaded_at|date:"M d, Y" }}</div>
                             </td>
                             <td style="text-align: right;">
-                                <a href="{% url 'download_case_document' doc.id %}" target="_blank" class="btn btn-secondary btn-sm" style="padding: 0.25rem 0.6rem;">View File</a>
+                                <a href="{% url 'download_case_document' doc.id %}" target="_blank" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">
+                                    Preview <i class="ri-external-link-line"></i>
+                                </a>
                             </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="3" style="text-align: center; padding: 2rem; color: var(--text-muted);">No documents uploaded for this case.</td>
                         </tr>
                         {% endfor %}
                     </table>
@@ -128,59 +202,139 @@
             </div>
         </div>
 
+        <!-- RIGHT COLUMN: COMMAND CENTER & HISTORY -->
         <div class="sidebar-column">
-            <!-- Workflow Section -->
-            {% if can_receive or can_assign or can_approve or can_number or can_release %}
-            <div class="glass-card">
-                <div class="card-header"><div class="card-title">Processing</div></div>
-                <div class="card-body" style="padding-bottom: 0.5rem;">
-                    {% if can_receive %}
-                    <form method="post" action="{% url 'receive_case' case.tracking_id %}">
-                        {% csrf_token %}
-                        <div class="control-panel">
-                            <div class="control-title">Receiving</div>
-                            <button class="btn btn-primary btn-block" type="submit">Mark as Received</button>
-                        </div>
-                    </form>
-                    {% endif %}
-                    <!-- Other forms follow the same pattern -->
-                </div>
-            </div>
+            <div class="sticky-sidebar">
+                
+                <!-- ACTION COMMAND CENTER -->
+<div class="panel" style="border-top: 4px solid var(--primary);">
+    <div class="panel-header" style="background: #f8fafc;">
+        <h2 class="panel-title">Workflow Actions</h2>
+    </div>
+    <div class="panel-body">
+        
+        {% if request.user.role == 'capitol_receiving' %}
+            {% if case.status == 'not_received' %}
+                <form method="post" action="{% url 'receive_case' case.tracking_id %}">
+                    {% csrf_token %}
+                    <button class="btn btn-primary btn-block" type="submit">
+                        <i class="ri-inbox-archive-line"></i> Confirm Receipt
+                    </button>
+                </form>
+            {% else %}
+                <button class="btn btn-primary btn-block"><i class="ri-share-forward-line"></i> Forward to Examiner</button>
+                <button class="btn btn-danger btn-block"><i class="ri-arrow-go-back-line"></i> Return to LGU</button>
             {% endif %}
 
-            <!-- Remarks -->
-            <div class="glass-card">
-                <div class="card-header"><div class="card-title">Activity & Remarks</div></div>
-                <div class="card-body">
-                    {% if remarks %}
-                        {% for r in remarks|slice:":3" %}
-                        <div style="background: #f8fafc; padding: 0.6rem; border-radius: 6px; margin-bottom: 0.5rem; font-size: 0.8rem;">
-                            <div style="color: #475569; margin-bottom: 0.2rem;">{{ r.text }}</div>
-                            <div style="font-size: 0.7rem; color: #94a3b8;">&mdash; {{ r.created_by }}</div>
-                        </div>
-                        {% endfor %}
-                    {% endif %}
-                    
-                    <form method="post" action="{% url 'add_case_remark' case.tracking_id %}">
-                        {% csrf_token %}
-                        {{ remark_form.text }}
-                        <button class="btn btn-secondary btn-block btn-sm" type="submit" style="margin-top: 0.5rem;">Add Remark</button>
-                    </form>
-                    
-                    <div style="margin-top: 1rem; border-top: 1px solid #f1f5f9; padding-top: 0.75rem;">
-                        <div class="info-label">Recent History</div>
+        {% elif request.user.role == 'capitol_examiner' %}
+            <!-- Forward for Approval Form -->
+            <form method="post" action="{% url 'forward_for_approval' case.tracking_id %}">
+                {% csrf_token %}
+                <button class="btn btn-primary btn-block" type="submit">
+                    <i class="ri-check-double-line"></i> Forward for Approval
+                </button>
+            </form>
+
+            <!-- Return for Correction Trigger -->
+            <button class="btn btn-danger btn-block" onclick="openReturnModal()">
+                <i class="ri-error-warning-line"></i> Request Correction
+            </button>
+
+        {% elif request.user.role == 'capitol_approver' %}
+            <form method="post" action="{% url 'approve_case' case.tracking_id %}">
+                {% csrf_token %}
+                <button class="btn btn-success btn-block" type="submit">
+                    <i class="ri-quill-pen-line"></i> Approve & Sign
+                </button>
+            </form>
+            <button class="btn btn-outline btn-block" style="color: #b45309; border-color: #fde68a;">
+                <i class="ri-arrow-go-back-line"></i> Return to Examiner
+            </button>
+        {% endif %} <!-- ONLY ONE ENDIF HERE FOR THE ROLE CHECK -->
+
+    </div>
+</div>
+
+                <!-- UNIFIED REMARKS & TIMELINE -->
+                <div class="panel">
+                    <div class="panel-header"><h2 class="panel-title">Activity Timeline</h2></div>
+                    <div class="panel-body">
+                        
+                        <form method="post" action="{% url 'add_case_remark' case.tracking_id %}" style="margin-bottom: 1.5rem;">
+                            {% csrf_token %}
+
+                            <textarea name="text" class="remarks-input" placeholder="Add an internal note..." id="noteBox"></textarea>
+                            
+                            <button class="btn-submit-note" type="submit">Add Internal Note</button>
+                        </form>
+
+                        <script>
+                        const textarea = document.getElementById("noteBox");
+
+                        textarea.addEventListener("keydown", function (event) {
+                            if (event.key === "Enter" && !event.shiftKey) {
+                                event.preventDefault(); // stop newline
+                                this.form.submit();     // now this works ✅
+                            }
+                        });
+                        </script>
+
                         <ul class="timeline">
-                            {% for h in history|slice:":3" %}
+                            {% for log in history %}
                             <li class="timeline-item">
-                                <div style="font-weight: 600;">{{ h.get_action_display }}</div>
-                                <div style="color: #94a3b8; font-size: 0.7rem;">{{ h.created_at|date:"M d, g:i A" }}</div>
+                                <div class="timeline-icon"></div>
+                                <span class="timeline-time">{{ log.created_at|date:"M d, g:i A" }}</span>
+                                <div class="timeline-content">
+                                    <strong>{{ log.actor.get_role_display|default:"System" }}</strong>
+                                    <p style="margin: 0.25rem 0 0 0;">
+                                        {% if log.action == "case_remark" %}
+                                            Added a note
+                                        {% else %}
+                                            {{ log.get_action_display }}
+                                        {% endif %}
+                                    </p>
+                                    
+                                    <!-- This part pulls the actual text from the AuditLog details -->
+                                    {% if log.details.remark %}
+                                        <p style="margin-top: 0.5rem; font-style: italic; color: var(--text-main); border-left: 2px solid var(--border); padding-left: 0.75rem;">
+                                            "{{ log.details.remark }}"
+                                        </p>
+                                    {% endif %}
+                                </div>
                             </li>
+                            {% empty %}
+                            <div style="color: var(--text-muted); text-align: center; font-size: 0.85rem;">No activity recorded yet.</div>
                             {% endfor %}
                         </ul>
+
                     </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<!-- Return Modal -->
+<div id="returnModal" class="drawer-backdrop" style="display:none; justify-content:center; align-items:center; opacity:1; visibility:visible;">
+    <div class="panel" style="width: 400px; padding: 2rem;">
+        <h3 class="panel-title" style="margin-bottom: 1rem;">Reason for Correction</h3>
+        <form method="post" action="{% url 'return_for_correction' case.tracking_id %}">
+            {% csrf_token %}
+            <textarea name="reason" class="remarks-input" placeholder="Explain what needs to be fixed..." required></textarea>
+            <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                <button type="button" class="btn btn-outline" style="flex:1" onclick="closeReturnModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary" style="flex:1; background: #dc2626;">Confirm Return</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function openReturnModal() {
+        document.getElementById('returnModal').style.display = 'flex';
+    }
+    function closeReturnModal() {
+        document.getElementById('returnModal').style.display = 'none';
+    }
+</script>
 {% endblock %}

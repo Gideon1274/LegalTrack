@@ -399,13 +399,23 @@ class StaffAccountUpdateForm(forms.ModelForm):
         model = CustomUser
         fields: ClassVar[list[str]] = ["full_name", "designation", "position"]
 
+    # Inside your CaseDetailsForm in forms.py
     def __init__(self, *args, **kwargs):
+        user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
-        user: CustomUser = self.instance
-        self.initial["lgu_municipality"] = (getattr(user, "lgu_municipality", "") or "").strip()
-        if user.role != "lgu_admin":
-            # Remove the field for non-LGU roles
-            del self.fields["lgu_municipality"]
+        
+        if user:
+            if user.role == 'lgu_admin':
+                # LGU Admins have their origin locked to their own municipality
+                if user.lgu_municipality:
+                    self.fields['area'].initial = user.lgu_municipality
+                    self.fields['area'].widget = forms.HiddenInput()
+            
+            elif user.role == 'capitol_receiving':
+                # Receivers MUST choose an origin from the dropdown
+                self.fields['area'].required = True
+                self.fields['area'].label = "LGU Origin"
+                self.fields['area'].help_text = "Select the municipality where this property is located."
 
     def clean_full_name(self):
         cleaned = self.cleaned_data or {}

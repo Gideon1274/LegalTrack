@@ -411,7 +411,7 @@ class Case(TimestampedModel):
         ("draft", "Draft"),
         ("not_received", "Not Received"),          # LGU created, still editable
         ("received", "Received"),                  # Capitol marked receipt
-        ("in_review", "In Review"),
+        ("in_review", "To Examine"),
         ("for_taxmapping", "For Taxmapping"),      # Added for TaxMapper flow
         ("for_approval", "For Approval"),
         ("approved", "Approved"),

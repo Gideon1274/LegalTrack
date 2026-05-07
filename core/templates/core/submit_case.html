@@ -504,10 +504,45 @@
             wrap.style.display = show ? '' : 'none';
             if (!show) { var sel = wrap.querySelector('select'); if (sel) sel.value = ''; }
         }
+        
         document.addEventListener('change', function (e) {
             if (e.target && e.target.id === '{{ form.case_type.id_for_label }}') syncTitleType();
         });
-        document.addEventListener('DOMContentLoaded', syncTitleType);
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // 1. Run the existing title sync
+            syncTitleType();
+
+            // 2. AUTO-LOCK LGU ORIGIN FOR LGU ADMINS
+            const userRole = "{{ request.user.role }}";
+            const userLguName = "{{ request.user.lgu_municipality|default:''|escapejs }}";
+            const areaSelect = document.getElementById('{{ form.area.id_for_label }}');
+
+            if (userRole === "lgu_admin" && areaSelect) {
+                // Loop through options to find and select the admin's specific LGU
+                for (let i = 0; i < areaSelect.options.length; i++) {
+                    if (areaSelect.options[i].text.includes(userLguName) || areaSelect.options[i].value === userLguName) {
+                        areaSelect.selectedIndex = i;
+                        break;
+                    }
+                }
+                
+                // Visually "Lock" the dropdown
+                areaSelect.style.pointerEvents = "none";
+                areaSelect.style.backgroundColor = "#f1f5f9";
+                areaSelect.style.color = "#64748b";
+                areaSelect.tabIndex = -1;
+
+                // Add a helper message so the user knows why it's locked
+                // const lockNote = document.createElement('div');
+                // lockNote.innerHTML = '<i class="ri-lock-fill"></i> Automatically locked to your designation.';
+                // lockNote.style.fontSize = '0.75rem';
+                // lockNote.style.color = '#64748b';
+                // lockNote.style.marginTop = '0.4rem';
+                // lockNote.style.fontWeight = '600';
+                // areaSelect.parentNode.appendChild(lockNote);
+            }
+        });
     }
 
     // ===== STEP 2 LOGIC =====
@@ -592,20 +627,16 @@
     // ===== STEP 3: DOCUMENT PREVIEW LOGIC =====
     if (currentStep === 3) {
         window.changePreview = function(tabElement, fileUrl) {
-            // Remove active class from all tabs
             document.querySelectorAll('.preview-tab').forEach(function(tab) {
                 tab.classList.remove('active');
             });
             
-            // Add active class to clicked tab
             tabElement.classList.add('active');
             
-            // Update Iframe src
             const iframe = document.getElementById('doc-preview-frame');
             const emptyState = document.getElementById('doc-empty-state');
             
             if (iframe && fileUrl) {
-                // Append #toolbar=0 to disable PDF download/print headers in preview
                 iframe.src = fileUrl + "#toolbar=0";
                 iframe.style.display = "block";
                 if(emptyState) emptyState.style.display = "none";

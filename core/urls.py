@@ -5,6 +5,9 @@ from . import views
 urlpatterns = [
     path("", views.landing, name="landing"),
     path("settings/", views.system_settings, name="settings"),
+
+    path("case/<str:tracking_id>/approve/", views.approve_case, name="approve_case"),
+
     # Module 4 (Public)
     path("track/", views.track_case, name="track_case"),
     path("track/<str:tracking_id>/", views.track_case_detail, name="track_case_detail"),
@@ -13,6 +16,9 @@ urlpatterns = [
     path("support/feedback/", views.submit_feedback, name="submit_feedback"),
     path("dashboard/", views.dashboard, name="dashboard"),
     path("submissions/", views.submissions, name="submissions"),
+
+    path('my-submissions/', views.lgu_submissions_view, name='my_submissions'),
+    path('case/<str:tracking_id>/quick-view/', views.case_quick_view, name='case_quick_view'),
     # Module 5 (Super Admin)
     path("analytics/", views.analytics_dashboard, name="analytics_dashboard"),
     path("reports/", views.reports, name="reports"),
@@ -41,12 +47,14 @@ urlpatterns = [
     path("case/<str:tracking_id>/remarks/", views.add_case_remark, name="add_case_remark"),
     path("case/<str:tracking_id>/receive/", views.receive_case, name="receive_case"),
     path("case/<str:tracking_id>/return/", views.return_case, name="return_case"),
+
+    path('case/<str:tracking_id>/forward/', views.forward_for_approval, name='forward_for_approval'),
+    path('case/<str:tracking_id>/return-correction/', views.return_for_correction, name='return_for_correction'),
+
     path("case/<str:tracking_id>/assign/", views.assign_case, name="assign_case"),
     path("case/<str:tracking_id>/submit-for-approval/", views.submit_for_approval, name="submit_for_approval"),
-    path("case/<str:tracking_id>/approve/", views.approve_case, name="approve_case"),
     path("case/<str:tracking_id>/assign-taxmapper/", views.assign_taxmapper, name="assign_taxmapper"),
     path("case/<str:tracking_id>/complete-taxmapping/", views.complete_taxmapping, name="complete_taxmapping"),
-    path("case/<str:tracking_id>/return-for-correction/", views.return_for_correction, name="return_for_correction"),
     path("case/<str:tracking_id>/return-to-receiving/", views.return_to_receiving, name="return_to_receiving"),
     path("case/<str:tracking_id>/mark-numbered/", views.mark_numbered, name="mark_numbered"),
     path("case/<str:tracking_id>/release/", views.release_case, name="release_case"),
@@ -55,4 +63,5 @@ urlpatterns = [
     # Protected media downloads
     path("documents/<int:doc_id>/download/", views.download_case_document, name="download_case_document"),
     path("documents/<int:doc_id>/review/", views.review_case_document, name="review_case_document"),
+    
 ]

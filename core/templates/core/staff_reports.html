@@ -1,229 +1,118 @@
-{% extends "base_admin.html" %}
+{% extends 'base_new.html' %}
+{% load static %}
 
-{% block title %}System & Staff Reports | LegalTrack{% endblock %}
+{% block title %}My Performance Report | LegalTrack{% endblock %}
 
 {% block extra_css %}
-<style>
-    .page-container {
-        max-width: 1200px;
-        margin: 0 auto;
-    }
+    <style>
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
+        .greeting h1 { font-size: 1.5rem; font-weight: 700; color: var(--text-main); margin-bottom: 0.25rem; }
+        .greeting span { font-size: 0.875rem; color: var(--text-muted); }
 
-    .page-header { 
-        display: flex; 
-        justify-content: space-between; 
-        align-items: flex-end; 
-        margin-bottom: 2rem; 
-        flex-wrap: wrap;
-        gap: 1rem;
-    }
-    
-    .page-title { font-size: 1.5rem; font-weight: 700; color: var(--text-main); margin-bottom: 0.35rem; }
-    .page-subtitle { font-size: 0.875rem; color: var(--text-muted); }
+        .btn-outline {
+            display: inline-flex; align-items: center; gap: 0.5rem;
+            padding: 0.6rem 1.25rem; border: 1px solid var(--border); border-radius: var(--radius-md);
+            background: white; color: var(--text-main); font-size: 0.875rem; font-weight: 500;
+            cursor: pointer; transition: 0.2s; text-decoration: none;
+        }
+        .btn-outline:hover { background: var(--inactive-bg); border-color: var(--border-hover); }
 
-    .btn {
-        padding: 0.6rem 1.25rem; border-radius: var(--radius-md);
-        font-size: 0.875rem; font-weight: 500; cursor: pointer;
-        transition: var(--transition); display: inline-flex;
-        align-items: center; justify-content: center; text-decoration: none;
-        gap: 0.5rem; border: none;
-    }
-    .btn-primary { background: var(--primary); color: white; box-shadow: var(--shadow-sm); }
-    .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
-    .btn-secondary { background: white; color: var(--text-main); border: 1px solid var(--border); box-shadow: var(--shadow-sm); }
-    .btn-secondary:hover { background: var(--inactive-bg); border-color: var(--border-hover); }
+        .panel {
+            background: var(--bg-surface); border: 1px solid var(--border);
+            border-radius: var(--radius-lg); box-shadow: var(--shadow-sm);
+            padding: 1.5rem; margin-bottom: 2rem;
+        }
 
-    .card {
-        background: var(--bg-surface); border: 1px solid var(--border);
-        border-radius: var(--radius-lg); box-shadow: var(--shadow-sm);
-        margin-bottom: 1.5rem; padding: 1.5rem;
-    }
-    
-    .card-header-flex {
-        display: flex; justify-content: space-between; align-items: center;
-        border-bottom: 1px solid var(--border); padding-bottom: 1rem; margin-bottom: 1rem;
-    }
-    .card-title { font-size: 1.125rem; font-weight: 600; color: var(--text-main); }
+        .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: 1rem; }
+        .panel-title { font-size: 1.125rem; font-weight: 600; color: var(--text-main); margin: 0;}
+        
+        /* Layout Grid */
+        .report-grid { display: grid; grid-template-columns: 1fr 2fr; gap: 2rem; }
 
-    /* ===== FORM STYLING ===== */
-    .filter-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap: 1.25rem;
-        align-items: end;
-    }
+        /* KPI Block */
+        .kpi-large { text-align: center; padding: 3rem 0; background: var(--primary-light); border-radius: var(--radius-md); border: 1px solid #bfdbfe;}
+        .kpi-large h2 { font-size: 5rem; font-weight: 800; color: var(--primary); margin: 0; line-height: 1; }
+        .kpi-large span { font-size: 0.85rem; color: var(--text-main); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-top: 1rem; }
 
-    .form-group { display: flex; flex-direction: column; gap: 0.4rem; }
-    .form-group label { font-size: 0.875rem; font-weight: 600; color: var(--text-main); }
-    
-    .form-group input, .form-group select {
-        width: 100%; padding: 0.6rem 1rem; border: 1px solid var(--border);
-        border-radius: var(--radius-md); font-size: 0.875rem; font-family: 'Inter', sans-serif;
-        color: var(--text-main); background-color: var(--bg-surface); transition: var(--transition);
-        outline: none;
-    }
-    .form-group select {
-        appearance: none; padding-right: 2.5rem;
-        background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2364748b%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
-        background-repeat: no-repeat; background-position: right 1rem top 50%; background-size: 0.65rem auto;
-    }
-    .form-group input:focus, .form-group select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
+        /* Table */
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th { font-size: 0.75rem; font-weight: 600; color: var(--text-muted); padding: 1rem 0.5rem; border-bottom: 1px solid var(--border); text-transform: uppercase; letter-spacing: 0.05em; }
+        td { padding: 1.25rem 0.5rem; border-bottom: 1px solid var(--border); font-size: 0.9rem; color: var(--text-main); font-weight: 500;}
+        tr:last-child td { border-bottom: none; }
+        tbody tr:hover td { background-color: #fafbfc; }
 
-    .msg.error {
-        background-color: var(--danger-bg); color: var(--danger-text);
-        padding: 1rem; border-radius: var(--radius-md); font-size: 0.875rem;
-        margin-top: 1.5rem; font-weight: 500; border: 1px solid #fca5a5;
-    }
-
-    /* ===== TABLE STYLING ===== */
-    .table-responsive { overflow-x: auto; margin-top: 1rem; }
-    table { width: 100%; border-collapse: collapse; text-align: left; }
-    th { font-size: 0.75rem; font-weight: 600; color: var(--text-muted); padding: 1rem 0.5rem; border-bottom: 1px solid var(--border); text-transform: uppercase; letter-spacing: 0.05em; }
-    td { padding: 1rem 0.5rem; border-bottom: 1px solid var(--border); font-size: 0.875rem; vertical-align: middle; transition: var(--transition); }
-    tbody tr:hover td { background-color: #fafbfc; }
-
-    .muted { color: var(--text-muted); }
-
-    /* Empty State */
-    .empty-state { text-align: center; padding: 3rem 0; }
-    .empty-state i { font-size: 3rem; color: var(--border-hover); margin-bottom: 1rem; display: block; }
-    .empty-state h3 { font-size: 1.125rem; color: var(--text-main); margin-bottom: 0.5rem; }
-    .empty-state p { color: var(--text-muted); font-size: 0.875rem; }
-</style>
+        /* Empty State */
+        .empty-state { text-align: center; padding: 4rem 0; color: var(--text-muted); }
+        .empty-state i { font-size: 3.5rem; color: var(--border-hover); margin-bottom: 1rem; display: block; }
+        .empty-state h3 { font-size: 1.125rem; color: var(--text-main); margin-bottom: 0.5rem; }
+        .empty-state p { font-size: 0.875rem; margin: 0;}
+    </style>
 {% endblock %}
 
 {% block content %}
-<div class="page-container">
-    
-    <!-- Header -->
-    <div class="page-header">
-        <div>
-            <h1 class="page-title">System & Staff Reports</h1>
-            <p class="page-subtitle">Generate insights on system usage, security audits, and user demographics.</p>
+    <div class="header">
+        <div class="greeting">
+            <h1>My Performance Report</h1>
+            <span>Account: <strong>{{ request.user.email }}</strong> | Role: <strong>{{ role_display }}</strong></span>
         </div>
-        <div>
-            <a class="btn btn-secondary" href="{% url 'analytics_dashboard' %}">
-                <i class="ri-bar-chart-2-line"></i> View System Analytics
-            </a>
-        </div>
+        <button onclick="window.print();" class="btn-outline">
+            <i class="ri-printer-line"></i> Print Report
+        </button>
     </div>
 
-    <!-- Filters Card -->
-    <div class="card">
-        <form method="get" class="filter-grid">
-            
-            <div class="form-group">
-                <label for="id_report_type">Report Type</label>
-                <!-- TRAE TODO: Update this to match your Django form field -->
-                <select name="report_type" id="id_report_type">
-                    <option value="role_distribution" {% if request.GET.report_type == 'role_distribution' %}selected{% endif %}>User Role Distribution</option>
-                    <option value="account_status" {% if request.GET.report_type == 'account_status' %}selected{% endif %}>Account Status Breakdown</option>
-                    <option value="activity_volume" {% if request.GET.report_type == 'activity_volume' %}selected{% endif %}>System Activity Volume</option>
-                </select>
-            </div>
-            
-            <div class="form-group">
-                <label for="id_date_from">Date From</label>
-                <input type="date" name="date_from" id="id_date_from" value="{{ request.GET.date_from }}">
-            </div>
-            
-            <div class="form-group">
-                <label for="id_date_to">Date To</label>
-                <input type="date" name="date_to" id="id_date_to" value="{{ request.GET.date_to }}">
-            </div>
-
-            <div class="form-group" style="margin-top: auto;">
-                <button class="btn btn-primary" type="submit" style="height: 42px; width: 100%;">
-                    <i class="ri-filter-3-line"></i> Generate Report
-                </button>
-            </div>
-        </form>
-
-        {% if form.is_bound and not form.is_valid %}
-            <div class="msg error">
-                <i class="ri-error-warning-line" style="vertical-align: middle;"></i> Invalid report parameters provided.
-            </div>
-        {% endif %}
-    </div>
-
-    <!-- Results Data Card -->
-    <div class="card" style="padding: 1.5rem;">
+    <div class="report-grid">
         
-        <div class="card-header-flex">
-            <h2 class="card-title">{{ title|default:"System Data Results" }}</h2>
+        <!-- Left Column: Total Actions KPI -->
+        <div class="panel">
+            <div class="panel-header">
+                <h3 class="panel-title">Lifetime Summary</h3>
+            </div>
+            <div class="kpi-large">
+                <h2>{{ activity_total|default:"0" }}</h2>
+                <span>Total Actions Processed</span>
+            </div>
+            <p style="text-align: center; font-size: 0.8rem; color: var(--text-muted); margin-top: 1.5rem; line-height: 1.5;">
+                This represents every documented action you have taken on the platform, ensuring full accountability and trackability of your work.
+            </p>
+        </div>
+
+        <!-- Right Column: Breakdown Table -->
+        <div class="panel">
+            <div class="panel-header">
+                <h3 class="panel-title">Action Breakdown</h3>
+            </div>
             
-            {% if rows %}
-                <!-- Use your existing export route, perhaps pass a flag indicating it's a staff report -->
-                <a class="btn btn-secondary" href="{% url 'export_reports_csv' %}?source=staff&{{ request.GET.urlencode }}">
-                    <i class="ri-file-download-line"></i> Export to CSV
-                </a>
-            {% endif %}
+            <div style="overflow-x: auto;">
+                {% if activity_counts %}
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Action Performed</th>
+                                <th style="text-align: right; width: 30%;">Volume</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in activity_counts %}
+                                <tr>
+                                    <td>{{ item.action }}</td>
+                                    <td style="text-align: right;">
+                                        <span style="background: var(--bg-surface); border: 1px solid var(--border); color: var(--text-main); padding: 0.3rem 1rem; border-radius: 999px; font-weight: 700;">
+                                            {{ item.count }}
+                                        </span>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <div class="empty-state">
+                        <i class="ri-bar-chart-box-line"></i>
+                        <h3>No activity data yet</h3>
+                        <p>Your performance metrics will appear here once you begin processing transactions.</p>
+                    </div>
+                {% endif %}
+            </div>
         </div>
 
-        <div class="table-responsive">
-            {% if rows %}
-                <table>
-                    <thead>
-                        {% if request.GET.report_type == 'role_distribution' %}
-                            <tr>
-                                <th>System Role / LGU</th>
-                                <th style="width:20%; text-align: right;">Total Active Users</th>
-                            </tr>
-                        {% elif request.GET.report_type == 'account_status' %}
-                            <tr>
-                                <th>Account Status (Active / Pending / Inactive)</th>
-                                <th style="width:20%; text-align: right;">User Count</th>
-                            </tr>
-                        {% elif request.GET.report_type == 'activity_volume' %}
-                            <tr>
-                                <th>Date / Month</th>
-                                <th>Action Type (Logins, Creations, etc.)</th>
-                                <th style="width:20%; text-align: right;">Total Actions</th>
-                            </tr>
-                        {% else %}
-                            <tr>
-                                <th>Data Category</th>
-                                <th style="width:20%; text-align: right;">Metric</th>
-                            </tr>
-                        {% endif %}
-                    </thead>
-                    <tbody>
-                        {% for r in rows %}
-                            {% if request.GET.report_type == 'role_distribution' %}
-                                <tr>
-                                    <td style="font-weight: 500;">{{ r.role_name }}</td>
-                                    <td style="text-align: right;" class="muted">{{ r.count }}</td>
-                                </tr>
-                            {% elif request.GET.report_type == 'account_status' %}
-                                <tr>
-                                    <td style="text-transform: capitalize; font-weight: 500;">{{ r.status }}</td>
-                                    <td style="text-align: right;" class="muted">{{ r.count }}</td>
-                                </tr>
-                            {% elif request.GET.report_type == 'activity_volume' %}
-                                <tr>
-                                    <td class="muted">{{ r.date_period|date:"F Y" }}</td>
-                                    <td style="font-weight: 500;">{{ r.action_type }}</td>
-                                    <td style="text-align: right; font-weight: 600;">{{ r.total }}</td>
-                                </tr>
-                            {% else %}
-                                <tr>
-                                    <td style="font-weight: 500;">{{ r.label }}</td>
-                                    <td style="text-align: right;" class="muted">{{ r.value }}</td>
-                                </tr>
-                            {% endif %}
-                        {% endfor %}
-                    </tbody>
-                </table>
-            {% else %}
-                <!-- Empty State -->
-                <div class="empty-state">
-                    <i class="ri-shield-user-line"></i>
-                    <h3>No System Data</h3>
-                    <p>Select your parameters above and click "Generate Report" to view system insights.</p>
-                </div>
-            {% endif %}
-        </div>
     </div>
-
-</div>
 {% endblock %}

@@ -55,25 +55,34 @@
             -webkit-font-smoothing: antialiased;
         }
 
-        /* ===== FIXED SIDEBAR ===== */
+        /* ===== INTERACTIVE SIDEBAR ===== */
         .sidebar {
-            width: 260px; 
+            width: 80px; /* Collapsed state */
             background-color: var(--bg-surface);
             border-right: 1px solid var(--border);
             display: flex; 
             flex-direction: column; 
-            padding: 2rem 1.25rem; 
+            padding: 2rem 0.75rem; /* Tighter padding when collapsed */
             z-index: 20;
-            flex-shrink: 0; /* Prevents sidebar from squishing */
+            flex-shrink: 0;
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s;
+            overflow-x: hidden; /* Hides text when collapsed */
+            white-space: nowrap; /* Prevents text from wrapping to next line */
+        }
+
+        /* Hover expansion */
+        .sidebar:hover {
+            width: 260px;
+            padding: 2rem 1.25rem;
         }
 
         .brand-logo { 
             display: flex; align-items: center; 
-            margin-bottom: 3rem; padding-left: 0.5rem;
+            margin-bottom: 3rem; padding-left: 0.25rem;
             font-size: 1.5rem; font-weight: 800; color: var(--text-main);
         }
         .brand-logo i { 
-            font-size: 1.75rem; margin-right: 0.5rem;
+            font-size: 1.75rem; min-width: 32px; margin-right: 0.75rem;
             background: linear-gradient(to bottom, #f59e0b, #dc2626, #2563eb); 
             -webkit-background-clip: text; -webkit-text-fill-color: transparent;
         }
@@ -83,19 +92,20 @@
         .nav-item {
             display: flex; align-items: center;
             color: var(--text-muted); text-decoration: none;
-            padding: 0.75rem 1rem; border-radius: var(--radius-md);
-            cursor: pointer; transition: 0.2s; font-size: 0.9rem; font-weight: 500;
+            padding: 0.75rem; border-radius: var(--radius-md);
+            cursor: pointer; transition: background 0.2s, color 0.2s; font-size: 0.9rem; font-weight: 500;
         }
-        .nav-item i { font-size: 1.25rem; width: 24px; text-align: center; margin-right: 0.75rem; transition: 0.2s; }
+        /* Ensure icons stay fixed size and spacing */
+        .nav-item i, .logout-btn i { font-size: 1.25rem; min-width: 24px; text-align: center; margin-right: 1rem; }
         
         .nav-item:hover { color: var(--text-main); background: var(--inactive-bg); }
         .nav-item.active { color: var(--primary); background: var(--primary-light); font-weight: 600; }
         .nav-item.active i { color: var(--primary); }
 
-        .sidebar-bottom { margin-top: auto; display: flex; flex-direction: column; gap: 0.5rem; }
+        .sidebar-bottom { margin-top: auto; display: flex; flex-direction: column; gap: 0.5rem; overflow: hidden; }
         
         .user-profile-nav {
-            display: flex; align-items: center; padding: 1rem 0.5rem;
+            display: flex; align-items: center; padding: 1rem 0.25rem;
             border-top: 1px solid var(--border); margin-bottom: 0.5rem;
         }
         .user-avatar {
@@ -110,11 +120,14 @@
 
         .logout-btn {
             display: flex; align-items: center; color: var(--danger-text); text-decoration: none;
-            padding: 0.75rem 1rem; border-radius: var(--radius-md); cursor: pointer; transition: 0.2s;
+            padding: 0.75rem; border-radius: var(--radius-md); cursor: pointer; transition: 0.2s;
             font-size: 0.9rem; font-weight: 500;
         }
-        .logout-btn i { font-size: 1.25rem; width: 24px; text-align: center; margin-right: 0.75rem; }
         .logout-btn:hover { background: var(--danger-bg); }
+
+        /* TEXT FADE ANIMATION: Hide text by default, reveal on sidebar hover */
+        .hide-text { opacity: 0; transition: opacity 0.2s ease; }
+        .sidebar:hover .hide-text { opacity: 1; transition-delay: 0.1s; }
 
         /* ===== MAIN CONTENT WRAPPER ===== */
         .main-content {
@@ -124,6 +137,12 @@
             overflow-y: auto;      /* Allows ONLY this specific box to scroll if content gets too tall */
             background-color: var(--bg-body);
         }
+
+            /* Slide-in Drawer Mechanics */
+        .drawer-backdrop { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.4); z-index: 1040; opacity: 0; visibility: hidden; transition: 0.3s; }
+        .drawer-backdrop.active { opacity: 1; visibility: visible; }
+        .drawer-panel { position: fixed; top: 0; right: -550px; width: 500px; max-width: 90vw; height: 100vh; background: white; z-index: 1050; box-shadow: -4px 0 24px rgba(0, 0, 0, 0.1); transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1); display: flex; flex-direction: column; }
+        .drawer-panel.active { right: 0; }
     </style>
 
     <!-- Block for page-specific CSS -->
@@ -131,33 +150,61 @@
 </head>
 <body>
 
-    <!-- FIXED SIDEBAR -->
+    <!-- INTERACTIVE SIDEBAR -->
     <aside class="sidebar">
         <div class="brand-logo">
-            <i class="ri-blaze-fill"></i> PAStrack
+            <i class="ri-blaze-fill"></i> <span class="hide-text">PAStrack</span>
         </div>
         
         <nav class="nav-menu">
+            <!-- 1. Universal: Dashboard -->
             <a href="{% url 'dashboard' %}" class="nav-item {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
-                <i class="ri-dashboard-line"></i> Dashboard
+                <i class="ri-dashboard-line"></i> <span class="hide-text">Dashboard</span>
             </a>
-            
+
+            <!-- 2. Super Admin ONLY -->
             {% if request.user.role == "super_admin" %}
             <a href="{% url 'user_management' %}" class="nav-item {% if 'user' in request.resolver_match.url_name %}active{% endif %}">
-                <i class="ri-team-line"></i> Account Management
+                <i class="ri-group-line"></i> <span class="hide-text">User Management</span>
             </a>
-            
-            <a href="{% url 'audit_logs' %}" class="nav-item {% if 'log' in request.resolver_match.url_name %}active{% endif %}">
-                <i class="ri-history-line"></i> Activity Logs
+            <a href="{% url 'reports' %}" class="nav-item {% if 'report' in request.resolver_match.url_name %}active{% endif %}">
+                <i class="ri-bar-chart-2-line"></i> <span class="hide-text">System Reports</span>
             </a>
             {% endif %}
 
-            <a href="{% if request.user.role == 'super_admin' %}{% url 'staff_reports' %}{% else %}{% url 'reports' %}{% endif %}" class="nav-item {% if 'report' in request.resolver_match.url_name %}active{% endif %}">
-                <i class="ri-file-chart-line"></i> System Reports
+            <!-- 3. LGU Admin ONLY -->
+            {% if request.user.role == "lgu_admin" %}
+            <a href="{% url 'submissions' %}" class="nav-item {% if request.resolver_match.url_name == 'submissions' %}active{% endif %}">
+                <i class="ri-folder-open-line"></i> <span class="hide-text">My Submissions</span>
             </a>
+            <a href="{% url 'drafts' %}" class="nav-item {% if request.resolver_match.url_name == 'drafts' %}active{% endif %}">
+                <i class="ri-file-edit-line"></i> <span class="hide-text">Drafts</span>
+            </a>
+            <a href="{% url 'reports' %}" class="nav-item {% if 'report' in request.resolver_match.url_name %}active{% endif %}">
+                <i class="ri-bar-chart-2-line"></i> <span class="hide-text">Reports</span>
+            </a>
+            {% endif %}
 
+            <!-- 4. Capitol Staff (Receiver, Examiner, Approver, Numberer, Releaser) -->
+            {% if request.user.role in "capitol_receiving,capitol_examiner,capitol_approver,capitol_taxmapper,capitol_numberer,capitol_releaser" %}
+            <a href="{% url 'submissions' %}?scope=me" class="nav-item {% if request.resolver_match.url_name == 'submissions' and request.GET.scope != 'all' %}active{% endif %}">
+                <i class="ri-inbox-archive-line"></i> <span class="hide-text">My Workspace</span>
+            </a>
+            <a href="{% url 'submissions' %}?scope=all" class="nav-item {% if request.resolver_match.url_name == 'submissions' and request.GET.scope == 'all' %}active{% endif %}">
+                <i class="ri-global-line"></i> <span class="hide-text">All Transactions</span>
+            </a>
+            <a href="{% url 'staff_reports' %}" class="nav-item {% if 'report' in request.resolver_match.url_name %}active{% endif %}">
+                <i class="ri-bar-chart-2-line"></i> <span class="hide-text">My Reports</span>
+            </a>
+            {% endif %}
+
+            <!-- 5. Universal: Activity Logs & Settings -->
+            <a href="{% url 'audit_logs' %}" class="nav-item {% if 'log' in request.resolver_match.url_name %}active{% endif %}">
+                <i class="ri-history-line"></i> <span class="hide-text">Activity Logs</span>
+            </a>
+            
             <a href="{% url 'profile' %}" class="nav-item {% if request.resolver_match.url_name == 'profile' %}active{% endif %}">
-                <i class="ri-settings-4-line"></i> Settings
+                <i class="ri-settings-4-line"></i> <span class="hide-text">Settings</span>
             </a>
         </nav>
 
@@ -166,14 +213,14 @@
                 <div class="user-avatar">
                     {{ request.user.first_name|slice:":2"|upper|default:"AD" }}
                 </div>
-                <div class="user-info-nav">
-                    <strong>{{ request.user.first_name|default:"Super Admin" }}</strong>
-                    <span>{{ request.user.get_role_display|default:"System Admin" }}</span>
+                <div class="user-info-nav hide-text">
+                    <strong>{{ request.user.first_name|default:"User" }}</strong>
+                    <span>{{ request.user.get_role_display|default:"System User" }}</span>
                 </div>
             </div>
             
             <a href="{% url 'logout' %}" class="logout-btn">
-                <i class="ri-logout-box-r-line"></i> Sign Out
+                <i class="ri-logout-box-r-line"></i> <span class="hide-text">Sign Out</span>
             </a>
         </div>
     </aside>
@@ -186,6 +233,50 @@
 
     <!-- Block for page-specific JavaScript -->
     {% block extra_js %}{% endblock %}
+
+    <div id="quickViewBackdrop" class="drawer-backdrop" onclick="closeQuickView()"></div>
+    <div id="quickViewDrawer" class="drawer-panel">
+        <div style="display:flex; height:100%; align-items:center; justify-content:center;">
+            <i class="ri-loader-4-line ri-spin" style="font-size: 2rem; color: #1d4ed8;"></i>
+        </div>
+    </div>
+
+    <script>
+        function openQuickView(trackingId) {
+            const backdrop = document.getElementById('quickViewBackdrop');
+            const drawer = document.getElementById('quickViewDrawer');
+
+            // Show loading spinner
+            drawer.innerHTML = '<div style="display:flex; height:100%; align-items:center; justify-content:center;"><i class="ri-loader-4-line ri-spin" style="font-size: 2rem; color: #1d4ed8;"></i></div>';
+            backdrop.classList.add('active');
+            drawer.classList.add('active');
+            
+            // Lock the main page from scrolling
+            document.body.style.overflow = 'hidden';
+
+            // Fetch the drawer HTML from the server
+            fetch(`/case/${trackingId}/quick-view/`)
+                .then(response => {
+                    if (!response.ok) throw new Error('Network response was not ok');
+                    return response.text();
+                })
+                .then(html => {
+                    drawer.innerHTML = html;
+                })
+                .catch(error => {
+                    console.error('Error fetching quick view:', error);
+                    drawer.innerHTML = '<div style="padding: 2rem; text-align: center; color: #dc2626;">Error loading case preview.</div>';
+                });
+        }
+
+        function closeQuickView() {
+            document.getElementById('quickViewBackdrop').classList.remove('active');
+            document.getElementById('quickViewDrawer').classList.remove('active');
+            
+            // Restore background scrolling
+            document.body.style.overflow = '';
+        }
+    </script>
 
 </body>
 </html>

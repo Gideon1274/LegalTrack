@@ -1,0 +1,425 @@
+{% extends 'base_admin.html' %}
+{% load static %}
+
+{% block title %}Receiver Dashboard | PAStrack{% endblock %}
+
+{% block extra_css %}
+    <style>
+
+        /* Assignment Modal Styles */
+.assign-modal-backdrop {
+    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px);
+    z-index: 2000; display: flex; align-items: center; justify-content: center;
+    opacity: 0; visibility: hidden; transition: 0.2s;
+}
+.assign-modal-backdrop.active { opacity: 1; visibility: visible; }
+.assign-modal-panel {
+    background: white; width: 100%; max-width: 400px; border-radius: var(--radius-lg);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    transform: translateY(20px); transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+}
+.assign-modal-backdrop.active .assign-modal-panel { transform: translateY(0); }
+
+.assign-header { padding: 1.5rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: #f8fafc; }
+.assign-header h3 { margin: 0; font-size: 1.125rem; color: var(--text-main); }
+.close-modal-btn { background: none; border: none; font-size: 1.5rem; color: var(--text-muted); cursor: pointer; }
+.close-modal-btn:hover { color: var(--danger-text); }
+
+.assign-body { padding: 1.5rem; }
+.assign-select { width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 6px; font-size: 0.875rem; margin-top: 0.5rem; margin-bottom: 1.5rem; outline: none; }
+.assign-select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
+
+        /* ===== DASHBOARD LAYOUT & HEADER ===== */
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
+        .greeting h1 { font-size: 1.5rem; font-weight: 700; color: var(--text-main); margin-bottom: 0.25rem; }
+        .greeting span { font-size: 0.875rem; color: var(--text-muted); }
+
+        .icon-purple { background: #f3e8ff; color: #6b21a8; }
+        
+        .btn-primary {
+            background-color: var(--primary); color: white; border: none;
+            padding: 0.6rem 1.25rem; border-radius: var(--radius-md);
+            font-size: 0.875rem; font-weight: 500; cursor: pointer; transition: 0.2s;
+            display: flex; align-items: center; gap: 0.5rem; box-shadow: var(--shadow-sm); text-decoration: none;
+        }
+        .btn-primary:hover { background-color: var(--primary-hover); box-shadow: var(--shadow-md); transform: translateY(-1px); color: white; }
+
+        /* ===== KPI CARDS GRID ===== */
+        .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; margin-bottom: 2rem; }
+        .kpi-card {
+            background: var(--bg-surface); border: 1px solid var(--border);
+            border-radius: var(--radius-lg); padding: 1.25rem;
+            display: flex; align-items: flex-start; gap: 1.25rem;
+            box-shadow: var(--shadow-sm); transition: 0.3s;
+        }
+        .kpi-card:hover { border-color: var(--primary); box-shadow: var(--shadow-md); transform: translateY(-2px); }
+        
+        .kpi-icon-box {
+            width: 48px; height: 48px; border-radius: var(--radius-md);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.5rem; flex-shrink: 0;
+        }
+        .kpi-data h2 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.15rem; color: var(--text-main); line-height: 1; }
+        .kpi-data span { display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem; }
+        
+        .kpi-trend { font-size: 0.75rem; font-weight: 500; display: flex; align-items: center; gap: 0.25rem; }
+        .trend-up { color: var(--success-text); }
+        .trend-down { color: var(--danger-text); }
+        .trend-neutral { color: var(--text-light); }
+
+        /* ===== PANEL & TABLE STYLING ===== */
+        .panel {
+            background: var(--bg-surface); border: 1px solid var(--border);
+            border-radius: var(--radius-lg); box-shadow: var(--shadow-sm);
+            margin-bottom: 2rem; padding: 1.5rem;
+        }
+        .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .panel-title { font-size: 1.125rem; font-weight: 600; color: var(--text-main); margin: 0; }
+        .view-all-link { font-size: 0.875rem; color: var(--primary); text-decoration: none; font-weight: 500; transition: 0.2s; }
+        .view-all-link:hover { color: var(--primary-hover); text-decoration: underline; }
+
+        /* Improved Legal Table */
+        .table-responsive { overflow-x: auto; }
+        .legal-table { width: 100%; border-collapse: separate; border-spacing: 0; text-align: left; }
+        .legal-table th { 
+            background: #f8fafc; padding: 1rem 1.5rem; color: var(--text-muted); 
+            font-size: 0.75rem; font-weight: 700; text-transform: uppercase; 
+            letter-spacing: 0.05em; border-bottom: 2px solid var(--border); 
+        }
+        .legal-table td { padding: 1.25rem 1.5rem; vertical-align: middle; border-bottom: 1px solid #f1f5f9; font-size: 0.875rem; transition: 0.2s; }
+        .legal-table tbody tr:hover td { background-color: #fafbfc; }
+
+        /* Specific Column Widths */
+        .col-case-no { width: 15%; }
+        .col-client { width: 30%; }
+        .col-origin { width: 15%; }
+        .col-status { width: 15%; }
+        .col-date   { width: 15%; }
+        .col-actions { width: 10%; text-align: right; }
+
+        .tracking-code { font-family: 'Inter', monospace; font-weight: 700; color: var(--text-main); letter-spacing: -0.02em; }
+        .user-info strong { display: block; font-weight: 600; color: var(--text-main); margin-bottom: 0.1rem; }
+        .user-info span { font-size: 0.75rem; color: var(--text-muted); }
+
+        /* Action Buttons */
+        .action-group { display: flex; justify-content: flex-end; gap: 1rem; align-items: center; }
+        .action-link { font-weight: 600; font-size: 0.85rem; text-decoration: none; transition: 0.2s; }
+        .action-link.secondary { color: var(--primary); border-bottom: 1px solid transparent; padding-bottom: 2px; }
+        .action-link.secondary:hover { border-bottom-color: var(--primary); }
+        .action-link.primary { background: var(--primary-light); color: var(--primary); padding: 0.5rem 1rem; border-radius: 6px; }
+        .action-link.primary:hover { background: var(--primary); color: white; }
+
+        /* CSS-driven Status Pills (Fixes the syntax error) */
+        .status-pill {
+            display: inline-flex; align-items: center; gap: 0.3rem;
+            padding: 0.25rem 0.75rem; border-radius: 999px;
+            font-size: 0.75rem; font-weight: 600; text-transform: capitalize;
+        }
+        .status-pill::before { content: ''; display: block; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+        
+        .status-pending { background: #fef3c7; color: #b45309; }
+        .status-received { background: #e0f2fe; color: #0369a1; }
+        .status-active { background: #dcfce7; color: #166534; }
+
+        /* ===== BOTTOM PANELS ===== */
+        .bottom-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+        .activity-list { display: flex; flex-direction: column; gap: 1.25rem; }
+        .activity-item { display: flex; justify-content: space-between; align-items: flex-start; padding: 0.5rem 0; border-bottom: 1px solid #f8fafc; }
+        .activity-item:last-child { border-bottom: none; }
+        .activity-left { display: flex; gap: 1rem; align-items: flex-start; }
+        .activity-icon { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0; }
+        
+        .icon-green { background: var(--success-bg); color: var(--success-text); }
+        .icon-blue { background: var(--primary-light); color: var(--primary); }
+        .icon-yellow { background: #fef3c7; color: #b45309; }
+        .icon-red { background: #fee2e2; color: #dc2626; }
+        
+        .activity-text strong { display: block; font-size: 0.875rem; font-weight: 600; color: var(--text-main); margin-bottom: 0.15rem; }
+        .activity-text span { font-size: 0.75rem; color: var(--text-muted); line-height: 1.4; display: block; }
+        .activity-time { font-size: 0.75rem; color: var(--text-muted); white-space: nowrap; margin-top: 0.2rem; font-weight: 500; }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <div class="header">
+        <div class="greeting">
+            <h1>Hi, {{ user.first_name|default:user.email }}!</h1>
+            <span>Receiving & Intake Dashboard</span>
+        </div>
+        <div style="display: flex; gap: 1rem;">
+            <a href="{% url 'submit_case' %}" class="btn-primary">
+                <i class="ri-add-fill"></i> New Transaction
+            </a>
+        </div>
+    </div>
+
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="kpi-icon-box" style="color: #b45309; background: #fef3c7;"><i class="ri-inbox-unarchive-line"></i></div>
+            <div class="kpi-data">
+                <h2>{{ receiver_stats.pending_intake }}</h2>
+                <span>Pending Intake</span>
+                <!-- <div class="kpi-trend trend-neutral"><i class="ri-truck-line"></i> Awaiting Physical Docs</div> -->
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon-box" style="color: #6b21a8; background: #f3e8ff;"><i class="ri-user-shared-2-line"></i></div>
+            <div class="kpi-data">
+                <h2>{{ receiver_stats.for_assignment }}</h2>
+                <span>Ready to Assign</span>
+                <!-- <div class="kpi-trend trend-neutral"><i class="ri-loader-line"></i> Unassigned Cases</div> -->
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon-box" style="color: #166534; background: #dcfce7;"><i class="ri-checkbox-circle-line"></i></div>
+            <div class="kpi-data">
+                <h2>{{ receiver_stats.received_today }}</h2>
+                <span>Received Today</span>
+                <!-- <div class="kpi-trend trend-up"><i class="ri-arrow-up-line"></i> Daily Output</div> -->
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon-box" style="color: #dc2626; background: #fee2e2;"><i class="ri-arrow-go-back-line"></i></div>
+            <div class="kpi-data">
+                <h2>{{ receiver_stats.returned_to_owner }}</h2>
+                <span>Returned to LGU</span>
+                <!-- <div class="kpi-trend trend-down"><i class="ri-error-warning-line"></i> Pending Corrections</div> -->
+            </div>
+        </div>
+    </div>
+
+    <div class="panel">
+        <div class="panel-header">
+            <h3 class="panel-title">Active Front Desk Queue</h3>
+            <a href="{% url 'submissions' %}?scope=me" class="view-all-link">Manage Workspace <i class="ri-arrow-right-line" style="vertical-align: middle;"></i></a>
+        </div>
+
+        <div class="table-responsive">
+            <table class="legal-table">
+                <thead>
+                    <tr>
+                        <th class="col-case-no">Case Number</th>
+                        <th class="col-client">Client / Request</th>
+                        <th class="col-origin">LGU Origin</th>
+                        <th class="col-status">Status</th>
+                        <th class="col-date">Date Submitted</th>
+                        <th class="col-actions">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for case in page_obj %}
+                    <tr>
+                        <td><span class="tracking-code">{{ case.tracking_id }}</span></td>
+                        <td>
+                            <div class="user-info">
+                                <strong>{{ case.client_name }}</strong>
+                                <span>{{ case.get_case_type_display }}</span>
+                            </div>
+                        </td>
+                        <td><span style="color: var(--text-muted);">{{ case.submitted_by.lgu_municipality|default:"—" }}</span></td>
+                        <td>
+                            <span class="status-pill 
+                                {% if case.status == 'not_received' %}status-pending
+                                {% elif case.status == 'received' %}status-received
+                                {% else %}status-active{% endif %}">
+                                {{ case.get_status_display }}
+                            </span>
+                        </td>
+                        <td style="color: var(--text-muted);">{{ case.created_at|date:"M d, Y" }}</td>
+                        <td>
+    <div class="action-group">
+        <a href="#" onclick="openQuickView('{{ case.tracking_id }}'); return false;" class="action-link secondary">Preview</a>
+        
+        {% if case.status == 'not_received' %}
+            <a href="{% url 'case_detail' case.tracking_id %}" class="action-link primary" style="background: var(--primary); color: white;">Receive
+            </a>
+        {% elif case.status == 'received' and not case.assigned_to %}
+            <a href="{% url 'case_detail' case.tracking_id %}?action=assign" class="action-link primary" style="background: #f3e8ff; color: #6b21a8;">
+                <i class="ri-user-add-line"></i> Assign Case
+            </a>
+        {% else %}
+            <a href="#" onclick="openAssignModal('{{ case.tracking_id|default:c.tracking_id }}', '{{ case.client_name|default:c.client_name|escapejs }}'); return false;" class="action-link primary" style="background: #f3e8ff; color: #6b21a8;">
+                <i class="ri-user-add-line"></i> Assign
+            </a>
+        {% endif %}
+    </div>
+</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" style="text-align: center; padding: 4rem 2rem; color: var(--text-muted);">
+                            <i class="ri-inbox-archive-line" style="font-size: 2.5rem; color: var(--border); display: block; margin-bottom: 1rem;"></i>
+                            <h3 style="color: var(--text-main); font-weight: 600; margin-bottom: 0.25rem;">Queue is empty!</h3>
+                            <p style="font-size: 0.875rem;">No new documents to receive or assign right now.</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="bottom-grid" style="align-items: stretch;">
+        
+        <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+            
+            <div class="panel" style="margin-bottom: 0; border-top: 4px solid var(--primary); flex: 1;">
+                <div class="panel-header" style="margin-bottom: 1rem;">
+                    <h3 class="panel-title">Pending Assignment</h3>
+                    <a href="{% url 'submissions' %}?scope=me&tab=unassigned" class="view-all-link">View All</a>
+                </div>
+                <div class="activity-list">
+                    {% for c in cases_to_assign|slice:":3" %} 
+                    <div class="activity-item" style="padding: 0.5rem 0;">
+                        <div class="activity-left" style="align-items: center;">
+                            <div class="activity-icon icon-purple" style="width: 32px; height: 32px; font-size: 1.1rem; border-radius: 8px;">
+                                <i class="ri-user-shared-2-line"></i>
+                            </div>
+                            <div class="activity-text">
+                                <strong style="font-family: monospace; color: var(--primary);">{{ c.tracking_id }}</strong>
+                                <span>{{ c.client_name|slice:":20" }}...</span>
+                            </div>
+                        </div>
+                        <a href="#" onclick="openAssignModal('{{ c.tracking_id }}', '{{ c.client_name|escapejs }}'); return false;" class="action-link primary" style="background: #f3e8ff; color: #6b21a8; padding: 0.3rem 0.8rem; border-radius: 6px;">Assign</a>
+                    </div>
+                    {% empty %}
+                    <div style="text-align: center; padding: 2rem; color: var(--text-muted); font-size: 0.85rem;">
+                        No cases pending assignment.
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="panel" style="margin-bottom: 0; border-top: 4px solid #f59e0b; flex: 1;">
+                <div class="panel-header" style="margin-bottom: 1rem;">
+                    <h3 class="panel-title">Returned by Examiners</h3>
+                    <a href="{% url 'submissions' %}?scope=me" class="view-all-link">View All</a>
+                </div>
+                <div class="activity-list">
+                    {% for c in returned_cases|slice:":3" %} 
+                    <div class="activity-item" style="padding: 0.5rem 0;">
+                        <div class="activity-left" style="align-items: center;">
+                            <div class="activity-icon icon-yellow" style="width: 32px; height: 32px; font-size: 1.1rem; border-radius: 8px;">
+                                <i class="ri-error-warning-line"></i>
+                            </div>
+                            <div class="activity-text">
+                                <strong style="font-family: monospace; color: #b45309;">{{ c.tracking_id }}</strong>
+                                <span>From {{ c.returned_by.full_name|default:c.returned_by.email|slice:":15" }}...</span>
+                            </div>
+                        </div>
+                        <a href="{% url 'case_detail' c.tracking_id %}" class="action-link secondary" style="padding: 0; font-size: 0.85rem;">Review</a>
+                    </div>
+                    {% empty %}
+                    <div style="text-align: center; padding: 2rem; color: var(--text-muted); font-size: 0.85rem;">
+                        No returned cases.
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+        </div>
+
+        <div class="panel" style="margin-bottom: 0; display: flex; flex-direction: column; height: 100%;">
+            <div class="panel-header">
+                <h3 class="panel-title">My Recent Activity</h3>
+                <a href="{% url 'audit_logs' %}" class="view-all-link" style="color: var(--primary);">
+                    View Full History <i class="ri-arrow-right-line" style="vertical-align: middle;"></i>
+                </a>
+            </div>
+
+            <div class="activity-list" style="flex-grow: 1; display: flex; flex-direction: column;">
+                {% for log in recent_activity|slice:":5" %} 
+                    <div class="activity-item" style="padding: 0.6rem 0;">
+                        <div class="activity-left">
+                            <div class="activity-icon 
+                                {% if log.action == 'case_receipt' %}icon-green
+                                {% elif log.action == 'case_assignment' %}icon-blue
+                                {% elif log.action == 'case_status_change' %}icon-yellow
+                                {% elif log.action in 'login,logout' %}icon-blue
+                                {% else %}icon-blue{% endif %}" style="width: 36px; height: 36px;">
+                                
+                                <i class="{% if log.action == 'case_receipt' %}ri-inbox-archive-line
+                                          {% elif log.action == 'case_assignment' %}ri-user-shared-2-line
+                                          {% elif log.action == 'case_status_change' %}ri-exchange-line
+                                          {% elif log.action == 'login' %}ri-login-box-line
+                                          {% elif log.action == 'logout' %}ri-logout-box-r-line
+                                          {% else %}ri-history-line{% endif %}"></i>
+                            </div>
+                            
+                            <div class="activity-text">
+                                <strong style="display: block; font-size: 0.875rem; font-weight: 600; color: var(--text-main); margin-bottom: 0.15rem;">
+                                    {{ log.get_action_display|default:"System Event" }}
+                                </strong>
+                                <span style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.4; display: block;">
+                                    {% if log.action in 'login,logout' %}
+                                        Session activity recorded
+                                    {% else %}
+                                        <span class="tracking-code" style="color: var(--primary); font-size: 0.75rem;">
+                                            {{ log.target_object|slice:"6:"|default:log.target_object }}
+                                        </span>
+                                        {% if log.action == 'case_assignment' %}
+                                            <i class="ri-arrow-right-s-line" style="vertical-align: middle;"></i> assigned to {{ log.details.assigned_to|default:"Examiner" }}
+                                        {% elif log.action == 'case_receipt' %}
+                                            <i class="ri-check-line" style="vertical-align: middle;"></i> physical docs verified
+                                        {% elif log.action == 'case_status_change' and log.details.new_status == 'client_correction' %}
+                                            <i class="ri-arrow-right-s-line" style="vertical-align: middle;"></i> returned to LGU
+                                        {% endif %}
+                                    {% endif %}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="activity-time" style="font-size: 0.75rem; color: var(--text-muted); white-space: nowrap; margin-top: 0.2rem; font-weight: 500;">
+                            {{ log.created_at|timesince }} ago
+                        </div>
+                    </div>
+                {% empty %}
+                    <div style="margin: auto; text-align: center; color: var(--text-muted); font-size: 0.875rem;">
+                        No recent activity found.
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+
+    </div>
+
+
+    <div id="assignModal" class="assign-modal-backdrop" onclick="if(event.target === this) closeAssignModal()">
+    <div class="assign-modal-panel">
+        <div class="assign-header">
+            <h3>Assign Case <span id="modalTrackingId" style="color: var(--primary);"></span></h3>
+            <button type="button" class="close-modal-btn" onclick="closeAssignModal()">&times;</button>
+        </div>
+        <form id="assignForm" method="POST" action="">
+            {% csrf_token %}
+            <div class="assign-body">
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
+                    Target: <strong id="modalClientName" style="color: var(--text-main);"></strong>
+                </p>
+                <label style="font-size: 0.85rem; font-weight: 600;">Select Examiner</label>
+                <select name="assigned_to" required class="assign-select">
+                    <option value="" disabled selected>Select from list...</option>
+                    {% for ex in examiners %}
+                        <option value="{{ ex.id }}">{{ ex.full_name|default:ex.email }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn-primary" style="width: 100%; justify-content: center;">Confirm Assignment</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function openAssignModal(tid, client) {
+    document.getElementById('modalTrackingId').innerText = tid;
+    document.getElementById('modalClientName').innerText = client;
+    document.getElementById('assignForm').action = `/case/${tid}/assign/`;
+    document.getElementById('assignModal').classList.add('active');
+}
+function closeAssignModal() {
+    document.getElementById('assignModal').classList.remove('active');
+}
+</script>
+
+{% endblock %}
