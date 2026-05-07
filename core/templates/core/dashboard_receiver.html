@@ -399,7 +399,7 @@
                 </p>
                 <label style="font-size: 0.85rem; font-weight: 600;">Select Examiner</label>
                 <select name="assigned_to" required class="assign-select">
-                    <option value="" disabled selected>Select from list...</option>
+                    <option value="" disabled selected>Select from active staff...</option>
                     {% for ex in examiners %}
                         <option value="{{ ex.id }}">{{ ex.full_name|default:ex.email }}</option>
                     {% endfor %}

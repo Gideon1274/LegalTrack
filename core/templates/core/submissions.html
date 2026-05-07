@@ -251,7 +251,7 @@
         </div>
 
         <!-- Data Table -->
-        <div style="overflow-x: auto;">
+<div style="overflow-x: auto;">
             {% if page_obj and page_obj.object_list %}
             <table class="legal-table">
             <thead>
@@ -261,7 +261,10 @@
                     <th class="col-origin">LGU Origin</th>
                     <th class="col-date">Date Submitted</th>
                     <th class="col-status">Status</th>
-                    <th class="col-actions">Actions</th>
+                    
+                    {% if tab != 'to_examine' %}
+                        <th class="col-actions">Actions</th>
+                    {% endif %}
                 </tr>
             </thead>
             <tbody>
@@ -285,28 +288,30 @@
                             {{ case.get_status_display }}
                         </span>
                     </td>
+                    
+                    {% if tab != 'to_examine' %}
                     <td>
                         <div class="action-group">
                             <a href="#" onclick="openQuickView('{{ case.tracking_id }}'); return false;" class="action-link secondary">
                                 Quick View
                             </a>
-                            <a href="{% url 'case_detail' case.tracking_id %}" class="action-link primary">
-                                Review
-                            </a>
+                            
+                            {% if case.status == 'not_received' %}
+                                <a href="{% url 'case_detail' case.tracking_id %}" class="action-link primary">Receive</a>
+                            {% elif case.status == 'received' and not case.assigned_to %}
+                                <a href="#" onclick="openAssignModal('{{ case.tracking_id }}', '{{ case.client_name|escapejs }}'); return false;" class="action-link primary" style="background: #f3e8ff; color: #6b21a8;">
+                                    Assign
+                                </a>
+                            {% endif %}
                         </div>
                     </td>
+                    {% endif %}
                 </tr>
                 {% endfor %}
             </tbody>
             </table>
             {% else %}
-                <div style="padding: 4rem 2rem; text-align: center; color: var(--text-muted);">
-                    <i class="ri-inbox-archive-line" style="font-size: 3rem; display: block; margin-bottom: 1rem; opacity: 0.5;"></i>
-                    <p style="margin: 0; font-weight: 500; font-size: 1.1rem; color: var(--text-main);">No transactions found</p>
-                    <p style="font-size: 0.9rem; margin-top: 0.5rem;">There are no records matching your current tab and filter criteria.</p>
-                </div>
             {% endif %}
-        </div>
 
         <!-- Pagination -->
         {% if page_obj.has_other_pages %}
@@ -333,6 +338,64 @@
                 </div>
             </div>
         {% endif %}
-
     </div>
+
+
+    <div id="assignModal" class="assign-modal-backdrop" onclick="if(event.target === this) closeAssignModal()">
+    <div class="assign-modal-panel">
+        <div class="assign-header">
+            <h3>Assign Case <span id="modalTrackingId" style="color: var(--primary);"></span></h3>
+            <button type="button" class="close-modal-btn" onclick="closeAssignModal()">&times;</button>
+        </div>
+        <form id="assignForm" method="POST" action="">
+            {% csrf_token %}
+            <div class="assign-body">
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem;">
+                    Client Name: <strong id="modalClientName" style="color: var(--text-main);"></strong>
+                </p>
+                
+                <div style="margin-bottom: 1.5rem;">
+                    <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem;">Assign to Examiner</label>
+                    <select name="assigned_to" required class="assign-select" style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 6px;">
+                        <option value="" disabled selected>Select an examiner...</option>
+                        {% for ex in examiners %}
+                            <option value="{{ ex.id }}">{{ ex.full_name|default:ex.email }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <button type="submit" class="btn-primary" style="width: 100%; justify-content: center; height: 45px;">
+                    Confirm Assignment
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function openAssignModal(trackingId, clientName) {
+        // Set the visible text in the modal
+        document.getElementById('modalTrackingId').innerText = trackingId;
+        document.getElementById('modalClientName').innerText = clientName;
+        
+        // Dynamically set the POST URL for this specific case
+        // This matches path('case/<str:tracking_id>/assign/', views.assign_case, name='assign_case')
+        document.getElementById('assignForm').action = `/case/${trackingId}/assign/`;
+        
+        // Show the modal
+        document.getElementById('assignModal').classList.add('active');
+    }
+
+    function closeAssignModal() {
+        document.getElementById('assignModal').classList.remove('active');
+    }
+
+    // Optional: Close modal if 'Esc' key is pressed
+    document.addEventListener('keydown', function(event) {
+        if (event.key === "Escape") {
+            closeAssignModal();
+        }
+    });
+</script>
+
 {% endblock %}

@@ -1172,6 +1172,52 @@ def dashboard(request):
         })
 
         if user.role == "capitol_receiving":
+            tab = (request.GET.get("tab") or "all").strip().lower()
+            q = (request.GET.get("q") or "").strip()
+            
+            # Base Querysets defined by the Chain of Custody rules
+            qs_all = Case.objects.all()
+            qs_received = Case.objects.filter(status="received", assigned_to__isnull=True)
+            qs_assigned = Case.objects.filter(assigned_to__isnull=False)
+
+            # Apply search filter if present
+            if q:
+                filt = Q(tracking_id__icontains=q) | Q(client_name__icontains=q) | Q(submitted_by__lgu_municipality__icontains=q)
+                qs_all = qs_all.filter(filt)
+                qs_received = qs_received.filter(filt)
+                qs_assigned = qs_assigned.filter(filt)
+
+            # Determine active queryset based on tab
+            if tab == "received":
+                active_qs = qs_received
+            elif tab == "to_examine":
+                active_qs = qs_assigned
+            else:
+                tab = "all"
+                active_qs = qs_all
+
+            # Pagination
+            active_qs = active_qs.select_related("submitted_by", "assigned_to").order_by("-updated_at")
+            paginator = Paginator(active_qs, 10)
+            page_obj = paginator.get_page(request.GET.get("page") or 1)
+
+            # Tab Definition
+            tabs = [
+                ("all", "All Case Intake", qs_all.count()),
+                ("received", "Received", qs_received.count()),
+                ("to_examine", "To Examine", qs_assigned.count())
+            ]
+
+            context.update({
+                "tab": tab,
+                "tabs": tabs,
+                "page_obj": page_obj,
+                "q": q,
+                # Required for the Assign Modal in the workspace
+                "examiners": CustomUser.objects.filter(role="capitol_examiner", is_active=True), 
+            })
+            template = "core/submissions.html"
+
             tab = (request.GET.get("tab") or "").strip().lower() or "pending"
             q = (request.GET.get("q") or "").strip()
             status_filter = (request.GET.get("status") or "").strip()
@@ -3301,41 +3347,43 @@ def return_case(request, tracking_id):
     messages.success(request, f"Case {case.tracking_id} returned to client (30-day correction window).")
     return redirect("case_detail", tracking_id=case.tracking_id)
 
-
 @login_required
-@require_POST
 def assign_case(request, tracking_id):
+    # 1. Fetch the case at the very beginning so it always exists
     case = get_object_or_404(Case, tracking_id=tracking_id)
 
-    if request.user.role != "capitol_receiving":
-        messages.error(request, "Only Receiver can assign cases.")
+    if request.method == "POST":
+        examiner_id = request.POST.get("assigned_to")
+        
+        # Prevent 404 if nothing was selected
+        if not examiner_id:
+            messages.error(request, "Please select an examiner before confirming.")
+            return redirect(request.META.get('HTTP_REFERER', 'dashboard'))
+            
+        # Fetch the selected examiner
+        examiner = get_object_or_404(CustomUser, id=examiner_id)
+        
+        # Update case
+        case.assigned_to = examiner
+        case.status = "received" # Ensure status is updated if needed
+        case.save()
+        
+        # Create Audit Log (Indented properly inside the POST block)
+        AuditLog.objects.create(
+            actor=request.user,
+            action="case_assignment",
+            target_object=f"Case: {case.tracking_id}",
+            details={
+                "new_status": case.status,
+                "assigned_to": f"{examiner.get_full_name()} - {examiner.get_role_display()}",
+            }
+        )
+
+        messages.success(request, f"Case {case.tracking_id} successfully assigned to {examiner.get_full_name()}.")
         return redirect("case_detail", tracking_id=case.tracking_id)
 
-    if case.status != "received" or case.assigned_to_id is not None:
-        messages.error(request, "This case is not eligible for assignment.")
-        return redirect("case_detail", tracking_id=case.tracking_id)
-
-    examiner_id = request.POST.get("examiner_id")
-    examiner = get_object_or_404(CustomUser, id=examiner_id, role="capitol_examiner", is_active=True)
-
-    case.assigned_to = examiner
-    case.assigned_at = timezone.now()
-    case.status = "in_review"
-    case.save()
-
-    AuditLog.objects.create(
-        actor=request.user,
-        action="case_assignment",
-        target_object=f"Case: {case.tracking_id}",
-        details={
-            "new_status": case.status,
-            "assigned_to": f"{examiner.get_full_name()} - {examiner.get_role_display()}",
-        }
-    )
-
-    messages.success(request, f"Case {case.tracking_id} assigned.")
-    return redirect("case_detail", tracking_id=case.tracking_id)
-
+    # 2. Fallback: If it's a GET request, just send them back to the dashboard safely
+    return redirect('dashboard')
 
 @login_required
 @require_POST

@@ -207,52 +207,36 @@
             <div class="sticky-sidebar">
                 
                 <!-- ACTION COMMAND CENTER -->
-<div class="panel" style="border-top: 4px solid var(--primary);">
-    <div class="panel-header" style="background: #f8fafc;">
-        <h2 class="panel-title">Workflow Actions</h2>
-    </div>
-    <div class="panel-body">
+<div class="workflow-card">
+    <h3>Workflow Actions</h3>
+    
+    {% if user.role == "capitol_receiving" %}
         
-        {% if request.user.role == 'capitol_receiving' %}
-            {% if case.status == 'not_received' %}
-                <form method="post" action="{% url 'receive_case' case.tracking_id %}">
-                    {% csrf_token %}
-                    <button class="btn btn-primary btn-block" type="submit">
-                        <i class="ri-inbox-archive-line"></i> Confirm Receipt
-                    </button>
-                </form>
-            {% else %}
-                <button class="btn btn-primary btn-block"><i class="ri-share-forward-line"></i> Forward to Examiner</button>
-                <button class="btn btn-danger btn-block"><i class="ri-arrow-go-back-line"></i> Return to LGU</button>
-            {% endif %}
-
-        {% elif request.user.role == 'capitol_examiner' %}
-            <!-- Forward for Approval Form -->
-            <form method="post" action="{% url 'forward_for_approval' case.tracking_id %}">
-                {% csrf_token %}
-                <button class="btn btn-primary btn-block" type="submit">
-                    <i class="ri-check-double-line"></i> Forward for Approval
-                </button>
-            </form>
-
-            <!-- Return for Correction Trigger -->
-            <button class="btn btn-danger btn-block" onclick="openReturnModal()">
-                <i class="ri-error-warning-line"></i> Request Correction
+        {% if case.assigned_to and not case.returned_by %}
+            <div style="padding: 1rem; background: var(--inactive-bg); border-radius: 8px; color: var(--text-muted); text-align: center;">
+                <i class="ri-lock-2-line" style="font-size: 1.5rem; display: block; margin-bottom: 0.5rem;"></i>
+                <p style="margin: 0; font-weight: 500;">Currently with Examiner</p>
+                <p style="margin: 0; font-size: 0.8rem;">Assigned to {{ case.assigned_to.get_full_name }}</p>
+            </div>
+            
+        {% elif case.status == "received" and not case.assigned_to %}
+            <button class="btn-primary" style="width: 100%;" onclick="openAssignModal('{{ case.tracking_id }}', '{{ case.client_name|escapejs }}')">
+                <i class="ri-user-add-line"></i> Assign to Examiner
             </button>
+        {% endif %}
 
-        {% elif request.user.role == 'capitol_approver' %}
-            <form method="post" action="{% url 'approve_case' case.tracking_id %}">
-                {% csrf_token %}
-                <button class="btn btn-success btn-block" type="submit">
-                    <i class="ri-quill-pen-line"></i> Approve & Sign
+        {% if case.returned_by %}
+            <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+                <p style="font-size: 0.8rem; color: #b45309; font-weight: 600; margin-bottom: 0.5rem;">
+                    <i class="ri-error-warning-line"></i> Returned by {{ case.returned_by.first_name }}
+                </p>
+                <button class="btn-outline-danger" style="width: 100%;" onclick="openReturnModal()">
+                    <i class="ri-arrow-go-back-line"></i> Return to LGU for Correction
                 </button>
-            </form>
-            <button class="btn btn-outline btn-block" style="color: #b45309; border-color: #fde68a;">
-                <i class="ri-arrow-go-back-line"></i> Return to Examiner
-            </button>
-        {% endif %} <!-- ONLY ONE ENDIF HERE FOR THE ROLE CHECK -->
+            </div>
+        {% endif %}
 
-    </div>
+    {% endif %}
 </div>
 
                 <!-- UNIFIED REMARKS & TIMELINE -->
