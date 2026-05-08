@@ -1171,127 +1171,76 @@ def dashboard(request):
             "capitol_role": user.get_role_display(),
         })
 
-        if user.role == "capitol_receiving":
-            tab = (request.GET.get("tab") or "all").strip().lower()
-            q = (request.GET.get("q") or "").strip()
-            
-            # Base Querysets defined by the Chain of Custody rules
-            qs_all = Case.objects.all()
-            qs_received = Case.objects.filter(status="received", assigned_to__isnull=True)
-            qs_assigned = Case.objects.filter(assigned_to__isnull=False)
+    if user.role == "capitol_receiving":
+        tab = (request.GET.get("tab") or "").strip().lower() or "pending"
+        q = (request.GET.get("q") or "").strip()
 
-            # Apply search filter if present
-            if q:
-                filt = Q(tracking_id__icontains=q) | Q(client_name__icontains=q) | Q(submitted_by__lgu_municipality__icontains=q)
-                qs_all = qs_all.filter(filt)
-                qs_received = qs_received.filter(filt)
-                qs_assigned = qs_assigned.filter(filt)
+        # --- 1. Base Querysets for Main Table (Front Desk) ---
+        base_pending_qs = Case.objects.filter(status="not_received")
+        base_received_qs = Case.objects.filter(status="received", assigned_to__isnull=True)
 
-            # Determine active queryset based on tab
-            if tab == "received":
-                active_qs = qs_received
-            elif tab == "to_examine":
-                active_qs = qs_assigned
-            else:
-                tab = "all"
-                active_qs = qs_all
+        # Apply Search Filter
+        if q:
+            filt = Q(tracking_id__icontains=q) | Q(client_name__icontains=q) | Q(submitted_by__lgu_municipality__icontains=q)
+            base_pending_qs = base_pending_qs.filter(filt)
+            base_received_qs = base_received_qs.filter(filt)
+        
+        # --- 2. Pagination Logic ---
+        pending_count = base_pending_qs.count()
+        received_count = base_received_qs.count()
 
-            # Pagination
-            active_qs = active_qs.select_related("submitted_by", "assigned_to").order_by("-updated_at")
+        if tab == "received":
+            active_qs = base_received_qs.select_related("submitted_by").order_by("-received_at")
             paginator = Paginator(active_qs, 10)
-            page_obj = paginator.get_page(request.GET.get("page") or 1)
-
-            # Tab Definition
-            tabs = [
-                ("all", "All Case Intake", qs_all.count()),
-                ("received", "Received", qs_received.count()),
-                ("to_examine", "To Examine", qs_assigned.count())
-            ]
-
-            context.update({
-                "tab": tab,
-                "tabs": tabs,
-                "page_obj": page_obj,
-                "q": q,
-                # Required for the Assign Modal in the workspace
-                "examiners": CustomUser.objects.filter(role="capitol_examiner", is_active=True), 
-            })
-            template = "core/submissions.html"
-
-            tab = (request.GET.get("tab") or "").strip().lower() or "pending"
-            q = (request.GET.get("q") or "").strip()
-            status_filter = (request.GET.get("status") or "").strip()
-            lgu_filter = (request.GET.get("lgu") or "").strip()
-            type_filter = (request.GET.get("case_type") or "").strip()
-
-            # --- 1. Base Querysets for Main Table ---
-            base_pending_qs = Case.objects.filter(status="not_received")
-            base_received_qs = Case.objects.filter(status="received", assigned_to__isnull=True)
-
-            # Applying Filters (Reusable for both QS)
-            for qs_name in [base_pending_qs, base_received_qs]:
-                if q:
-                    filt = Q(tracking_id__icontains=q) | Q(client_name__icontains=q) | Q(submitted_by__lgu_municipality__icontains=q)
-                    if qs_name == base_pending_qs: base_pending_qs = base_pending_qs.filter(filt)
-                    else: base_received_qs = base_received_qs.filter(filt)
+        else:
+            tab = "pending"
+            active_qs = base_pending_qs.select_related("submitted_by").order_by("-created_at")
+            paginator = Paginator(active_qs, 10)
             
-            # --- 2. Pagination Logic ---
-            pending_qs = base_pending_qs.select_related("submitted_by").order_by("-created_at")
-            received_qs = base_received_qs.select_related("submitted_by").order_by("-received_at")
-            
-            pending_count = pending_qs.count()
-            received_count = received_qs.count()
+        page_obj = paginator.get_page(request.GET.get("page") or 1)
 
-            if tab == "received":
-                paginator = Paginator(received_qs, 10)
-            else:
-                tab = "pending"
-                paginator = Paginator(pending_qs, 10)
-            page_obj = paginator.get_page(request.GET.get("page") or 1)
+        # --- 3. Dashboard Panel Stats & Queries ---
+        today = timezone.localdate()
+        stats_received_today = AuditLog.objects.filter(actor=user, action="case_receipt", created_at__date=today).count()
+        stats_pending_intake = Case.objects.filter(status="not_received").count()
+        stats_for_assignment = Case.objects.filter(status="received", assigned_to__isnull=True).count()
+        stats_returned_to_owner = Case.objects.filter(status="client_correction").count()
 
-            # --- 3. Dashboard Panel Stats & Queries ---
-            today = timezone.localdate()
-            stats_received_today = AuditLog.objects.filter(actor=user, action="case_receipt", created_at__date=today).count()
-            stats_pending_intake = Case.objects.filter(status="not_received").count()
-            stats_for_assignment = Case.objects.filter(status="received", assigned_to__isnull=True).count()
-            stats_returned_to_owner = Case.objects.filter(status="client_correction").count()
+        # Separate Returned by Examiner vs Freshly Received (Limited to 3 for UI)
+        returned_cases = Case.objects.filter(
+            status="received", 
+            assigned_to__isnull=True, 
+            returned_by__isnull=False 
+        ).select_related("returned_by").order_by("-returned_at")[:3]
+        
+        cases_to_assign = Case.objects.filter(
+            status="received", 
+            assigned_to__isnull=True, 
+            returned_by__isnull=True 
+        ).select_related("submitted_by").order_by("updated_at")[:3]
 
-            # NEW: Separate Returned by Examiner vs Freshly Received
-            returned_cases = Case.objects.filter(
-                status="received", 
-                assigned_to__isnull=True, 
-                returned_by__isnull=False # Examiner sent it back
-            ).select_related("returned_by").order_by("-returned_at")[:3]
-            
-            cases_to_assign = Case.objects.filter(
-                status="received", 
-                assigned_to__isnull=True, 
-                returned_by__isnull=True # Freshly received, not yet touched by examiner
-            ).select_related("submitted_by").order_by("updated_at")[:3]
+        # --- 4. REQUIRED FOR MODAL: Fetch Examiners ---
+        examiners = CustomUser.objects.filter(role="capitol_examiner", is_active=True)
 
-            # --- 4. REQUIRED FOR MODAL: Fetch Examiners ---
-            examiners = CustomUser.objects.filter(role="capitol_examiner", is_active=True)
+        context.update({
+            "tab": tab,
+            "tabs": [("pending", "Pending Intake", pending_count), ("received", "Received (Unassigned)", received_count)],
+            "page_obj": page_obj,
+            "receiver_stats": {
+                "received_today": stats_received_today,
+                "pending_intake": stats_pending_intake,
+                "for_assignment": stats_for_assignment,
+                "returned_to_owner": stats_returned_to_owner,
+            },
+            "returned_cases": returned_cases,   
+            "cases_to_assign": cases_to_assign, 
+            "recent_activity": AuditLog.objects.filter(actor=user).order_by("-created_at")[:5],
+            "examiners": examiners,             
+            "q": q,
+        })
+        template = "core/dashboard_receiver.html"
 
-            context.update({
-                "tab": tab,
-                "tabs": [("pending", "Pending", pending_count), ("received", "Received", received_count)],
-                "page_obj": page_obj,
-                "receiver_stats": {
-                    "received_today": stats_received_today,
-                    "pending_intake": stats_pending_intake,
-                    "for_assignment": stats_for_assignment,
-                    "returned_to_owner": stats_returned_to_owner,
-                },
-                "returned_cases": returned_cases,   # Use this for Top-Left panel
-                "cases_to_assign": cases_to_assign, # Use this for Bottom-Left panel
-                "recent_activity": AuditLog.objects.filter(actor=user).order_by("-created_at")[:5],
-                "examiners": examiners,             # Important for the Modal dropdown
-                "lgu_choices": CustomUser.LGU_MUNICIPALITY_CHOICES,
-                "case_type_choices": Case.CASE_TYPE_CHOICES,
-            })
-            template = "core/dashboard_receiver.html"
-
-        elif user.role == "capitol_examiner":
+    elif user.role == "capitol_examiner":
             today = timezone.localdate()
             
             # --- 1. Filter Handling ---
@@ -1382,7 +1331,7 @@ def dashboard(request):
             })
             template = "core/dashboard_examiner.html" # Fixed Assignment Here
 
-        elif user.role == "capitol_approver":
+    elif user.role == "capitol_approver":
             today = timezone.localdate()
 
             # --- 1. KPIs ---
@@ -1432,7 +1381,7 @@ def dashboard(request):
             })
             template = "core/dashboard_approver.html"
 
-        elif user.role == "capitol_taxmapper":
+    elif user.role == "capitol_taxmapper":
             today = timezone.localdate()
 
             # --- 1. KPIs ---
@@ -1485,7 +1434,7 @@ def dashboard(request):
             })
             template = "core/dashboard_taxmapper.html"
 
-        elif user.role == "capitol_numberer":
+    elif user.role == "capitol_numberer":
             queue_cases = (
                 Case.objects.filter(status="for_numbering")
                 .select_related("submitted_by")
@@ -1536,7 +1485,7 @@ def dashboard(request):
             })
             template = "core/dashboard_capitol.html" # Set here
 
-        elif user.role == "capitol_receiving":
+    elif user.role == "capitol_receiving":
             today = timezone.localdate()
 
             # --- 1. KPIs ---
@@ -1584,7 +1533,7 @@ def dashboard(request):
             })
             template = "core/dashboard_receiver.html"
             
-        else:
+    else:
             template = "core/dashboard_capitol.html" # Fallback if no matching role
 
     return render(request, template, context)
@@ -3077,10 +3026,6 @@ def submissions(request):
     scope = (request.GET.get("scope") or "me").strip().lower()
     tab = (request.GET.get("tab") or "").strip().lower()
     
-    # Default tabs based on scope
-    if not tab:
-        tab = "all_assigned" if scope == "me" else "all"
-
     q = (request.GET.get("q") or "").strip()
     case_type = (request.GET.get("case_type") or "").strip()
     lgu = (request.GET.get("lgu") or "").strip()
@@ -3093,57 +3038,93 @@ def submissions(request):
     # Base: Everything submitted by LGUs
     qs = Case.objects.filter(lgu_submitted_at__isnull=False).select_related("submitted_by", "assigned_to").order_by("-created_at")
 
+    examiners = None  # Will populate only if the user needs the Assignment Modal
+
     # ==========================================
     # SCOPE & TAB LOGIC
     # ==========================================
     if scope == "me" and request.user.role != "super_admin":
         page_title = "My Workspace"
         page_subtitle = "Cases specifically assigned to your queue."
-        tabs = [("all_assigned", "All Assigned"), ("under_review", "Under Review")]
         
-        # 1. Scope Filter (Only active cases in their hands)
+        # 1. Scope Filter & Dynamic Tabs based on Role
         if request.user.role == "capitol_receiving":
-            qs = qs.filter(status__in=["not_received", "received"], assigned_to__isnull=True)
+            tabs = [
+                ("all", f"All Case Intake ({qs.count()})"), 
+                ("received", f"Received ({qs.filter(status='received', assigned_to__isnull=True).count()})"), 
+                ("to_examine", f"To Examine ({qs.filter(status='to_examine').count()})")
+            ]
+            if not tab: tab = "all"
+
+            # Fetch examiners to populate the Assign modal
+            examiners = CustomUser.objects.filter(role="capitol_examiner", is_active=True)
+
+            if tab == "received":
+                qs = qs.filter(status="received", assigned_to__isnull=True)
+            elif tab == "to_examine":
+                qs = qs.filter(status="to_examine")
+            # If tab == "all", it keeps the base `qs` (everything)
+            
         elif request.user.role == "capitol_examiner":
-            qs = qs.filter(assigned_to=request.user, status__in=["in_review", "for_review", "under_review", "client_correction"])
+            tabs = [("all_assigned", "All Assigned"), ("under_review", "Under Review")]
+            if not tab: tab = "all_assigned"
+            
+            # Note: Included "to_examine" so freshly assigned cases show up for them
+            qs = qs.filter(assigned_to=request.user, status__in=["to_examine", "in_review", "for_review", "under_review", "client_correction"])
+            
+            if tab == "under_review":
+                qs = qs.filter(status__in=["in_review", "under_review"])
+                
         elif request.user.role == "capitol_approver":
+            tabs = [("all_assigned", "All Assigned")]
+            if not tab: tab = "all_assigned"
             qs = qs.filter(status="for_approval")
+            
         elif request.user.role == "capitol_taxmapper":
+            tabs = [("all_assigned", "All Assigned")]
+            if not tab: tab = "all_assigned"
             qs = qs.filter(status="for_taxmapping", taxmapper_assigned_to=request.user)
+            
         elif request.user.role == "capitol_numberer":
+            tabs = [("all_assigned", "All Assigned")]
+            if not tab: tab = "all_assigned"
             qs = qs.filter(status="for_numbering")
+            
         elif request.user.role == "capitol_releaser":
+            tabs = [("all_assigned", "All Assigned")]
+            if not tab: tab = "all_assigned"
             qs = qs.filter(status="for_release")
 
-        # 2. Tab Filter (Workspace Specific)
-        if tab == "under_review":
-            qs = qs.filter(status__in=["in_review", "under_review"])
-
     else:
+        # GLOBAL TRANSACTIONS SCOPE
         page_title = "All Transactions"
         page_subtitle = "Global view of all submitted cases."
+        
         tabs = [
             ("all", "All"), ("pending", "Pending"), ("received", "Received"),
-            ("in_review", "To Examine"), # <--- Renamed here
-            ("for_taxmapping", "For Taxmapping"),
+            ("to_examine", "To Examine"), ("for_taxmapping", "For Taxmapping"),
             ("for_approval", "For Approval"), ("for_numbering", "For Numbering"),
             ("for_release", "For Release"), ("released", "Released"),
         ]
         
-        # Tab Filter (Global Specific)
         tab_map = {
-            "pending": {"not_received", "client_correction"},
-            "received": {"received"},
-            "in_review": {"in_review", "for_review", "under_review"},
-            "for_taxmapping": {"for_taxmapping"},
-            "for_approval": {"for_approval"},
-            "for_numbering": {"for_numbering"},
-            "for_release": {"for_release"},
-            "released": {"released"},
+            "pending": ["not_received", "client_correction"],
+            "received": ["received"],
+            "to_examine": ["to_examine", "in_review", "for_review", "under_review"],
+            "for_taxmapping": ["for_taxmapping"],
+            "for_approval": ["for_approval"],
+            "for_numbering": ["for_numbering"],
+            "for_release": ["for_release"],
+            "released": ["released"],
         }
-        if tab_map.get(tab):
-            qs = qs.filter(status__in=tab_map[tab])
 
+        # CRITICAL FIX: Update the 'qs' based on the selected tab
+        if tab in tab_map:
+            qs = qs.filter(status__in=tab_map[tab])
+            
+            # Additional logic for 'received' tab to show only unassigned ones
+            if tab == "received":
+                qs = qs.filter(assigned_to__isnull=True)
     # ==========================================
     # SEARCH & FILTERS
     # ==========================================
@@ -3157,7 +3138,7 @@ def submissions(request):
             Q(submitted_by__email__icontains=q)
         )
 
-    # Only apply advanced filters if they are actually passed (usually from Global Scope)
+    # Only apply advanced filters if they are actually passed
     if case_type: qs = qs.filter(case_type=case_type)
     if lgu: qs = qs.filter(submitted_by__lgu_municipality=lgu)
     if date_from: qs = qs.filter(created_at__date__gte=date_from)
@@ -3198,8 +3179,8 @@ def submissions(request):
         "lgu_choices": list(getattr(CustomUser, "LGU_MUNICIPALITY_CHOICES", [])),
         "qs_params": query.urlencode(),
         "qs_params_no_tab": query_no_tab.urlencode(),
+        "examiners": examiners,  # Injected here for the modal logic
     })
-
 
 @login_required
 def audit_logs(request):
@@ -3349,26 +3330,28 @@ def return_case(request, tracking_id):
 
 @login_required
 def assign_case(request, tracking_id):
-    # 1. Fetch the case at the very beginning so it always exists
+    # 1. Fetch the case at the very beginning so it always exists for this function
     case = get_object_or_404(Case, tracking_id=tracking_id)
 
     if request.method == "POST":
         examiner_id = request.POST.get("assigned_to")
         
-        # Prevent 404 if nothing was selected
+        # Prevent 404/Error if the user clicked 'Confirm' without picking an examiner
         if not examiner_id:
             messages.error(request, "Please select an examiner before confirming.")
+            # Use META referer to send them back to exactly where they were
             return redirect(request.META.get('HTTP_REFERER', 'dashboard'))
             
-        # Fetch the selected examiner
+        # Fetch the selected examiner staff account
         examiner = get_object_or_404(CustomUser, id=examiner_id)
         
-        # Update case
+        # --- WORKFLOW TRANSITION ---
+        # We assign the user AND update the status to push it to the next phase
         case.assigned_to = examiner
-        case.status = "received" # Ensure status is updated if needed
+        case.status = "to_examine" 
         case.save()
         
-        # Create Audit Log (Indented properly inside the POST block)
+        # Create Audit Log for transparency
         AuditLog.objects.create(
             actor=request.user,
             action="case_assignment",
@@ -3380,11 +3363,14 @@ def assign_case(request, tracking_id):
         )
 
         messages.success(request, f"Case {case.tracking_id} successfully assigned to {examiner.get_full_name()}.")
+        
+        # After assigning, redirecting to case_detail will now show the 
+        # "Assigned" status and lock the controls for the Receiver.
         return redirect("case_detail", tracking_id=case.tracking_id)
 
-    # 2. Fallback: If it's a GET request, just send them back to the dashboard safely
+    # 2. Fallback: If it's a GET request (e.g. manual URL entry), return to dashboard
     return redirect('dashboard')
-
+    
 @login_required
 @require_POST
 def submit_for_approval(request, tracking_id):

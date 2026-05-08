@@ -143,6 +143,154 @@
         .drawer-backdrop.active { opacity: 1; visibility: visible; }
         .drawer-panel { position: fixed; top: 0; right: -550px; width: 500px; max-width: 90vw; height: 100vh; background: white; z-index: 1050; box-shadow: -4px 0 24px rgba(0, 0, 0, 0.1); transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1); display: flex; flex-direction: column; }
         .drawer-panel.active { right: 0; }
+
+
+        .assign-modal-backdrop {
+    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px);
+    z-index: 3000; display: flex; align-items: center; justify-content: center;
+    opacity: 0; visibility: hidden; transition: 0.2s;
+}
+.assign-modal-backdrop.active { opacity: 1; visibility: visible; }
+.assign-modal-panel {
+    background: white; width: 100%; max-width: 400px; border-radius: 12px;
+    transform: translateY(20px); transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.assign-modal-backdrop.active .assign-modal-panel { transform: translateY(0); }
+
+
+/* Better Pill Styling */
+.status-pill {
+    padding: 0.35rem 0.8rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 6px; /* Slightly squarer modern look */
+    text-transform: capitalize;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+/* Purple Theme for To Examine */
+
+.status-to_examine::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    background: #7c3aed;
+    border-radius: 50%;
+}
+
+/* Ensure Received looks distinct */
+.status-received {
+    background: #ecfdf5;
+    color: #065f46;
+    border: 1px solid #a7f3d0;
+}
+
+/* Table Interaction */
+.clickable-row {
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+.clickable-row:hover {
+    background-color: #f8fafc !important;
+}
+
+/* Typography Improvements */
+.client-name {
+    font-weight: 600;
+    color: #1e293b;
+    font-size: 0.9rem;
+}
+.request-subtext {
+    font-size: 0.75rem;
+    color: #64748b;
+    margin-top: 2px;
+}
+.date-text {
+    font-size: 0.85rem;
+    color: #475569;
+}
+
+/* User Info & Avatar Styling */
+.user-info-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+.avatar-circle {
+    width: 32px;
+    height: 32px;
+    background: #e0f2fe;
+    color: #0369a1;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.75rem;
+    flex-shrink: 0;
+    border: 1px solid #bae6fd;
+}
+.user-details {
+    display: flex;
+    flex-direction: column;
+}
+.user-name {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #1e293b;
+}
+.user-role {
+    font-size: 0.7rem;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
+/* Polished Status Pills */
+.status-pill {
+    padding: 4px 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 9999px; /* Pill shape */
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+
+.status-to_examine::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    background: #8b5cf6;
+    border-radius: 50%;
+}
+
+/* View Button */
+.view-btn {
+    color: #94a3b8;
+    font-size: 1.2rem;
+    transition: color 0.2s;
+}
+.clickable-row:hover .view-btn {
+    color: var(--primary);
+}
+
+
+.status-to_examine {
+    background: #f5f3ff;
+    color: #6d28d9;
+    border: 1px solid #ddd6fe;
+}
+
+.status-received {
+    background: #ecfdf5;
+    color: #065f46;
+    border: 1px solid #a7f3d0;
+}
     </style>
 
     <!-- Block for page-specific CSS -->

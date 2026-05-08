@@ -253,63 +253,75 @@
         <!-- Data Table -->
 <div style="overflow-x: auto;">
             {% if page_obj and page_obj.object_list %}
-            <table class="legal-table">
-            <thead>
-                <tr>
-                    <th class="col-case-no">Case Number</th>
-                    <th class="col-client">Client & Request</th>
-                    <th class="col-origin">LGU Origin</th>
-                    <th class="col-date">Date Submitted</th>
-                    <th class="col-status">Status</th>
-                    
-                    {% if tab != 'to_examine' %}
-                        <th class="col-actions">Actions</th>
-                    {% endif %}
-                </tr>
-            </thead>
-            <tbody>
-                {% for case in page_obj %}
-                <tr>
-                    <td>
-                        <span class="tracking-code">{{ case.tracking_id }}</span>
-                    </td>
-                    <td>
-                        <div style="font-weight: 600; color: var(--text-main);">{{ case.client_display_name|default:case.client_name }}</div>
-                        <div style="font-size: 0.75rem; color: var(--text-muted);">{{ case.get_case_type_display }}</div>
-                    </td>
-                    <td>
-                        <span style="color: var(--text-muted);">{{ case.submitted_by.lgu_municipality|default:"—" }}</span>
-                    </td>
-                    <td>
-                        <span style="color: var(--text-muted);">{{ case.created_at|date:"m/d/Y" }}</span>
-                    </td>
-                    <td>
-                        <span class="status-pill status-{{ case.status }}">
-                            {{ case.get_status_display }}
-                        </span>
-                    </td>
-                    
-                    {% if tab != 'to_examine' %}
-                    <td>
-                        <div class="action-group">
-                            <a href="#" onclick="openQuickView('{{ case.tracking_id }}'); return false;" class="action-link secondary">
-                                Quick View
-                            </a>
-                            
-                            {% if case.status == 'not_received' %}
-                                <a href="{% url 'case_detail' case.tracking_id %}" class="action-link primary">Receive</a>
-                            {% elif case.status == 'received' and not case.assigned_to %}
-                                <a href="#" onclick="openAssignModal('{{ case.tracking_id }}', '{{ case.client_name|escapejs }}'); return false;" class="action-link primary" style="background: #f3e8ff; color: #6b21a8;">
-                                    Assign
-                                </a>
-                            {% endif %}
-                        </div>
-                    </td>
-                    {% endif %}
-                </tr>
-                {% endfor %}
-            </tbody>
-            </table>
+<table class="legal-table">
+    <thead>
+    <tr>
+        <th class="col-case-no">Case Number</th>
+        <th class="col-client">Client & Request</th>
+        
+        {% if tab == 'to_examine' or tab == 'in_review' %}
+            <th>Assigned To</th>
+            <th>Date Assigned</th>
+        {% else %}
+            <th>LGU Origin</th>
+            <th>Date Submitted</th>
+        {% endif %}
+        
+        <th class="col-status">Status</th>
+        
+        {% if scope == 'me' and tab != 'to_examine' %}
+            <th style="text-align: right;">Action</th>
+        {% endif %}
+    </tr>
+</thead>
+    <tbody>
+    {% for case in page_obj %}
+    <tr class="clickable-row" data-url="{% url 'case_detail' case.tracking_id %}" onclick="window.location=this.dataset.url">
+        <td><span class="tracking-code">{{ case.tracking_id }}</span></td>
+        <td>
+            <div class="client-name">{{ case.client_name }}</div>
+            <div class="request-subtext">{{ case.get_case_type_display }}</div>
+        </td>
+
+        {% if tab == 'to_examine' or tab == 'in_review' %}
+            <td>
+                {% if case.assigned_to %}
+                <div class="user-info-cell">
+                    <div class="avatar-circle">
+                        {{ case.assigned_to.first_name|slice:":1" }}{{ case.assigned_to.last_name|slice:":1" }}
+                    </div>
+                    <div class="user-details">
+                        <span class="user-name">{{ case.assigned_to.get_full_name }}</span>
+                        <span class="user-role">Examiner</span>
+                    </div>
+                </div>
+                {% else %}
+                <span class="text-muted italic">Not yet assigned</span>
+                {% endif %}
+            </td>
+            <td><span class="date-text">{{ case.updated_at|date:"M d, Y" }}</span></td>
+        {% else %}
+            <td><span class="date-text">{{ case.submitted_by.lgu_municipality|default:"Direct" }}</span></td>
+            <td><span class="date-text">{{ case.created_at|date:"M d, Y" }}</span></td>
+        {% endif %}
+
+        <td>
+            <span class="status-pill status-{{ case.status }}">
+                {{ case.get_status_display }}
+            </span>
+        </td>
+
+        {% if scope == 'me' and tab != 'to_examine' %}
+        <td style="text-align: right;">
+            <a href="{% url 'case_detail' case.tracking_id %}" class="view-btn">
+                <i class="ri-arrow-right-line"></i>
+            </a>
+        </td>
+        {% endif %}
+    </tr>
+    {% endfor %}
+</tbody>
+</table>
             {% else %}
             {% endif %}
 

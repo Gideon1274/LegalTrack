@@ -407,12 +407,14 @@ class Case(TimestampedModel):
     draft_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
 
     # ---------- Status ----------
+    # ---------- Status ----------
     STATUS_CHOICES: ClassVar[list[tuple[str, str]]] = [
         ("draft", "Draft"),
-        ("not_received", "Not Received"),          # LGU created, still editable
-        ("received", "Received"),                  # Capitol marked receipt
-        ("in_review", "To Examine"),
-        ("for_taxmapping", "For Taxmapping"),      # Added for TaxMapper flow
+        ("not_received", "Not Received"),
+        ("received", "Received"),
+        ("to_examine", "To Examine"),       # Status after Receiver assigns it
+        ("in_review", "Under Examination"), # Status once Examiner starts working
+        ("for_taxmapping", "For Taxmapping"),
         ("for_approval", "For Approval"),
         ("approved", "Approved"),
         ("for_numbering", "For Numbering"),
@@ -527,8 +529,8 @@ class Case(TimestampedModel):
     lgu_submitted_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        ordering: ClassVar[list[str]] = ["-created_at"]
-        indexes: ClassVar[list] = [
+        ordering = ["-created_at"]
+        indexes = [
             models.Index(fields=["status"]),
             models.Index(fields=["created_at"]),
             models.Index(fields=["updated_at"]),
