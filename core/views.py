@@ -23,6 +23,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.template.loader import render_to_string
 
+import random
+from .models import Case, CustomUser, AuditLog, LGUTaxDeclarationSequence # <--- Add it here
 
 @login_required
 def case_quick_view(request, tracking_id):
@@ -1435,55 +1437,36 @@ def dashboard(request):
             template = "core/dashboard_taxmapper.html"
 
     elif user.role == "capitol_numberer":
-            queue_cases = (
-                Case.objects.filter(status="for_numbering")
-                .select_related("submitted_by")
-                .prefetch_related("numbers")
-                .order_by("-updated_at")
-            )
+        today = timezone.localdate()
 
-            lgu = (request.GET.get("lgu") or "").strip()
-            date_from_raw = (request.GET.get("date_from") or "").strip()
-            date_to_raw = (request.GET.get("date_to") or "").strip()
-            number_q = (request.GET.get("number") or "").strip()
+        # 1. Main Table Queue
+        qs = Case.objects.filter(status="for_numbering").select_related("assigned_to", "submitted_by").order_by("updated_at")
+        paginator = Paginator(qs, 10)
+        page_obj = paginator.get_page(request.GET.get("page") or 1)
 
-            date_from = parse_date(date_from_raw) if date_from_raw else None
-            date_to = parse_date(date_to_raw) if date_to_raw else None
+        # 2. KPIs
+        stats_pending = qs.count()
+        stats_numbered_today = AuditLog.objects.filter(actor=user, action="case_numbered", created_at__date=today).count()
 
-            if lgu:
-                queue_cases = queue_cases.filter(submitted_by__lgu_municipality=lgu)
-            if date_from:
-                queue_cases = queue_cases.filter(created_at__date__gte=date_from)
-            if date_to:
-                queue_cases = queue_cases.filter(created_at__date__lte=date_to)
-            if number_q:
-                if number_q.isdigit():
-                    padded = number_q.zfill(5) if len(number_q) <= 5 else number_q
-                    queue_cases = queue_cases.filter(
-                        Q(numbers__number=padded) |
-                        Q(tracking_id__icontains=number_q)
-                    )
-                else:
-                    queue_cases = queue_cases.filter(
-                        Q(tracking_id__icontains=number_q)
-                    )
-                queue_cases = queue_cases.distinct()
+        # 3. Randomized "Featured" LGU Sequence
+        sequences = list(LGUTaxDeclarationSequence.objects.all())
+        featured_sequence = random.choice(sequences) if sequences else None
 
-            last_used = CaseNumber.objects.order_by("-number").values_list("number", flat=True).first()
-            suggested_next = (int(last_used) + 1) if (last_used and str(last_used).isdigit()) else 1
-            suggested_next_str = str(suggested_next).zfill(5)
+        # 4. Personal Activity
+        recent_activity = AuditLog.objects.filter(
+            actor=user,
+            action__in=["login", "logout", "case_numbered"]
+        ).order_by("-created_at")[:3]
 
-            context.update({
-                "queue_cases": queue_cases[:50],
-                "numberer_lgu_choices": CustomUser.LGU_MUNICIPALITY_CHOICES,
-                "filter_lgu": lgu,
-                "filter_date_from": date_from_raw,
-                "filter_date_to": date_to_raw,
-                "filter_number": number_q,
-                "last_used_number": last_used,
-                "suggested_next_number": suggested_next_str,
-            })
-            template = "core/dashboard_capitol.html" # Set here
+        context.update({
+            "section": "capitol_numberer",
+            "page_obj": page_obj,
+            "recent_activity": recent_activity,
+            "stats_pending": stats_pending,
+            "stats_numbered_today": stats_numbered_today,
+            "featured_sequence": featured_sequence, # Pass the random LGU
+        })
+        template = "core/dashboard_numberer.html"
 
     elif user.role == "capitol_receiving":
             today = timezone.localdate()
@@ -1538,6 +1521,39 @@ def dashboard(request):
 
     return render(request, template, context)
 
+@login_required
+def assign_td_number(request, tracking_id):
+    if request.user.role != "capitol_numberer" and request.user.role != "super_admin":
+        messages.error(request, "Unauthorized.")
+        return redirect("dashboard")
+
+    case = get_object_or_404(Case, tracking_id=tracking_id, status="for_numbering")
+
+    if request.method == "POST":
+        lgu_origin = case.submitted_by.lgu_municipality
+        
+        try:
+            # 1. Generate the strictly sequential number safely
+            new_td_number = LGUTaxDeclarationSequence.get_next_number(lgu_origin)
+            
+            # 2. Assign and move to next phase
+            case.td_number = new_td_number
+            case.status = "for_release"
+            case.save()
+
+            # 3. Create the Audit Log for the timeline feed
+            AuditLog.objects.create(
+                actor=request.user,
+                action="case_numbered",
+                target_object=f"Case: {case.tracking_id}",
+                details={"td_number": new_td_number, "lgu": lgu_origin}
+            )
+
+            messages.success(request, f"Successfully assigned TD No. {new_td_number} to {case.tracking_id}.")
+        except Exception as e:
+            messages.error(request, f"Error generating number: {str(e)}")
+            
+    return redirect("dashboard")
 
 @login_required
 def user_management(request):

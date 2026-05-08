@@ -399,6 +399,32 @@ class PasswordResetRequest(models.Model):
         ]
 
 
+class LGUTaxDeclarationSequence(models.Model):
+    """Tracks the current TD sequence for each LGU to ensure strict sequential numbering."""
+    lgu_name = models.CharField(max_length=100, unique=True, choices=CustomUser.LGU_MUNICIPALITY_CHOICES)
+    prefix = models.CharField(max_length=10, help_text="e.g., '120-' for Alcoy")
+    current_count = models.PositiveIntegerField(default=0)
+
+    def __str__(self):
+        return f"{self.lgu_name} ({self.prefix}) - Next: {self.current_count + 1:03d}"
+
+    @classmethod
+    def get_next_number(cls, lgu_name):
+        """Safely generates the next sequential number using a database lock."""
+        with transaction.atomic():
+            # select_for_update() locks this specific row until the transaction finishes.
+            # This completely prevents two cases from getting the same number.
+            sequence, created = cls.objects.select_for_update().get_or_create(
+                lgu_name=lgu_name,
+                defaults={'prefix': '000-'} # You can update prefixes in the Django Admin
+            )
+            
+            sequence.current_count += 1
+            sequence.save()
+            
+            # Formats as 120-001, 120-002, etc. (padding with 3 zeros)
+            return f"{sequence.prefix}{sequence.current_count:03d}"
+
 class Case(TimestampedModel):
     # ---------- Tracking ID ----------
     tracking_id = models.CharField(max_length=30, unique=True, editable=False, blank=True, null=True)
@@ -590,6 +616,14 @@ class Case(TimestampedModel):
         
         raise ValueError("Unable to generate unique tracking_id")
 
+
+    td_number = models.CharField(
+        max_length=50, 
+        blank=True, 
+        null=True, 
+        unique=True, 
+        help_text="Official Tax Declaration Number assigned by Numberer"
+    )
     # ------------------------------------------------------------------
     #  Save override
     # ------------------------------------------------------------------
