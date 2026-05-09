@@ -78,7 +78,7 @@
 
         .brand-logo { 
             display: flex; align-items: center; 
-            margin-bottom: 3rem; padding-left: 0.25rem;
+            margin-bottom: 2.5rem; padding-left: 0.25rem;
             font-size: 1.5rem; font-weight: 800; color: var(--text-main);
         }
         .brand-logo i { 
@@ -300,9 +300,13 @@
 
     <!-- INTERACTIVE SIDEBAR -->
     <aside class="sidebar">
-        <div class="brand-logo">
-            <i class="ri-blaze-fill"></i> <span class="hide-text">PAStrack</span>
-        </div>
+    <div class="brand-logo" style="display: flex; align-items: center; gap: 2px; padding: 0 ;">
+        <!-- The Logo Mark -->
+        <img src="{% static 'core/logo.png' %}" alt="Logo" style="width: 54px; height: 54px; object-fit: contain;">
+        
+        <!-- The Brand Name SVG -->
+        <img src="{% static 'core/sub-logo.png' %}" alt="PAStrack" class="hide-text" style="height: 24px; object-fit: contain;">
+    </div>
         
         <nav class="nav-menu">
             <!-- 1. Universal: Dashboard -->

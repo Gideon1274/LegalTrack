@@ -1,40 +1,39 @@
-{% extends 'base_admin.html' %}
+{% extends 'base_new.html' %}
 {% load static %}
 
 {% block title %}Receiver Dashboard | PAStrack{% endblock %}
 
 {% block extra_css %}
     <style>
-
         /* Assignment Modal Styles */
-.assign-modal-backdrop {
-    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-    background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px);
-    z-index: 2000; display: flex; align-items: center; justify-content: center;
-    opacity: 0; visibility: hidden; transition: 0.2s;
-}
-.assign-modal-backdrop.active { opacity: 1; visibility: visible; }
-.assign-modal-panel {
-    background: white; width: 100%; max-width: 400px; border-radius: var(--radius-lg);
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-    transform: translateY(20px); transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    overflow: hidden;
-}
-.assign-modal-backdrop.active .assign-modal-panel { transform: translateY(0); }
+        .assign-modal-backdrop {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px);
+            z-index: 2000; display: flex; align-items: center; justify-content: center;
+            opacity: 0; visibility: hidden; transition: 0.2s;
+        }
+        .assign-modal-backdrop.active { opacity: 1; visibility: visible; }
+        .assign-modal-panel {
+            background: white; width: 100%; max-width: 400px; border-radius: var(--radius-lg);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            transform: translateY(20px); transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow: hidden;
+        }
+        .assign-modal-backdrop.active .assign-modal-panel { transform: translateY(0); }
 
-.assign-header { padding: 1.5rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: #f8fafc; }
-.assign-header h3 { margin: 0; font-size: 1.125rem; color: var(--text-main); }
-.close-modal-btn { background: none; border: none; font-size: 1.5rem; color: var(--text-muted); cursor: pointer; }
-.close-modal-btn:hover { color: var(--danger-text); }
+        .assign-header { padding: 1.5rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: #f8fafc; }
+        .assign-header h3 { margin: 0; font-size: 1.125rem; color: var(--text-main); }
+        .close-modal-btn { background: none; border: none; font-size: 1.5rem; color: var(--text-muted); cursor: pointer; }
+        .close-modal-btn:hover { color: var(--danger-text); }
 
-.assign-body { padding: 1.5rem; }
-.assign-select { width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 6px; font-size: 0.875rem; margin-top: 0.5rem; margin-bottom: 1.5rem; outline: none; }
-.assign-select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
+        .assign-body { padding: 1.5rem; }
+        .assign-select { width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 6px; font-size: 0.875rem; margin-top: 0.5rem; margin-bottom: 1.5rem; outline: none; }
+        .assign-select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
 
         /* ===== DASHBOARD LAYOUT & HEADER ===== */
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
-        .greeting h1 { font-size: 1.5rem; font-weight: 700; color: var(--text-main); margin-bottom: 0.25rem; }
-        .greeting span { font-size: 0.875rem; color: var(--text-muted); }
+        .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2rem; }
+        .greeting h1 { font-size: 1.75rem; font-weight: 700; color: #0f172a; margin-bottom: 0.25rem; }
+        .greeting p { color: #64748b; margin-top: 0.25rem; font-family: 'Inter', sans-serif; font-weight: 500; }
 
         .icon-purple { background: #f3e8ff; color: #6b21a8; }
         
@@ -111,7 +110,7 @@
         .action-link.primary { background: var(--primary-light); color: var(--primary); padding: 0.5rem 1rem; border-radius: 6px; }
         .action-link.primary:hover { background: var(--primary); color: white; }
 
-        /* CSS-driven Status Pills (Fixes the syntax error) */
+        /* CSS-driven Status Pills */
         .status-pill {
             display: inline-flex; align-items: center; gap: 0.3rem;
             padding: 0.25rem 0.75rem; border-radius: 999px;
@@ -145,8 +144,12 @@
 {% block content %}
     <div class="header">
         <div class="greeting">
-            <h1>Hi, {{ user.first_name|default:user.email }}!</h1>
-            <span>Receiving & Intake Dashboard</span>
+            <h1>Hi, {{ request.user.first_name|default:"Receiver" }}!</h1>
+            <p>
+                <span style="color: #3b82f6; font-weight: 700;">{{ request.user.staff_id|default:"REC-001" }}</span> 
+                <span style="margin: 0 8px; color: #cbd5e1;">|</span> 
+                Capitol Receiver
+            </p>
         </div>
         <div style="display: flex; gap: 1rem;">
             <a href="{% url 'submit_case' %}" class="btn-primary">
@@ -159,33 +162,29 @@
         <div class="kpi-card">
             <div class="kpi-icon-box" style="color: #b45309; background: #fef3c7;"><i class="ri-inbox-unarchive-line"></i></div>
             <div class="kpi-data">
-                <h2>{{ receiver_stats.pending_intake }}</h2>
+                <h2>{{ stats_pending_intake|default:"0" }}</h2>
                 <span>Pending Intake</span>
-                <!-- <div class="kpi-trend trend-neutral"><i class="ri-truck-line"></i> Awaiting Physical Docs</div> -->
             </div>
         </div>
         <div class="kpi-card">
             <div class="kpi-icon-box" style="color: #6b21a8; background: #f3e8ff;"><i class="ri-user-shared-2-line"></i></div>
             <div class="kpi-data">
-                <h2>{{ receiver_stats.for_assignment }}</h2>
+                <h2>{{ stats_ready_assign|default:"0" }}</h2>
                 <span>Ready to Assign</span>
-                <!-- <div class="kpi-trend trend-neutral"><i class="ri-loader-line"></i> Unassigned Cases</div> -->
             </div>
         </div>
         <div class="kpi-card">
             <div class="kpi-icon-box" style="color: #166534; background: #dcfce7;"><i class="ri-checkbox-circle-line"></i></div>
             <div class="kpi-data">
-                <h2>{{ receiver_stats.received_today }}</h2>
+                <h2>{{ stats_received_today|default:"0" }}</h2>
                 <span>Received Today</span>
-                <!-- <div class="kpi-trend trend-up"><i class="ri-arrow-up-line"></i> Daily Output</div> -->
             </div>
         </div>
         <div class="kpi-card">
             <div class="kpi-icon-box" style="color: #dc2626; background: #fee2e2;"><i class="ri-arrow-go-back-line"></i></div>
             <div class="kpi-data">
-                <h2>{{ receiver_stats.returned_to_owner }}</h2>
+                <h2>{{ stats_returned_lgu|default:"0" }}</h2>
                 <span>Returned to LGU</span>
-                <!-- <div class="kpi-trend trend-down"><i class="ri-error-warning-line"></i> Pending Corrections</div> -->
             </div>
         </div>
     </div>
@@ -330,7 +329,7 @@
             </div>
 
             <div class="activity-list" style="flex-grow: 1; display: flex; flex-direction: column;">
-                {% for log in recent_activity|slice:":5" %} 
+                {% for log in recent_logs|slice:":5" %} 
                     <div class="activity-item" style="padding: 0.6rem 0;">
                         <div class="activity-left">
                             <div class="activity-icon 
@@ -410,7 +409,7 @@
     </div>
 </div>
 
-<script>
+<!-- <script>
 function openAssignModal(tid, client) {
     document.getElementById('modalTrackingId').innerText = tid;
     document.getElementById('modalClientName').innerText = client;
@@ -420,6 +419,37 @@ function openAssignModal(tid, client) {
 function closeAssignModal() {
     document.getElementById('assignModal').classList.remove('active');
 }
-</script>
+</script> -->
 
+<script>
+function openAssignModal(tid, client) {
+    document.getElementById('modalTrackingId').innerText = tid;
+    document.getElementById('modalClientName').innerText = client;
+    document.getElementById('assignForm').action = `/case/${tid}/assign/`;
+    document.getElementById('assignModal').classList.add('active');
+}
+
+function closeAssignModal() {
+    document.getElementById('assignModal').classList.remove('active');
+}
+
+// Auto-refresh Receiver Dashboard every 5 seconds
+document.addEventListener('DOMContentLoaded', function () {
+    setInterval(function () {
+        // Do not refresh while assignment modal is open
+        const modal = document.getElementById('assignModal');
+        if (modal && modal.classList.contains('active')) {
+            return;
+        }
+
+        // Do not refresh if user is typing in a form field
+        const active = document.activeElement;
+        if (active && ['INPUT', 'SELECT', 'TEXTAREA'].includes(active.tagName)) {
+            return;
+        }
+
+        window.location.reload();
+    }, 5000);
+});
+</script>
 {% endblock %}

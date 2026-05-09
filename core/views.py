@@ -947,6 +947,32 @@ def dashboard(request):
         "role_display": user.get_role_display(),
     }
 
+    # ==========================================
+    # COMMON CAPITOL STAFF LOGIC
+    # ==========================================
+    if user.role.startswith("capitol_"):
+        activity_raw = list(
+            AuditLog.objects.filter(actor=user, action__startswith="case_")
+            .values("action")
+            .annotate(count=Count("id"))
+            .order_by("action")
+        )
+        activity_labels = dict(AuditLog.ACTION_CHOICES)
+        activity_counts = [
+            {"action": activity_labels.get(r["action"], r["action"]), "count": r["count"]}
+            for r in activity_raw
+            if r.get("count")
+        ]
+        context.update({
+            "activity_counts": activity_counts,
+            "activity_total": sum(int(r.get("count") or 0) for r in activity_raw),
+            "section": "capitol_staff",
+            "capitol_role": user.get_role_display(),
+        })
+
+    # ==========================================
+    # ROLE-SPECIFIC DASHBOARDS
+    # ==========================================
     if user.role == "super_admin":
         # 1. KPIs
         total_users_count = CustomUser.objects.count()
@@ -965,7 +991,6 @@ def dashboard(request):
         ).select_related("actor", "target_user").order_by("-created_at")[:5]
 
         # 3. Chart Data (Role Distribution)
-        # Order: ['Municipal Assessor', 'Capitol Receiver', 'Capitol Examiner', 'Capitol Approver', 'Capitol Numberer']
         role_map = {
             "lgu_admin": 0,
             "capitol_receiving": 1,
@@ -987,6 +1012,7 @@ def dashboard(request):
         page_obj = paginator.get_page(page_number)
 
         context.update({
+            "section": "super_admin",
             "total_users_count": total_users_count,
             "total_lgus_count": total_lgus_count,
             "active_cases_count": active_cases_count,
@@ -1003,9 +1029,8 @@ def dashboard(request):
 
     elif user.role == "lgu_admin":
         tab = (request.GET.get("tab") or "").strip().lower() or "all"
-
         mun = (getattr(user, "lgu_municipality", "") or "").strip()
-        # base_qs represents all submitted cases for this LGU
+        
         base_qs = Case.objects.filter(lgu_submitted_at__isnull=False).select_related("submitted_by").order_by("-created_at")
         
         if mun:
@@ -1015,10 +1040,8 @@ def dashboard(request):
 
         base_qs = base_qs.exclude(status="client_correction", client_correction_deadline__lt=timezone.now())
 
-        # --- ADD THESE LINES FOR YOUR KPIs ---
         total_cases_count = base_qs.count()
         todays_cases_count = base_qs.filter(lgu_submitted_at__date=timezone.localdate()).count()
-        # -------------------------------------
 
         tab_map = {
             "all": None,
@@ -1043,7 +1066,6 @@ def dashboard(request):
         status_labels = dict(Case.STATUS_CHOICES)
         status_counts = [{"status": status_labels.get(r["status"], r["status"]), "count": r["count"]} for r in raw]
 
-        # RECENT ACTIVITY LOGS for the bottom panel
         recent_logs = AuditLog.objects.filter(actor=user).order_by("-created_at")[:5]
 
         context.update({
@@ -1052,407 +1074,216 @@ def dashboard(request):
             "tabs": [("all", "All", all_count), ("pending", "Pending", pending_count), ("received", "Received", received_count)],
             "page_obj": page_obj,
             "status_counts": status_counts,
-            "total_cases_count": total_cases_count,  # Now passed to template
-            "todays_cases_count": todays_cases_count, # Now passed to template
+            "total_cases_count": total_cases_count,
+            "todays_cases_count": todays_cases_count,
             "recent_logs": recent_logs,
         })
         template = "core/dashboard_lgu.html"
 
-        tab = (request.GET.get("tab") or "").strip().lower() or "all"
-
-        mun = (getattr(user, "lgu_municipality", "") or "").strip()
-        base_qs = Case.objects.filter(lgu_submitted_at__isnull=False).select_related("submitted_by").order_by("-created_at")
-        if mun:
-            base_qs = base_qs.filter(submitted_by__lgu_municipality=mun)
-        else:
-            base_qs = base_qs.filter(submitted_by=user)
-
-        base_qs = base_qs.exclude(status="client_correction", client_correction_deadline__lt=timezone.now())
-
-        tab_map = {
-            "all": None,
-            "pending": {"not_received", "client_correction"},
-            "received": {"received", "in_review", "for_taxmapping", "for_approval", "for_numbering", "for_release", "released"},
-        }
-        statuses = tab_map.get(tab)
-        qs = base_qs
-        if statuses:
-            qs = qs.filter(status__in=statuses)
-
-        # Counts for tab badges (computed on the municipality-wide base set)
-        all_count = base_qs.count()
-        pending_count = base_qs.filter(status__in=tab_map["pending"]).count()
-        received_count = base_qs.filter(status__in=tab_map["received"]).count()
-
-        paginator = Paginator(qs, 10)
-        page_obj = paginator.get_page(request.GET.get("page") or 1)
-
-        raw = list(base_qs.values("status").annotate(count=Count("id")).order_by("status"))
-        status_labels = dict(Case.STATUS_CHOICES)
-        status_counts = [{"status": status_labels.get(r["status"], r["status"]), "count": r["count"]} for r in raw]
-
-        # --- NEW CODE: Fetch Recent Logs & Today's Submissions ---
-        recent_logs = AuditLog.objects.filter(actor=user).order_by("-created_at")[:5]
-        todays_cases_count = base_qs.filter(created_at__date=timezone.localdate()).count()
-        # ---------------------------------------------------------
-
-        context.update({
-            "section": "lgu_admin",
-            "tab": tab,
-            "tabs": [("all", "All", all_count), ("pending", "Pending", pending_count), ("received", "Received", received_count)],
-            "page_obj": page_obj,
-            "status_counts": status_counts,
-            "recent_logs": recent_logs,               # Passed to template
-            "todays_cases_count": todays_cases_count, # Passed to template
-        })
-        template = "core/dashboard_lgu.html"
-
-        
-        tab = (request.GET.get("tab") or "").strip().lower() or "all"
-
-        mun = (getattr(user, "lgu_municipality", "") or "").strip()
-        base_qs = Case.objects.filter(lgu_submitted_at__isnull=False).select_related("submitted_by").order_by("-created_at")
-        if mun:
-            base_qs = base_qs.filter(submitted_by__lgu_municipality=mun)
-        else:
-            base_qs = base_qs.filter(submitted_by=user)
-
-        base_qs = base_qs.exclude(status="client_correction", client_correction_deadline__lt=timezone.now())
-
-        tab_map = {
-            "all": None,
-            "pending": {"not_received", "client_correction"},
-            "received": {"received", "in_review", "for_taxmapping", "for_approval", "for_numbering", "for_release", "released"},
-        }
-        statuses = tab_map.get(tab)
-        qs = base_qs
-        if statuses:
-            qs = qs.filter(status__in=statuses)
-
-        # Counts for tab badges (computed on the municipality-wide base set)
-        all_count = base_qs.count()
-        pending_count = base_qs.filter(status__in=tab_map["pending"]).count()
-        received_count = base_qs.filter(status__in=tab_map["received"]).count()
-
-        paginator = Paginator(qs, 10)
-        page_obj = paginator.get_page(request.GET.get("page") or 1)
-
-        raw = list(base_qs.values("status").annotate(count=Count("id")).order_by("status"))
-        status_labels = dict(Case.STATUS_CHOICES)
-        status_counts = [{"status": status_labels.get(r["status"], r["status"]), "count": r["count"]} for r in raw]
-
-        context.update({
-            "section": "lgu_admin",
-            "tab": tab,
-            "tabs": [("all", "All", all_count), ("pending", "Pending", pending_count), ("received", "Received", received_count)],
-            "page_obj": page_obj,
-            "status_counts": status_counts,
-        })
-        template = "core/dashboard_lgu.html"
-
-    else:  # Capitol roles
-        activity_raw = list(
-            AuditLog.objects.filter(actor=user, action__startswith="case_")
-            .values("action")
-            .annotate(count=Count("id"))
-            .order_by("action")
-        )
-        activity_labels = dict(AuditLog.ACTION_CHOICES)
-        activity_counts = [
-            {"action": activity_labels.get(r["action"], r["action"]), "count": r["count"]}
-            for r in activity_raw
-            if r.get("count")
-        ]
-        context.update({
-            "activity_counts": activity_counts,
-            "activity_total": sum(int(r.get("count") or 0) for r in activity_raw),
-        })
-
-        context.update({
-            "section": "capitol_staff",
-            "capitol_role": user.get_role_display(),
-        })
-
-    if user.role == "capitol_receiving":
+    elif user.role == "capitol_receiving":
         tab = (request.GET.get("tab") or "").strip().lower() or "pending"
         q = (request.GET.get("q") or "").strip()
 
-        # --- 1. Base Querysets for Main Table (Front Desk) ---
+        # Base Queries
         base_pending_qs = Case.objects.filter(status="not_received")
         base_received_qs = Case.objects.filter(status="received", assigned_to__isnull=True)
 
-        # Apply Search Filter
         if q:
             filt = Q(tracking_id__icontains=q) | Q(client_name__icontains=q) | Q(submitted_by__lgu_municipality__icontains=q)
             base_pending_qs = base_pending_qs.filter(filt)
             base_received_qs = base_received_qs.filter(filt)
         
-        # --- 2. Pagination Logic ---
         pending_count = base_pending_qs.count()
         received_count = base_received_qs.count()
 
         if tab == "received":
             active_qs = base_received_qs.select_related("submitted_by").order_by("-received_at")
-            paginator = Paginator(active_qs, 10)
         else:
             tab = "pending"
             active_qs = base_pending_qs.select_related("submitted_by").order_by("-created_at")
-            paginator = Paginator(active_qs, 10)
             
+        paginator = Paginator(active_qs, 10)
         page_obj = paginator.get_page(request.GET.get("page") or 1)
 
-        # --- 3. Dashboard Panel Stats & Queries ---
+        # KPIs
         today = timezone.localdate()
-        stats_received_today = AuditLog.objects.filter(actor=user, action="case_receipt", created_at__date=today).count()
         stats_pending_intake = Case.objects.filter(status="not_received").count()
-        stats_for_assignment = Case.objects.filter(status="received", assigned_to__isnull=True).count()
-        stats_returned_to_owner = Case.objects.filter(status="client_correction").count()
+        stats_ready_assign = Case.objects.filter(status="received", assigned_to__isnull=True).count()
+        stats_received_today = AuditLog.objects.filter(actor=user, action="case_receipt", created_at__date=today).count()
+        stats_returned_lgu = Case.objects.filter(status="client_correction").count()
 
-        # Separate Returned by Examiner vs Freshly Received (Limited to 3 for UI)
+        # Secondary Panels
         returned_cases = Case.objects.filter(
             status="received", 
             assigned_to__isnull=True, 
             returned_by__isnull=False 
-        ).select_related("returned_by").order_by("-returned_at")[:3]
-        
+        ).select_related("returned_by").order_by("-returned_at")[:5]
+
         cases_to_assign = Case.objects.filter(
             status="received", 
             assigned_to__isnull=True, 
             returned_by__isnull=True 
         ).select_related("submitted_by").order_by("updated_at")[:3]
 
-        # --- 4. REQUIRED FOR MODAL: Fetch Examiners ---
         examiners = CustomUser.objects.filter(role="capitol_examiner", is_active=True)
+        recent_logs = AuditLog.objects.filter(actor=user).order_by("-created_at")[:6]
 
         context.update({
+            "section": "capitol_receiving",
             "tab": tab,
             "tabs": [("pending", "Pending Intake", pending_count), ("received", "Received (Unassigned)", received_count)],
             "page_obj": page_obj,
-            "receiver_stats": {
-                "received_today": stats_received_today,
-                "pending_intake": stats_pending_intake,
-                "for_assignment": stats_for_assignment,
-                "returned_to_owner": stats_returned_to_owner,
-            },
-            "returned_cases": returned_cases,   
-            "cases_to_assign": cases_to_assign, 
-            "recent_activity": AuditLog.objects.filter(actor=user).order_by("-created_at")[:5],
-            "examiners": examiners,             
+            "stats_pending_intake": stats_pending_intake,
+            "stats_ready_assign": stats_ready_assign,
+            "stats_received_today": stats_received_today,
+            "stats_returned_lgu": stats_returned_lgu,
+            "returned_cases": returned_cases,
+            "cases_to_assign": cases_to_assign,
+            "recent_logs": recent_logs,
+            "examiners": examiners,
             "q": q,
         })
         template = "core/dashboard_receiver.html"
 
     elif user.role == "capitol_examiner":
-            today = timezone.localdate()
-            
-            # --- 1. Filter Handling ---
-            q = (request.GET.get("q") or "").strip()
-            case_type_filter = (request.GET.get("case_type") or "").strip()
-            lgu_filter = (request.GET.get("lgu") or "").strip()
-            
-            # --- 2. Base Querysets ---
-            # All cases assigned to this examiner
-            base_qs = Case.objects.filter(assigned_to=user).select_related("submitted_by")
-            
-            # --- 3. KPIs (Matching the 5 cards in the design) ---
-            stats_assigned_today = base_qs.filter(assigned_at__date=today).count()
-            stats_pending_intake = base_qs.filter(status="for_review").count() # Freshly assigned
-            stats_under_review = base_qs.filter(status="in_review").count()    # Currently working on
-            stats_returned = base_qs.filter(status="client_correction").count()
-            stats_total_handled = AuditLog.objects.filter(actor=user, action="case_status_change", details__new_status="for_approval").count()
-
-            # --- 4. Main Table: My Assigned Cases ---
-            # Filter active queue
-            active_qs = base_qs.filter(status__in=["for_review", "in_review", "under_review", "client_correction"]).order_by("-assigned_at")
-            
-            if q:
-                active_qs = active_qs.filter(
-                    Q(tracking_id__icontains=q) | 
-                    Q(client_name__icontains=q) |
-                    Q(client_first_name__icontains=q) |
-                    Q(client_last_name__icontains=q)
-                )
-            if case_type_filter:
-                active_qs = active_qs.filter(case_type=case_type_filter)
-            if lgu_filter:
-                active_qs = active_qs.filter(submitted_by__lgu_municipality=lgu_filter)
-
-            paginator = Paginator(active_qs, 5) # Show 5 to leave room for bottom section
-            page_obj = paginator.get_page(request.GET.get("page") or 1)
-
-            # --- 5. Bottom Left: Cases Under Review ---
-            # Just grabbing the oldest ones currently in progress
-            under_review_cases = base_qs.filter(status__in=["in_review", "under_review"]).order_by("assigned_at")[:4]
-
-            # --- 6. Bottom Right: Recent Activity ---
-            recent_logs = AuditLog.objects.filter(actor=user).order_by("-created_at")[:4]
-
-            context.update({
-                "section": "capitol_examiner",
-                "stats_assigned_today": stats_assigned_today,
-                "stats_pending_intake": stats_pending_intake,
-                "stats_under_review": stats_under_review,
-                "stats_returned": stats_returned,
-                "stats_total_handled": stats_total_handled,
-                "page_obj": page_obj,
-                "under_review_cases": under_review_cases,
-                "recent_logs": recent_logs,
-                "filter_q": q,
-                "filter_case_type": case_type_filter,
-                "filter_lgu": lgu_filter,
-                "lgu_choices": CustomUser.LGU_MUNICIPALITY_CHOICES,
-                "case_type_choices": Case.CASE_TYPE_CHOICES,
-            })
-            template = "core/dashboard_examiner.html"
-
-            today = timezone.localdate()
+        today = timezone.localdate()
         
-            # 1. KPIs
-            stats_assigned_today = Case.objects.filter(assigned_to=user, assigned_at__date=today).count()
-            stats_pending_review = Case.objects.filter(assigned_to=user, status__in=["in_review", "for_review", "under_review"]).count()
-            stats_action_required = Case.objects.filter(assigned_to=user, status="client_correction").count()
-            
-            # Total cases examined
-            stats_total_examined = AuditLog.objects.filter(actor=user, action="case_status_change", details__new_status="for_approval").count()
+        q = (request.GET.get("q") or "").strip()
+        case_type_filter = (request.GET.get("case_type") or "").strip()
+        lgu_filter = (request.GET.get("lgu") or "").strip()
+        
+        base_qs = Case.objects.filter(assigned_to=user).select_related("submitted_by")
+        
+        # KPIs
+        stats_assigned_today = base_qs.filter(assigned_at__date=today).count()
+        stats_pending_intake = base_qs.filter(status="for_review").count()
+        stats_under_review = base_qs.filter(status="in_review").count()
+        stats_returned = base_qs.filter(status="client_correction").count()
+        stats_total_handled = AuditLog.objects.filter(actor=user, action="case_status_change", details__new_status="for_approval").count()
 
-            # 2. Main Queue Table
-            qs = Case.objects.filter(assigned_to=user, status__in=["in_review", "for_review", "under_review"]).order_by("-assigned_at")
-            paginator = Paginator(qs, 10)
-            page_obj = paginator.get_page(request.GET.get("page") or 1)
+        # Main Table Queue
+        active_qs = base_qs.filter(status__in=["for_review", "in_review", "under_review", "client_correction"]).order_by("-assigned_at")
+        
+        if q:
+            active_qs = active_qs.filter(
+                Q(tracking_id__icontains=q) | 
+                Q(client_name__icontains=q) |
+                Q(client_first_name__icontains=q) |
+                Q(client_last_name__icontains=q)
+            )
+        if case_type_filter:
+            active_qs = active_qs.filter(case_type=case_type_filter)
+        if lgu_filter:
+            active_qs = active_qs.filter(submitted_by__lgu_municipality=lgu_filter)
 
-            # 3. Recent Activity Logs
-            recent_logs = AuditLog.objects.filter(actor=user).order_by("-created_at")[:5]
+        paginator = Paginator(active_qs, 5)
+        page_obj = paginator.get_page(request.GET.get("page") or 1)
 
-            context.update({
-                "stats_assigned_today": stats_assigned_today,
-                "stats_pending_review": stats_pending_review,
-                "stats_action_required": stats_action_required,
-                "stats_total_examined": stats_total_examined,
-                "page_obj": page_obj,
-                "recent_logs": recent_logs,
-            })
-            template = "core/dashboard_examiner.html" # Fixed Assignment Here
+        under_review_cases = base_qs.filter(status__in=["in_review", "under_review"]).order_by("assigned_at")[:4]
+        recent_logs = AuditLog.objects.filter(actor=user).order_by("-created_at")[:4]
+
+        context.update({
+            "section": "capitol_examiner",
+            "stats_assigned_today": stats_assigned_today,
+            "stats_pending_intake": stats_pending_intake,
+            "stats_under_review": stats_under_review,
+            "stats_returned": stats_returned,
+            "stats_total_handled": stats_total_handled,
+            "page_obj": page_obj,
+            "under_review_cases": under_review_cases,
+            "recent_logs": recent_logs,
+            "filter_q": q,
+            "filter_case_type": case_type_filter,
+            "filter_lgu": lgu_filter,
+            "lgu_choices": CustomUser.LGU_MUNICIPALITY_CHOICES,
+            "case_type_choices": Case.CASE_TYPE_CHOICES,
+        })
+        template = "core/dashboard_examiner.html"
 
     elif user.role == "capitol_approver":
-            today = timezone.localdate()
+        today = timezone.localdate()
 
-            # --- 1. KPIs ---
-            stats_pending_approval = Case.objects.filter(status="for_approval").count()
-            stats_approved_today = AuditLog.objects.filter(actor=user, action="case_approval", created_at__date=today).count()
-            stats_total_signed = AuditLog.objects.filter(actor=user, action="case_approval").count()
-            
-            # Count cases denied/returned to examiner
-            stats_cases_denied = AuditLog.objects.filter(
-                actor=user, 
-                action="case_status_change", 
-                details__new_status="in_review" # Status for returned to Examiner
-            ).count()
+        stats_pending_approval = Case.objects.filter(status="for_approval").count()
+        stats_approved_today = AuditLog.objects.filter(actor=user, action="case_approval", created_at__date=today).count()
+        stats_total_signed = AuditLog.objects.filter(actor=user, action="case_approval").count()
+        stats_cases_denied = AuditLog.objects.filter(actor=user, action="case_status_change", details__new_status="in_review").count()
 
-            # --- 2. Horizontal Div 1: Command Center Table ---
-            # All cases currently waiting for approval
-            qs = Case.objects.filter(status="for_approval").select_related("assigned_to", "submitted_by").order_by("updated_at")
-            paginator = Paginator(qs, 10)
-            page_obj = paginator.get_page(request.GET.get("page") or 1)
+        qs = Case.objects.filter(status="for_approval").select_related("assigned_to", "submitted_by").order_by("updated_at")
+        paginator = Paginator(qs, 10)
+        page_obj = paginator.get_page(request.GET.get("page") or 1)
 
-            # --- 3. Bottom Left: Approved Today ---
-            # Extract tracking IDs from recent approval logs to fetch the actual cases
-            approved_logs = AuditLog.objects.filter(actor=user, action="case_approval", created_at__date=today).order_by("-created_at")[:5]
-            approved_tracking_ids = [log.target_object.replace("Case: ", "") for log in approved_logs]
-            
-            # Preserve order of the recent approvals
-            approved_today_cases = []
-            if approved_tracking_ids:
-                cases_dict = {c.tracking_id: c for c in Case.objects.filter(tracking_id__in=approved_tracking_ids)}
-                approved_today_cases = [cases_dict[tid] for tid in approved_tracking_ids if tid in cases_dict]
+        approved_logs = AuditLog.objects.filter(actor=user, action="case_approval", created_at__date=today).order_by("-created_at")[:5]
+        approved_tracking_ids = [log.target_object.replace("Case: ", "") for log in approved_logs]
+        
+        approved_today_cases = []
+        if approved_tracking_ids:
+            cases_dict = {c.tracking_id: c for c in Case.objects.filter(tracking_id__in=approved_tracking_ids)}
+            approved_today_cases = [cases_dict[tid] for tid in approved_tracking_ids if tid in cases_dict]
 
-            # --- 4. Bottom Right: Staff Activity Monitor ---
-            # See what the rest of the department is doing (e.g., Examiners forwarding cases)
-            staff_activity = AuditLog.objects.filter(
-                action__in=["case_status_change", "case_receipt", "case_assignment"]
-            ).exclude(actor=user).order_by("-created_at")[:6]
+        staff_activity = AuditLog.objects.filter(
+            action__in=["case_status_change", "case_receipt", "case_assignment"]
+        ).exclude(actor=user).order_by("-created_at")[:6]
 
-            context.update({
-                "section": "capitol_approver",
-                "stats_pending_approval": stats_pending_approval,
-                "stats_approved_today": stats_approved_today,
-                "stats_total_signed": stats_total_signed,
-                "stats_cases_denied": stats_cases_denied,
-                "page_obj": page_obj,
-                "approved_today_cases": approved_today_cases,
-                "staff_activity": staff_activity,
-            })
-            template = "core/dashboard_approver.html"
+        context.update({
+            "section": "capitol_approver",
+            "stats_pending_approval": stats_pending_approval,
+            "stats_approved_today": stats_approved_today,
+            "stats_total_signed": stats_total_signed,
+            "stats_cases_denied": stats_cases_denied,
+            "page_obj": page_obj,
+            "approved_today_cases": approved_today_cases,
+            "staff_activity": staff_activity,
+        })
+        template = "core/dashboard_approver.html"
 
     elif user.role == "capitol_taxmapper":
-            today = timezone.localdate()
+        today = timezone.localdate()
 
-            # --- 1. KPIs ---
-            stats_pending_mapping = Case.objects.filter(status="for_taxmapping", taxmapper_assigned_to=user).count()
-            
-            # Count cases where this specific user marked taxmapping as complete
-            stats_completed_today = AuditLog.objects.filter(
-                actor=user, 
-                action="case_status_change", 
-                details__taxmapped=True, 
-                created_at__date=today
-            ).count()
-            
-            stats_total_mapped = AuditLog.objects.filter(
-                actor=user, 
-                action="case_status_change", 
-                details__taxmapped=True
-            ).count()
+        stats_pending_mapping = Case.objects.filter(status="for_taxmapping", taxmapper_assigned_to=user).count()
+        stats_completed_today = AuditLog.objects.filter(actor=user, action="case_status_change", details__taxmapped=True, created_at__date=today).count()
+        stats_total_mapped = AuditLog.objects.filter(actor=user, action="case_status_change", details__taxmapped=True).count()
 
-            # --- 2. Horizontal Div 1: Mapping Queue ---
-            qs = Case.objects.filter(status="for_taxmapping", taxmapper_assigned_to=user).select_related("submitted_by").order_by("updated_at")
-            paginator = Paginator(qs, 10)
-            page_obj = paginator.get_page(request.GET.get("page") or 1)
+        qs = Case.objects.filter(status="for_taxmapping", taxmapper_assigned_to=user).select_related("submitted_by").order_by("updated_at")
+        paginator = Paginator(qs, 10)
+        page_obj = paginator.get_page(request.GET.get("page") or 1)
 
-            # --- 3. Bottom Left: Recently Mapped ---
-            mapped_logs = AuditLog.objects.filter(actor=user, action="case_status_change", details__taxmapped=True).order_by("-created_at")[:5]
-            mapped_tracking_ids = [log.target_object.replace("Case: ", "") for log in mapped_logs]
-            
-            recently_mapped_cases = []
-            if mapped_tracking_ids:
-                cases_dict = {c.tracking_id: c for c in Case.objects.filter(tracking_id__in=mapped_tracking_ids)}
-                # Preserve the chronological order from the logs
-                recently_mapped_cases = [cases_dict[tid] for tid in mapped_tracking_ids if tid in cases_dict]
+        mapped_logs = AuditLog.objects.filter(actor=user, action="case_status_change", details__taxmapped=True).order_by("-created_at")[:5]
+        mapped_tracking_ids = [log.target_object.replace("Case: ", "") for log in mapped_logs]
+        
+        recently_mapped_cases = []
+        if mapped_tracking_ids:
+            cases_dict = {c.tracking_id: c for c in Case.objects.filter(tracking_id__in=mapped_tracking_ids)}
+            recently_mapped_cases = [cases_dict[tid] for tid in mapped_tracking_ids if tid in cases_dict]
 
-            # --- 4. Bottom Right: Routing Activity ---
-            # Show cases routed to this tax mapper
-            routing_activity = AuditLog.objects.filter(
-                action="case_status_change", 
-                details__new_status="for_taxmapping"
-            ).exclude(actor=user).order_by("-created_at")[:6]
+        routing_activity = AuditLog.objects.filter(
+            action="case_status_change", 
+            details__new_status="for_taxmapping"
+        ).exclude(actor=user).order_by("-created_at")[:6]
 
-            context.update({
-                "section": "capitol_taxmapper",
-                "stats_pending_mapping": stats_pending_mapping,
-                "stats_completed_today": stats_completed_today,
-                "stats_total_mapped": stats_total_mapped,
-                "page_obj": page_obj,
-                "recently_mapped_cases": recently_mapped_cases,
-                "routing_activity": routing_activity,
-            })
-            template = "core/dashboard_taxmapper.html"
+        context.update({
+            "section": "capitol_taxmapper",
+            "stats_pending_mapping": stats_pending_mapping,
+            "stats_completed_today": stats_completed_today,
+            "stats_total_mapped": stats_total_mapped,
+            "page_obj": page_obj,
+            "recently_mapped_cases": recently_mapped_cases,
+            "routing_activity": routing_activity,
+        })
+        template = "core/dashboard_taxmapper.html"
 
     elif user.role == "capitol_numberer":
         today = timezone.localdate()
 
-        # 1. Main Table Queue
         qs = Case.objects.filter(status="for_numbering").select_related("assigned_to", "submitted_by").order_by("updated_at")
         paginator = Paginator(qs, 10)
         page_obj = paginator.get_page(request.GET.get("page") or 1)
 
-        # 2. KPIs
         stats_pending = qs.count()
         stats_numbered_today = AuditLog.objects.filter(actor=user, action="case_numbered", created_at__date=today).count()
 
-        # 3. Randomized "Featured" LGU Sequence
         sequences = list(LGUTaxDeclarationSequence.objects.all())
         featured_sequence = random.choice(sequences) if sequences else None
 
-        # 4. Personal Activity
         recent_activity = AuditLog.objects.filter(
             actor=user,
             action__in=["login", "logout", "case_numbered"]
@@ -1464,60 +1295,41 @@ def dashboard(request):
             "recent_activity": recent_activity,
             "stats_pending": stats_pending,
             "stats_numbered_today": stats_numbered_today,
-            "featured_sequence": featured_sequence, # Pass the random LGU
+            "featured_sequence": featured_sequence,
         })
         template = "core/dashboard_numberer.html"
 
-    elif user.role == "capitol_receiving":
-            today = timezone.localdate()
+    elif user.role == "capitol_releaser":
+        today = timezone.localdate()
+        start_of_week = today - timedelta(days=today.weekday())
 
-            # --- 1. KPIs ---
-            # Cases submitted by LGU but not yet physically received
-            stats_pending_intake = Case.objects.filter(status="not_received").count()
-            
-            # Cases received physically, but waiting for an Examiner assignment
-            stats_ready_assign = Case.objects.filter(status="received", assigned_to__isnull=True).count()
-            
-            # Productivity metric
-            stats_received_today = AuditLog.objects.filter(actor=user, action="case_receipt", created_at__date=today).count()
-            
-            # Cases the Receiver sent back to the LGU for missing docs/errors
-            stats_returned_lgu = Case.objects.filter(status="client_correction").count()
+        qs = Case.objects.filter(status="for_release").select_related("assigned_to", "submitted_by").order_by("updated_at")
+        paginator = Paginator(qs, 10)
+        page_obj = paginator.get_page(request.GET.get("page") or 1)
 
-            # --- 2. Main Panel: Active Front Desk Queue ---
-            # Shows BOTH things they need to receive AND things they need to assign
-            qs = Case.objects.filter(
-                Q(status="not_received") | Q(status="received", assigned_to__isnull=True)
-            ).select_related("submitted_by").order_by("created_at")
-            
-            paginator = Paginator(qs, 10)
-            page_obj = paginator.get_page(request.GET.get("page") or 1)
+        stats_pending = qs.count()
+        stats_released_today = AuditLog.objects.filter(actor=user, action="case_released", created_at__date=today).count()
+        stats_released_week = AuditLog.objects.filter(actor=user, action="case_released", created_at__date__gte=start_of_week).count()
+        stats_total_released = AuditLog.objects.filter(actor=user, action="case_released").count()
 
-            # --- 3. Bottom Left: Returned by Examiners ---
-            # High priority: Examiners found an issue and sent it back to the Receiver
-            returned_cases = Case.objects.filter(
-                status="received", 
-                assigned_to__isnull=True,
-                returned_by__isnull=False
-            ).select_related("returned_by").order_by("-returned_at")[:5]
+        recent_activity = AuditLog.objects.filter(
+            actor=user,
+            action__in=["login", "logout", "case_released"]
+        ).order_by("-created_at")[:4]
 
-            # --- 4. Bottom Right: My Recent Activity ---
-            recent_logs = AuditLog.objects.filter(actor=user).order_by("-created_at")[:6]
-
-            context.update({
-                "section": "capitol_receiving",
-                "stats_pending_intake": stats_pending_intake,
-                "stats_ready_assign": stats_ready_assign,
-                "stats_received_today": stats_received_today,
-                "stats_returned_lgu": stats_returned_lgu,
-                "page_obj": page_obj,
-                "returned_cases": returned_cases,
-                "recent_logs": recent_logs,
-            })
-            template = "core/dashboard_receiver.html"
-            
+        context.update({
+            "section": "capitol_releaser",
+            "page_obj": page_obj,
+            "stats_pending": stats_pending,
+            "stats_released_today": stats_released_today,
+            "stats_released_week": stats_released_week,
+            "stats_total_released": stats_total_released,
+            "recent_activity": recent_activity,
+        })
+        template = "core/dashboard_releaser.html"
+        
     else:
-            template = "core/dashboard_capitol.html" # Fallback if no matching role
+        template = "core/dashboard_capitol.html" # Fallback if no matching role
 
     return render(request, template, context)
 
@@ -1555,6 +1367,36 @@ def assign_td_number(request, tracking_id):
             
     return redirect("dashboard")
 
+
+
+@login_required
+def release_case(request, tracking_id):
+    """Marks a case as officially released to the client/LGU."""
+    # Ensure only releasers or superadmins can do this
+    if request.user.role not in ["capitol_releaser", "super_admin"]:
+        messages.error(request, "Unauthorized access.")
+        return redirect("dashboard")
+
+    case = get_object_or_404(Case, tracking_id=tracking_id, status="for_release")
+
+    if request.method == "POST":
+        # 1. Update Status and Timestamp
+        case.status = "released"
+        case.released_at = timezone.now()
+        case.save()
+
+        # 2. Create Audit Log for the Activity Feed
+        AuditLog.objects.create(
+            actor=request.user,
+            action="case_released",
+            target_object=f"Case: {case.tracking_id}",
+            details={"client": case.client_name, "td_number": case.td_number}
+        )
+
+        messages.success(request, f"Case {case.tracking_id} has been successfully released!")
+            
+    return redirect("dashboard")
+    
 @login_required
 def user_management(request):
     denial = _require_super_admin(request)

@@ -1,4 +1,4 @@
-{% extends 'base_admin.html' %}
+{% extends 'base_new.html' %}
 {% load static %}
 
 {% block extra_css %}
@@ -181,12 +181,18 @@
 {% endblock %}
 
 {% block content %}
-    <div class="header">
-        <div class="greeting">
-            <h1>Hi, {{ user.first_name|default:"Super Admin" }}!</h1>
-            <span>Super Admin Dashboard</span>
+    <div class="header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2rem;">
+        <div>
+            <h1 style="font-size: 1.75rem; font-weight: 700; color: #0f172a; margin: 0;">Hi, {{ request.user.first_name|default:"Super Admin" }}!</h1>
+            <p style="color: #64748b; margin-top: 0.25rem; font-family: 'Inter', sans-serif; font-weight: 500;">
+                <span style="color: #3b82f6; font-weight: 700;">{{ request.user.staff_id|default:"ADM-001" }}</span> 
+                <span style="margin: 0 8px; color: #cbd5e1;">|</span> 
+                System Administrator
+            </p>
         </div>
-        <a href="{% url 'create_staff_account' %}" class="btn-primary"><i class="ri-user-add-line"></i> Create New Account</a>
+        <a href="{% url 'create_staff_account' %}" class="btn-primary" style="background-color: #2563eb; color: white; padding: 0.6rem 1.25rem; border-radius: 6px; text-decoration: none; font-weight: 500; display: flex; align-items: center; gap: 0.5rem;">
+            <i class="ri-user-add-line"></i> Create New Account
+        </a>
     </div>
 
     <!-- DYNAMIC KPI ROW -->
@@ -286,81 +292,78 @@
     </div>
 
     <!-- BOTTOM PANELS -->
-    <div class="bottom-grid">
+<!-- BOTTOM PANELS -->
+<div class="bottom-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; align-items: stretch;">
+    
+    <!-- Chart Panel: Users by Role -->
+    <div class="panel" style="background: white; border-radius: 12px; border: 1px solid #e2e8f0; padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: flex; flex-direction: column;">
+        <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+            <h3 style="font-weight: 700; color: #1e293b; font-size: 1.1rem; margin: 0;">Users by Role</h3>
+            <a href="{% url 'staff_reports' %}" style="color: #2563eb; font-size: 0.85rem; text-decoration: none; font-weight: 500;">View Report</a>
+        </div>
         
-        <!-- Chart Panel -->
-        <div class="panel" style="margin-bottom: 0;">
-            <div class="panel-header">
-                <h3 class="panel-title">Users by Role</h3>
-                <a href="{% url 'staff_reports' %}" class="view-all-link">View Report</a>
+        <div class="chart-container" style="display: flex; align-items: center; justify-content: space-around; flex: 1; padding: 0 1rem;">
+            <!-- Chart Wrapper -->
+            <div class="chart-wrapper" style="position: relative; width: 180px; height: 180px; flex-shrink: 0;">
+                <canvas id="roleChart"></canvas>
+                <div class="chart-center-text" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center;">
+                    <h3 style="font-size: 1.75rem; font-weight: 800; margin: 0; color: #0f172a;">{{ total_users_count }}</h3>
+                    <span style="font-size: 0.75rem; color: #64748b; font-weight: 600; text-transform: uppercase;">Total Users</span>
+                </div>
             </div>
             
-            <div class="chart-container">
-                <div class="chart-wrapper">
-                    <canvas id="roleChart"></canvas>
-                    <div class="chart-center-text">
-                        <h3>{{ total_users_count }}</h3>
-                        <span>Total Users</span>
-                    </div>
-                </div>
-                
-                <div class="chart-legend">
-                    <ul>
-                        <li><div class="legend-dot" style="background:#0ea5e9;"></div> LGU Admin </li>
-                        <li><div class="legend-dot" style="background:#a855f7;"></div> Capitol Receiver </li>
-                        <li><div class="legend-dot" style="background:#eab308;"></div> Capitol Examiner </li>
-                        <li><div class="legend-dot" style="background:#22c55e;"></div> Capitol Approver </li>
-                        <li><div class="legend-dot" style="background:#ef4444;"></div> Capitol Numberer </li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-
-        <!-- Activity Panel -->
-        <div class="panel" style="margin-bottom: 0;">
-            <div class="panel-header">
-                <h3 class="panel-title">Recent Account Activity</h3>
-                <a href="{% url 'audit_logs' %}" class="view-all-link" style="color: var(--primary);">
-                    View Full History <i class="ri-arrow-right-line" style="vertical-align: middle;"></i>
-                </a>
-            </div>
-
-            <div class="activity-list">
-                {% for log in recent_logs %}
-                    <div class="activity-item">
-                        <div class="activity-left">
-                            <div class="activity-icon 
-                                {% if log.action in 'create_user,activate_account,reactivate_user' %}icon-green
-                                {% elif log.action in 'deactivate_user,login_failed' %}icon-red
-                                {% else %}icon-blue{% endif %}">
-                                
-                                <i class="{% if log.action in 'create_user,activate_account' %}ri-user-add-line
-                                          {% elif log.action == 'deactivate_user' %}ri-user-unfollow-line
-                                          {% elif log.action in 'login,logout' %}ri-login-box-line
-                                          {% elif log.action == 'reset_password' %}ri-lock-unlock-line
-                                          {% else %}ri-user-settings-line{% endif %}"></i>
-                            </div>
-                            <div class="activity-text">
-                                <strong>{{ log.get_action_display }}</strong>
-                                <span>
-                                    {% if log.target_user %}
-                                        {{ log.target_user.full_name|default:log.target_user.email }}
-                                    {% elif log.actor %}
-                                        by {{ log.actor.full_name|default:log.actor.email }}
-                                    {% else %}
-                                        {{ log.target_object|default:"System Event" }}
-                                    {% endif %}
-                                </span>
-                            </div>
-                        </div>
-                        <div class="activity-time">{{ log.created_at|timesince }} ago</div>
-                    </div>
-                {% empty %}
-                    <div class="text-center muted" style="padding: 2rem;">No recent activity found.</div>
-                {% endfor %}
+            <!-- Custom Legend -->
+            <div class="chart-legend" style="margin-left: 2rem;">
+                <ul style="list-style: none; padding: 0; margin: 0; display: grid; gap: 0.75rem;">
+                    <li style="display: flex; align-items: center; gap: 0.75rem; font-size: 0.9rem; font-weight: 500; color: #334155;">
+                        <div style="width: 12px; height: 12px; border-radius: 3px; background: #0ea5e9; border: 1px solid rgba(0,0,0,0.05);"></div> LGU Admin
+                    </li>
+                    <li style="display: flex; align-items: center; gap: 0.75rem; font-size: 0.9rem; font-weight: 500; color: #334155;">
+                        <div style="width: 12px; height: 12px; border-radius: 3px; background: #a855f7; border: 1px solid rgba(0,0,0,0.05);"></div> Capitol Receiver
+                    </li>
+                    <li style="display: flex; align-items: center; gap: 0.75rem; font-size: 0.9rem; font-weight: 500; color: #334155;">
+                        <div style="width: 12px; height: 12px; border-radius: 3px; background: #eab308; border: 1px solid rgba(0,0,0,0.05);"></div> Capitol Examiner
+                    </li>
+                    <li style="display: flex; align-items: center; gap: 0.75rem; font-size: 0.9rem; font-weight: 500; color: #334155;">
+                        <div style="width: 12px; height: 12px; border-radius: 3px; background: #22c55e; border: 1px solid rgba(0,0,0,0.05);"></div> Capitol Approver
+                    </li>
+                    <li style="display: flex; align-items: center; gap: 0.75rem; font-size: 0.9rem; font-weight: 500; color: #334155;">
+                        <div style="width: 12px; height: 12px; border-radius: 3px; background: #ef4444; border: 1px solid rgba(0,0,0,0.05);"></div> Capitol Numberer
+                    </li>
+                </ul>
             </div>
         </div>
     </div>
+
+    <!-- Activity Panel -->
+    <div class="panel" style="background: white; border-radius: 12px; border: 1px solid #e2e8f0; padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: flex; flex-direction: column;">
+        <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+            <h3 style="font-weight: 700; color: #1e293b; font-size: 1.1rem; margin: 0;">Recent Account Activity</h3>
+            <a href="{% url 'audit_logs' %}" style="color: #2563eb; font-size: 0.85rem; text-decoration: none; font-weight: 500;">View Full History &rarr;</a>
+        </div>
+
+        <div class="activity-list" style="display: flex; flex-direction: column; gap: 1.25rem;">
+            {% for log in recent_logs %}
+                <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 0.75rem; border-bottom: 1px solid #f1f5f9;">
+                    <div style="display: flex; gap: 1rem; align-items: center;">
+                        <div style="width: 36px; height: 36px; border-radius: 50%; background: #f8fafc; border: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: center;">
+                            <i class="ri-user-settings-line" style="color: #64748b; font-size: 1.1rem;"></i>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.85rem; font-weight: 600; color: #334155;">{{ log.get_action_display }}</div>
+                            <div style="font-size: 0.75rem; color: #64748b; margin-top: 1px;">
+                                by {{ log.actor.get_full_name|default:log.actor.email }}
+                            </div>
+                        </div>
+                    </div>
+                    <div style="font-size: 0.7rem; color: #94a3b8; font-weight: 500;">{{ log.created_at|timesince }} ago</div>
+                </div>
+            {% empty %}
+                <div style="text-align: center; padding: 2rem; color: #94a3b8;">No recent activity.</div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -562,38 +565,44 @@
     });
 
     // --- Chart.js Rendering ---
-    document.addEventListener("DOMContentLoaded", function() {
-        const ctx = document.getElementById('roleChart');
-        if (ctx) {
-            const roleData = JSON.parse('{{ role_distribution_array|default:"[0,0,0,0,0]"|safe }}');
+document.addEventListener("DOMContentLoaded", function() {
+    // Initialize role chart
+    const ctx = document.getElementById('roleChart');
+    if (ctx) {
+        const roleData = JSON.parse('{{ role_distribution_array|default:"[0,0,0,0,0]"|safe }}');
 
-            new Chart(ctx.getContext('2d'), {
-                type: 'doughnut',
-                data: {
-                    labels: ['LGU Admin', 'Receiver', 'Examiner', 'Approver', 'Numberer'],
-                    datasets: [{
-                        data: roleData,
-                        backgroundColor: ['#0ea5e9', '#a855f7', '#eab308', '#22c55e', '#ef4444'],
-                        borderWidth: 0,
-                        cutout: '78%'
-                    }]
+        new Chart(ctx.getContext('2d'), {
+            type: 'doughnut',
+            data: {
+                labels: ['LGU Admin', 'Receiver', 'Examiner', 'Approver', 'Numberer'],
+                datasets: [{
+                    data: roleData,
+                    backgroundColor: ['#0ea5e9', '#a855f7', '#eab308', '#22c55e', '#ef4444'],
+                    borderWidth: 0,
+                    cutout: '78%'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { enabled: true }
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { 
-                        legend: { display: false },
-                        tooltip: { enabled: true }
-                    },
-                    animation: { animateScale: true }
-                }
-            });
-        }
+                animation: { animateScale: true }
+            }
+        });
+    }
 
-        // Fire initial load
-        if (typeof loadTableData === 'function') {
-            loadTableData();
-        }
-    });
+    // Initial table load
+    if (typeof loadTableData === 'function') {
+        loadTableData();
+    }
+
+    // Auto-refresh every 10 seconds
+    setInterval(() => {
+        loadTableData();
+    }, 10000);
+});
 </script>
 {% endblock %}
