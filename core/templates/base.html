@@ -23,6 +23,36 @@
             --shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
         }
 
+        body[data-theme="dark"] {
+            --bg: #0b1220;
+            --card: #0f172a;
+            --text: #e5e7eb;
+            --muted: #94a3b8;
+            --border: #1f2a44;
+            --border-strong: #334155;
+            --primary: #60a5fa;
+            --accent: #f7d400;
+            --danger: #f87171;
+            --sidebar: #0f172a;
+            --shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            body[data-theme="system"] {
+                --bg: #0b1220;
+                --card: #0f172a;
+                --text: #e5e7eb;
+                --muted: #94a3b8;
+                --border: #1f2a44;
+                --border-strong: #334155;
+                --primary: #60a5fa;
+                --accent: #f7d400;
+                --danger: #f87171;
+                --sidebar: #0f172a;
+                --shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+            }
+        }
+
         * { box-sizing: border-box; }
         body {font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; line-height:1.45; margin:0; background:var(--bg); color:var(--text);}
         a {color:inherit; text-decoration:none;}
@@ -233,13 +263,13 @@
         }
     </style>
 </head>
-<body>
+<body data-theme="{% if user.is_authenticated %}{{ user.theme_preference|default:'light' }}{% else %}light{% endif %}">
     {% if user.is_authenticated %}
         <div class="app">
             <aside class="sidebar {% block sidebar_class %}{% endblock %}" aria-label="Sidebar">
                 <div class="sidebar__brand">
                     <a href="{% url 'dashboard' %}">
-                        <img src="{% static 'core/PAStrackLOGO.png' %}" alt="PAStrack" />
+                        <img src="{% static 'core/logo.png' %}" alt="PAStrack" />
                         <span class="brand-text">PAStrack</span>
                     </a>
                 </div>
@@ -324,7 +354,7 @@
                         </a>
                     {% endif %}
 
-                    <a class="sideitem {% if request.resolver_match.url_name == 'profile' %}active{% endif %}" href="{% url 'profile' %}" title="Settings">
+                    <a class="sideitem {% if request.resolver_match.url_name == 'settings' %}active{% endif %}" href="{% url 'settings' %}" title="Settings">
                         <svg class="sideicon" viewBox="0 0 24 24" fill="none">
                             <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM19.4 15a7.9 7.9 0 0 0 .1-2l2-1.5-2-3.5-2.4 1a8 8 0 0 0-1.7-1l-.3-2.6H9l-.3 2.6a8 8 0 0 0-1.7 1l-2.4-1-2 3.5 2 1.5a7.9 7.9 0 0 0 0 2l-2 1.5 2 3.5 2.4-1a8 8 0 0 0 1.7 1L9 22h6l.3-2.6a8 8 0 0 0 1.7-1l2.4 1 2-3.5-2-1.5Z" fill="currentColor" opacity=".9"/>
                         </svg>

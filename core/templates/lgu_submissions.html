@@ -1,5 +1,6 @@
 {% extends 'base_new.html' %}
 {% load static %}
+{% load core_extras %}
 
 {% block title %}My Submissions | LegalTrack{% endblock %}
 
@@ -72,7 +73,7 @@
         .owner-info strong { display: block; font-size: 0.875rem; font-weight: 600; color: var(--text-main); margin-bottom: 0.1rem; }
         .owner-info span { font-size: 0.75rem; color: var(--text-muted); }
 
-        /* Status Pills (Only Pending and Received based on rules) */
+        /* Status Pills */
         .status-pill {
             display: inline-flex; align-items: center; gap: 0.3rem;
             padding: 0.25rem 0.75rem; border-radius: 999px;
@@ -81,11 +82,29 @@
         }
         .status-pill::before { content: ''; display: block; width: 6px; height: 6px; border-radius: 50%; }
         
-        .status-not_received, .status-pending { background: #fef3c7; color: #b45309; border-color: #fde68a; }
-        .status-not_received::before, .status-pending::before { background-color: #b45309; }
+        .status-pending, .status-not_received { background: #fef3c7; color: #b45309; border-color: #fde68a; }
+        .status-pending::before, .status-not_received::before { background-color: #b45309; }
+
+        .status-returned, .status-client_correction { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
+        .status-returned::before, .status-client_correction::before { background-color: #991b1b; }
         
-        .status-received { background: var(--primary-light); color: var(--primary); border-color: #bfdbfe; }
-        .status-received::before { background-color: var(--primary); }
+        .status-received { background: #e0f2fe; color: #0369a1; border-color: #bae6fd; }
+        .status-received::before { background-color: #0369a1; }
+
+        .status-to_examine, .status-for_review, .status-in_review, .status-under_review { background: #e0e7ff; color: #4338ca; border-color: #c7d2fe; }
+        .status-to_examine::before, .status-for_review::before, .status-in_review::before, .status-under_review::before { background-color: #4338ca; }
+
+        .status-for_taxmapping { background: #ffedd5; color: #c2410c; border-color: #fed7aa; }
+        .status-for_taxmapping::before { background-color: #c2410c; }
+
+        .status-for_approval { background: #f3e8ff; color: #7e22ce; border-color: #e9d5ff; }
+        .status-for_approval::before { background-color: #7e22ce; }
+
+        .status-for_numbering, .status-for_release { background: #fce7f3; color: #be185d; border-color: #fbcfe8; }
+        .status-for_numbering::before, .status-for_release::before { background-color: #be185d; }
+
+        .status-released { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
+        .status-released::before { background-color: #166534; }
 
         .action-btn { border: none; background: transparent; cursor: pointer; color: var(--text-light); padding: 0.4rem; border-radius: var(--radius-md); transition: 0.2s; font-size: 1.1rem; text-decoration: none;}
         .action-btn:hover { background: var(--inactive-bg); color: var(--primary); }
@@ -111,15 +130,11 @@
     <div class="panel">
         <!-- Status Tabs -->
         <div class="tabs">
-            <a href="?tab=total{% if query %}&q={{ query }}{% endif %}" class="tab {% if tab == 'total' %}active{% endif %}">
-                All Submissions <span class="tab-badge">{{ total_count }}</span>
-            </a>
-            <a href="?tab=pending{% if query %}&q={{ query }}{% endif %}" class="tab {% if tab == 'pending' %}active{% endif %}">
-                Pending Submission <span class="tab-badge">{{ pending_count }}</span>
-            </a>
-            <a href="?tab=received{% if query %}&q={{ query }}{% endif %}" class="tab {% if tab == 'received' %}active{% endif %}">
-                Received <span class="tab-badge">{{ received_count }}</span>
-            </a>
+            {% for key, label in tabs %}
+                <a href="?tab={{ key }}{% if query %}&q={{ query }}{% endif %}" class="tab {% if tab == key %}active{% endif %}">
+                    {{ label }} <span class="tab-badge">{{ counts|get_item:key|default:"0" }}</span>
+                </a>
+            {% endfor %}
         </div>
 
         <!-- Advanced Toolbar -->
@@ -166,17 +181,21 @@
                             <td>
                                 <!-- Status locked strictly to pending or received -->
                                 <span class="status-pill status-{{ case.status }}">
-                                    {% if case.status == 'received' %}Received
-                                    {% else %}Pending Submission{% endif %}
+                                    {{ case.get_status_display|default:case.status }}
                                 </span>
                             </td>
                             <td style="color: var(--text-muted); font-size: 0.8rem;">
-                                {{ case.created_at|date:"M d, Y" }} <br> 
-                                <span style="font-size: 0.7rem;">{{ case.created_at|time:"H:i A" }}</span>
+                                {% if case.lgu_submitted_at %}
+                                    {{ case.lgu_submitted_at|date:"M d, Y" }} <br>
+                                    <span style="font-size: 0.7rem;">{{ case.lgu_submitted_at|time:"h:i A" }}</span>
+                                {% else %}
+                                    {{ case.created_at|date:"M d, Y" }} <br>
+                                    <span style="font-size: 0.7rem;">{{ case.created_at|time:"h:i A" }}</span>
+                                {% endif %}
                             </td>
                             <td style="text-align: right;">
                                 <a href="{% url 'case_detail' case.tracking_id %}" class="action-btn" title="View Details"><i class="ri-eye-line"></i></a>
-                                {% if case.status == 'not_received' or case.status == 'pending' %}
+                                {% if case.status == 'not_received' or case.status == 'pending' or case.status == 'returned' or case.status == 'client_correction' %}
                                     <a href="{% url 'case_wizard' case.tracking_id 1 %}" class="action-btn" title="Edit Data" style="color: var(--primary);"><i class="ri-pencil-line"></i></a>
                                 {% endif %}
                             </td>

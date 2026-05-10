@@ -183,6 +183,14 @@
                 <span>Page <strong>{{ page_obj.number }}</strong> of <strong>{{ page_obj.paginator.num_pages }}</strong></span>
                 
                 <div class="pagination-controls">
+                    {% if page_obj.number|default:1|add:"0" > 1 %}
+                        <a class="page-btn" href="?page=1&action={{ action_filter }}&q={{ q_filter }}">
+                            <i class="ri-skip-left-line" style="vertical-align: middle;"></i> First
+                        </a>
+                    {% else %}
+                        <button class="page-btn" disabled><i class="ri-skip-left-line" style="vertical-align: middle;"></i> First</button>
+                    {% endif %}
+
                     {% if page_obj.has_previous %}
                         <a class="page-btn" href="?page={{ page_obj.previous_page_number }}&action={{ action_filter }}&q={{ q_filter }}">
                             <i class="ri-arrow-left-s-line" style="vertical-align: middle;"></i> Prev
@@ -191,7 +199,7 @@
                         <button class="page-btn" disabled><i class="ri-arrow-left-s-line" style="vertical-align: middle;"></i> Prev</button>
                     {% endif %}
 
-                    {% for p in page_obj.paginator.page_range %}
+                    {% for p in page_window %}
                         {% if p == page_obj.number %}
                             <button class="page-btn active">{{ p }}</button>
                         {% else %}
@@ -205,6 +213,14 @@
                         </a>
                     {% else %}
                         <button class="page-btn" disabled>Next <i class="ri-arrow-right-s-line" style="vertical-align: middle;"></i></button>
+                    {% endif %}
+
+                    {% if page_obj.number < num_pages %}
+                        <a class="page-btn" href="?page={{ num_pages }}&action={{ action_filter }}&q={{ q_filter }}">
+                            Last <i class="ri-skip-right-line" style="vertical-align: middle;"></i>
+                        </a>
+                    {% else %}
+                        <button class="page-btn" disabled>Last <i class="ri-skip-right-line" style="vertical-align: middle;"></i></button>
                     {% endif %}
                 </div>
             </div>

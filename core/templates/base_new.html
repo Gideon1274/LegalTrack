@@ -41,6 +41,36 @@
             --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
+        body[data-theme="dark"] {
+            --bg-body: #0b1220;
+            --bg-surface: #0f172a;
+            --text-main: #e5e7eb;
+            --text-muted: #94a3b8;
+            --text-light: #64748b;
+            --primary: #60a5fa;
+            --primary-hover: #3b82f6;
+            --primary-light: rgba(96, 165, 250, 0.16);
+            --border: #1f2a44;
+            --border-hover: #334155;
+            --inactive-bg: rgba(148, 163, 184, 0.12);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            body[data-theme="system"] {
+                --bg-body: #0b1220;
+                --bg-surface: #0f172a;
+                --text-main: #e5e7eb;
+                --text-muted: #94a3b8;
+                --text-light: #64748b;
+                --primary: #60a5fa;
+                --primary-hover: #3b82f6;
+                --primary-light: rgba(96, 165, 250, 0.16);
+                --border: #1f2a44;
+                --border-hover: #334155;
+                --inactive-bg: rgba(148, 163, 184, 0.12);
+            }
+        }
+
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         /* STRICT FULL-SCREEN LOCK */
@@ -296,7 +326,7 @@
     <!-- Block for page-specific CSS -->
     {% block extra_css %}{% endblock %}
 </head>
-<body>
+<body data-theme="{{ request.user.theme_preference|default:'light' }}">
 
     <!-- INTERACTIVE SIDEBAR -->
     <aside class="sidebar">
@@ -326,8 +356,8 @@
 
             <!-- 3. LGU Admin ONLY -->
             {% if request.user.role == "lgu_admin" %}
-            <a href="{% url 'submissions' %}" class="nav-item {% if request.resolver_match.url_name == 'submissions' %}active{% endif %}">
-                <i class="ri-folder-open-line"></i> <span class="hide-text">My Submissions</span>
+            <a href="{% url 'my_submissions' %}" class="nav-item {% if request.resolver_match.url_name == 'my_submissions' %}active{% endif %}">
+                <i class="ri-folder-open-line"></i> <span class="hide-text">Submissions</span>
             </a>
             <a href="{% url 'drafts' %}" class="nav-item {% if request.resolver_match.url_name == 'drafts' %}active{% endif %}">
                 <i class="ri-file-edit-line"></i> <span class="hide-text">Drafts</span>
@@ -354,8 +384,12 @@
             <a href="{% url 'audit_logs' %}" class="nav-item {% if 'log' in request.resolver_match.url_name %}active{% endif %}">
                 <i class="ri-history-line"></i> <span class="hide-text">Activity Logs</span>
             </a>
-            
+
             <a href="{% url 'profile' %}" class="nav-item {% if request.resolver_match.url_name == 'profile' %}active{% endif %}">
+                <i class="ri-user-3-line"></i> <span class="hide-text">Profile</span>
+            </a>
+            
+            <a href="{% url 'settings' %}" class="nav-item {% if request.resolver_match.url_name == 'settings' %}active{% endif %}">
                 <i class="ri-settings-4-line"></i> <span class="hide-text">Settings</span>
             </a>
         </nav>

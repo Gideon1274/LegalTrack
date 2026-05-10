@@ -70,6 +70,21 @@ class CustomUser(AbstractUser):
     position = models.CharField(max_length=120, blank=True)
     role = models.CharField(max_length=50, choices=ROLE_CHOICES, null=False)
 
+    photo = models.ImageField(upload_to="profile_photos/", blank=True, null=True)
+
+    THEME_CHOICES: ClassVar[list[tuple[str, str]]] = [
+        ("light", "Light"),
+        ("dark", "Dark"),
+        ("system", "System"),
+    ]
+    theme_preference = models.CharField(max_length=16, choices=THEME_CHOICES, default="light")
+    timezone_preference = models.CharField(max_length=64, default="Asia/Manila")
+    date_format_preference = models.CharField(max_length=32, default="YYYY-MM-DD")
+
+    notify_new_account_activations = models.BooleanField(default=True)
+    notify_weekly_activity_report = models.BooleanField(default=False)
+    notify_critical_system_alerts = models.BooleanField(default=True)
+
     # Module 1.2: force password change on first login for admin-created accounts
     must_change_password = models.BooleanField(default=False)
 
@@ -251,11 +266,9 @@ class CustomUser(AbstractUser):
 
         temp_password: str | None = None
 
-        # Keep legacy `full_name` populated when first/last are used.
-        if not (self.full_name or "").strip():
-            computed = f"{(self.first_name or '').strip()} {(self.last_name or '').strip()}".strip()
-            if computed:
-                self.full_name = computed
+        computed = f"{(self.first_name or '').strip()} {(self.last_name or '').strip()}".strip()
+        if computed:
+            self.full_name = computed
 
         if is_new:
             # Generate Staff ID
@@ -296,7 +309,7 @@ class CustomUser(AbstractUser):
                 print(f"Email: {self.email}")
                 print(f"Staff ID: {self.username}")
                 print(f"Password: {temp_password}")
-                print("Login: http://127.0.0.1:8000/accounts/login/")
+                print("Login: http://127.0.0.1:8000/login/")
                 print("========================\n")
 
             # Audit log
