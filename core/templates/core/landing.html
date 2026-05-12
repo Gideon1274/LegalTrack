@@ -4,32 +4,674 @@
 {% block container_class %}container--narrow{% endblock %}
 
 {% block auth_content %}
-<div class="card text-center">
-    <div style="display:flex; justify-content:center; margin:0 auto 12px auto;">
-        <img src="{% static 'core/PAStrackLOGO.png' %}" alt="PAStrack" style="max-width:340px; width:100%; height:auto;" />
-    </div>
-    <h1 class="page-title">PAStrack</h1>
-    <p class="page-subtitle">Track your request status using your Tracking Number.</p>
 
-    <form method="get" action="{% url 'track_case' %}" class="searchbar searchbar--center mt-14" style="margin:0;">
-        <div class="grow">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap');
+
+  :root {
+    --c-blue: #1a56db;
+    --c-blue-hover: #1648c0;
+    --c-blue-light: #eff4ff;
+    --c-blue-mid: #c7d7fd;
+    --c-yellow: #f5c400;
+    --c-surface: #f3f4f6;
+    --c-white: #ffffff;
+    --c-border: #e5e7eb;
+    --c-border-strong: #d1d5db;
+    --c-text: #111827;
+    --c-text-muted: #6b7280;
+    --c-text-hint: #9ca3af;
+    --c-warn-bg: #fffbeb;
+    --c-warn-border: #fde68a;
+    --c-warn-text: #92400e;
+    --c-red: #dc2626;
+    --c-red-bg: #fef2f2;
+    --c-red-border: #fecaca;
+    --c-red-text: #991b1b;
+    --c-red-mid: #fca5a5;
+    --r-card: 14px;
+    --r-input: 8px;
+    --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.05);
+    --shadow-lg: 0 10px 40px rgba(0,0,0,.14), 0 2px 8px rgba(0,0,0,.08);
+    --font: 'DM Sans', system-ui, sans-serif;
+    --mono: 'DM Mono', monospace;
+  }
+
+  /* ── Shell ── */
+  .pas-shell {
+    min-height: 100vh;
+    background: var(--c-surface);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2.5rem 1rem;
+    font-family: var(--font);
+  }
+
+  .pas-inner {
+    width: 100%;
+    max-width: 480px;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    animation: fadein .4s ease both;
+  }
+
+  @keyframes fadein {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── Brand ── */
+  .pas-brand {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: .25rem;
+  }
+  .pas-logo-box {
+    width: 44px; height: 44px;
+    background: var(--c-white);
+    border: 1px solid var(--c-border);
+    border-radius: 11px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .pas-logo-box img { width: 34px; height: auto; }
+  .pas-wordmark {
+    font-size: 1.6rem;
+    font-weight: 600;
+    letter-spacing: -.025em;
+    color: var(--c-text);
+    line-height: 1;
+  }
+  .pas-wordmark span { color: var(--c-yellow); }
+
+  /* ── Card ── */
+  .pas-card {
+    background: var(--c-white);
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-card);
+    box-shadow: var(--shadow);
+    padding: 1.75rem 2rem;
+  }
+
+  /* ── Badge ── */
+  .pas-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--c-blue-light);
+    color: var(--c-blue);
+    font-size: .7rem;
+    font-weight: 600;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    padding: 3px 9px;
+    border-radius: 99px;
+    border: 1px solid var(--c-blue-mid);
+    margin-bottom: .9rem;
+  }
+  .pas-badge-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--c-blue);
+    flex-shrink: 0;
+  }
+
+  /* ── Typography ── */
+  .pas-title {
+    font-size: 1.4rem;
+    font-weight: 600;
+    color: var(--c-text);
+    letter-spacing: -.02em;
+    margin: 0 0 .35rem;
+  }
+  .pas-sub {
+    font-size: .875rem;
+    color: var(--c-text-muted);
+    line-height: 1.6;
+    margin: 0 0 1.4rem;
+  }
+
+  /* ── Search row ── */
+  .pas-search-row {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+  }
+  .pas-field { flex: 1; }
+  .pas-field label {
+    display: block;
+    font-size: .7rem;
+    font-weight: 600;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    color: var(--c-text-hint);
+    margin-bottom: 5px;
+  }
+  .pas-field input {
+    width: 100%;
+    box-sizing: border-box;
+    height: 42px;
+    padding: 0 12px;
+    border: 1.5px solid var(--c-border-strong);
+    border-radius: var(--r-input);
+    font-size: .88rem;
+    font-family: var(--mono);
+    color: var(--c-text);
+    background: var(--c-white);
+    outline: none;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .pas-field input::placeholder {
+    color: var(--c-text-hint);
+    font-family: var(--font);
+  }
+  .pas-field input:focus {
+    border-color: var(--c-blue);
+    box-shadow: 0 0 0 3px rgba(26,86,219,.12);
+  }
+  .pas-field input.input--error {
+    border-color: var(--c-red);
+    box-shadow: 0 0 0 3px rgba(220,38,38,.1);
+  }
+
+  /* ── Button ── */
+  .pas-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 42px;
+    padding: 0 18px;
+    background: var(--c-blue);
+    color: #fff;
+    font-family: var(--font);
+    font-size: .88rem;
+    font-weight: 600;
+    border: none;
+    border-radius: var(--r-input);
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: background .15s, transform .1s;
+  }
+  .pas-btn:hover  { background: var(--c-blue-hover); }
+  .pas-btn:active { transform: scale(.97); }
+  .pas-btn svg {
+    width: 14px; height: 14px;
+    stroke: #fff; fill: none;
+    stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round;
+  }
+
+  /* ── Divider ── */
+  .pas-divider {
+    border: none;
+    border-top: 1px solid var(--c-border);
+    margin: 1.4rem 0 1.1rem;
+  }
+
+  /* ── Footer links ── */
+  .pas-links {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    font-size: .8rem;
+  }
+  .pas-links a {
+    color: var(--c-text-muted);
+    text-decoration: none;
+    transition: color .15s;
+  }
+  .pas-links a:hover { color: var(--c-blue); }
+  .pas-links .dot { color: var(--c-border-strong); }
+
+  /* ── Info card ── */
+  .pas-info {
+    background: var(--c-warn-bg);
+    border: 1px solid var(--c-warn-border);
+    border-radius: var(--r-card);
+    padding: 1rem 1.25rem;
+    display: flex;
+    gap: 11px;
+    align-items: flex-start;
+  }
+  .pas-info-icon {
+    flex-shrink: 0;
+    width: 30px; height: 30px;
+    background: var(--c-warn-border);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .pas-info-icon svg {
+    width: 15px; height: 15px;
+    stroke: var(--c-warn-text); fill: none;
+    stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  }
+  .pas-info-text h3 {
+    font-size: .84rem;
+    font-weight: 600;
+    color: var(--c-warn-text);
+    margin: 0 0 3px;
+  }
+  .pas-info-text p {
+    font-size: .8rem;
+    color: #92400e;
+    line-height: 1.55;
+    margin: 0;
+  }
+  .pas-info-text strong { font-weight: 600; }
+
+  /* ════════════════════════════════════════
+     MODAL STYLES
+  ════════════════════════════════════════ */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(17, 24, 39, .45);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    padding: 1rem;
+    /* hidden by default */
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .2s ease;
+  }
+  .modal-overlay.is-open {
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  .modal-box {
+    background: var(--c-white);
+    border-radius: 16px;
+    box-shadow: var(--shadow-lg);
+    width: 100%;
+    max-width: 400px;
+    overflow: hidden;
+    transform: translateY(16px) scale(.97);
+    transition: transform .25s cubic-bezier(.34,1.56,.64,1);
+  }
+  .modal-overlay.is-open .modal-box {
+    transform: translateY(0) scale(1);
+  }
+
+  /* Icon strip at top of modal */
+  .modal-icon-strip {
+    padding: 1.75rem 1.75rem 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-icon-circle {
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .modal-icon-circle svg {
+    width: 26px; height: 26px;
+    fill: none;
+    stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  }
+
+  /* Format modal — amber/warning */
+  .modal-icon-circle--warn {
+    background: var(--c-warn-bg);
+    border: 2px solid var(--c-warn-border);
+  }
+  .modal-icon-circle--warn svg { stroke: var(--c-warn-text); }
+
+  /* Not-found modal — red/error */
+  .modal-icon-circle--error {
+    background: var(--c-red-bg);
+    border: 2px solid var(--c-red-border);
+  }
+  .modal-icon-circle--error svg { stroke: var(--c-red-text); }
+
+  .modal-body {
+    padding: 1.1rem 1.75rem 1.75rem;
+    text-align: center;
+  }
+  .modal-title {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--c-text);
+    letter-spacing: -.02em;
+    margin: 0 0 .45rem;
+  }
+  .modal-desc {
+    font-size: .85rem;
+    color: var(--c-text-muted);
+    line-height: 1.65;
+    margin: 0 0 1.35rem;
+  }
+  .modal-desc strong {
+    font-weight: 600;
+    color: var(--c-text);
+  }
+
+  /* Format example box inside modal */
+  .modal-format-example {
+    background: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: 8px;
+    padding: .6rem 1rem;
+    margin-bottom: 1.35rem;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .modal-format-example .mfe-label {
+    font-size: .68rem;
+    font-weight: 600;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--c-text-hint);
+  }
+  .modal-format-example .mfe-code {
+    font-family: var(--mono);
+    font-size: .95rem;
+    color: var(--c-blue);
+    font-weight: 500;
+    letter-spacing: .04em;
+  }
+  .modal-format-example .mfe-breakdown {
+    font-size: .75rem;
+    color: var(--c-text-muted);
+    margin-top: 2px;
+  }
+  .modal-format-example .mfe-breakdown span {
+    display: inline-block;
+    background: var(--c-blue-light);
+    color: var(--c-blue);
+    border: 1px solid var(--c-blue-mid);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-family: var(--mono);
+    font-size: .7rem;
+    margin: 0 1px;
+  }
+  .modal-format-example .mfe-breakdown em {
+    display: inline-block;
+    background: var(--c-surface);
+    color: var(--c-text-muted);
+    border: 1px solid var(--c-border);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-family: var(--mono);
+    font-size: .7rem;
+    font-style: normal;
+    margin: 0 1px;
+  }
+
+  /* Tracking number display in not-found modal */
+  .modal-tracking-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--c-red-bg);
+    border: 1px solid var(--c-red-border);
+    color: var(--c-red-text);
+    font-family: var(--mono);
+    font-size: .85rem;
+    font-weight: 500;
+    padding: 4px 12px;
+    border-radius: 6px;
+    margin-bottom: 1.35rem;
+  }
+  .modal-tracking-chip svg {
+    width: 13px; height: 13px;
+    stroke: var(--c-red-text); fill: none;
+    stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+    flex-shrink: 0;
+  }
+
+  /* Modal button */
+  .modal-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    height: 42px;
+    font-family: var(--font);
+    font-size: .9rem;
+    font-weight: 600;
+    border-radius: var(--r-input);
+    border: none;
+    cursor: pointer;
+    transition: background .15s, transform .1s;
+  }
+  .modal-btn:active { transform: scale(.98); }
+  .modal-btn--blue {
+    background: var(--c-blue);
+    color: #fff;
+  }
+  .modal-btn--blue:hover { background: var(--c-blue-hover); }
+  .modal-btn--red {
+    background: var(--c-red);
+    color: #fff;
+  }
+  .modal-btn--red:hover { background: #b91c1c; }
+</style>
+
+<!-- ════════════════════════════════════════
+     MODAL 1 — Invalid Format Warning
+════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-format" role="dialog" aria-modal="true" aria-labelledby="mf-title">
+  <div class="modal-box">
+    <div class="modal-icon-strip">
+      <div class="modal-icon-circle modal-icon-circle--warn">
+        <svg viewBox="0 0 24 24">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+          <line x1="12" y1="9" x2="12" y2="13"/>
+          <line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+      </div>
+    </div>
+    <div class="modal-body">
+      <h2 class="modal-title" id="mf-title">Invalid Tracking Number Format</h2>
+      <p class="modal-desc">
+        The tracking number you entered doesn't match the required format.
+        Please check and try again.
+      </p>
+      <div class="modal-format-example">
+        <div class="mfe-label">Correct Format</div>
+        <div class="mfe-code">PAS26XXXXXX</div>
+        <div class="mfe-breakdown">
+          <span>PAS</span> prefix &nbsp;+&nbsp;
+          <span>26</span> year &nbsp;+&nbsp;
+          <em>XXXXXX</em> 6-char code
+        </div>
+      </div>
+      <button class="modal-btn modal-btn--blue" onclick="closeModal('modal-format'); focusInput()">
+        Got it, let me fix it
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     MODAL 2 — Tracking Number Not Found
+════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-notfound" role="dialog" aria-modal="true" aria-labelledby="mnf-title">
+  <div class="modal-box">
+    <div class="modal-icon-strip">
+      <div class="modal-icon-circle modal-icon-circle--error">
+        <svg viewBox="0 0 24 24">
+          <circle cx="11" cy="11" r="8"/>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          <line x1="8" y1="11" x2="14" y2="11"/>
+        </svg>
+      </div>
+    </div>
+    <div class="modal-body">
+      <h2 class="modal-title" id="mnf-title">Tracking Number Not Found</h2>
+      <p class="modal-desc">
+        We couldn't find any record matching the tracking number below.
+        Please double-check the number and try again.
+      </p>
+      <div class="modal-tracking-chip" id="notfound-chip">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        <span id="notfound-tracking-display"></span>
+      </div>
+      <button class="modal-btn modal-btn--red" onclick="closeModal('modal-notfound'); focusInput()">
+        Try a Different Number
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     MAIN PAGE
+════════════════════════════════════════ -->
+<div class="pas-shell">
+  <div class="pas-inner">
+
+    <!-- Brand -->
+    <div class="pas-brand">
+      <div class="pas-logo-box">
+        <img src="{% static 'core/logo.png' %}" alt="PAStrack" />
+      </div>
+      <div class="pas-wordmark">PAS<span>track</span></div>
+    </div>
+
+    <!-- Main card -->
+    <div class="pas-card">
+
+      <div class="pas-badge">
+        <span class="pas-badge-dot"></span>
+        Live Tracking
+      </div>
+
+      <h1 class="pas-title">PAStrack</h1>
+      <p class="pas-sub">Track your request status using your Tracking Number.</p>
+
+      {% comment %} ======= ORIGINAL FORM LOGIC — NOT CHANGED ======= {% endcomment %}
+      <form method="get" action="{% url 'track_case' %}" class="searchbar searchbar--center mt-14" style="margin:0;" id="tracking-form" novalidate>
+        <div class="pas-search-row">
+          <div class="pas-field grow">
             <label for="id_tracking" class="muted">Tracking Number</label>
-            <input id="id_tracking" name="q" placeholder="e.g., PAS26010001" />
+            <input id="id_tracking" name="q" placeholder="e.g., PAS26010001" autocomplete="off" />
+          </div>
+          <button class="pas-btn btn btn-primary" type="submit">
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="22" y2="22"/></svg>
+            Track Request
+          </button>
         </div>
-        <div>
-            <button class="btn btn-primary" type="submit">Track Request</button>
-        </div>
-    </form>
+      </form>
+      {% comment %} ================================================= {% endcomment %}
 
-    <div class="mt-14">
+      <hr class="pas-divider" />
+
+      {% comment %} ======= ORIGINAL LINKS — NOT CHANGED ======= {% endcomment %}
+      <div class="pas-links">
         <a class="link-muted" href="{% url 'support' %}">Need help?</a>
-        <span class="muted">•</span>
+        <span class="dot">•</span>
         <a class="link-muted" href="{% url 'login' %}">Staff Login</a>
+      </div>
+      {% comment %} ============================================= {% endcomment %}
+
     </div>
+
+    <!-- Activation info card -->
+    <div class="pas-info">
+      <div class="pas-info-icon">
+        <svg viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+      </div>
+      <div class="pas-info-text">
+        <h3>Account Activation</h3>
+        <p>New staff accounts start as <strong>Pending Activation</strong>. Activate using the link (expires in 1 hour) and set a new strong password.</p>
+      </div>
+    </div>
+
+  </div>
 </div>
 
-<div class="card">
-    <h2 class="page-title" style="font-size:1.1rem; margin-bottom:6px;">Account Activation</h2>
-    <p class="muted">New staff accounts start as <strong>Pending Activation</strong>. Activate using the link (expires in 1 hour) and set a new strong password.</p>
-</div>
+<script>
+  /* ── Tracking Number format: PAS + 2-digit year + 6 alphanumeric chars
+     e.g. PAS26010001, PAS26AB12XY — case-insensitive ── */
+  const TRACKING_REGEX = /^PAS\d{2}[A-Z0-9]{6}$/i;
+
+  const form      = document.getElementById('tracking-form');
+  const input     = document.getElementById('id_tracking');
+
+  /* ── Close modal helper ── */
+  function closeModal(id) {
+    const overlay = document.getElementById(id);
+    overlay.classList.remove('is-open');
+  }
+
+  /* ── Re-focus input after closing modal ── */
+  function focusInput() {
+    input.focus();
+    input.select();
+  }
+
+  /* ── Close on backdrop click ── */
+  document.querySelectorAll('.modal-overlay').forEach(function(overlay) {
+    overlay.addEventListener('click', function(e) {
+      if (e.target === overlay) {
+        overlay.classList.remove('is-open');
+        focusInput();
+      }
+    });
+  });
+
+  /* ── Close on Escape key ── */
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('.modal-overlay.is-open').forEach(function(o) {
+        o.classList.remove('is-open');
+      });
+      focusInput();
+    }
+  });
+
+  /* ── Clear error state on input ── */
+  input.addEventListener('input', function() {
+    input.classList.remove('input--error');
+  });
+
+  /* ── Form submit: validate format before allowing submission ── */
+  form.addEventListener('submit', function(e) {
+    const val = input.value.trim();
+
+    if (!TRACKING_REGEX.test(val)) {
+      e.preventDefault();
+      input.classList.add('input--error');
+      document.getElementById('modal-format').classList.add('is-open');
+      return;
+    }
+
+    /* Format is valid — allow normal Django GET submission */
+  });
+
+  /* ── On page load: if Django signals "not found", show the not-found modal.
+     Django should pass  not_found=True  and  searched_q="PAS26XXXXXX"
+     in the view context when the tracking number is valid but doesn't exist. ── */
+  {% if not_found %}
+    (function() {
+      var q = "{{ searched_q|escapejs }}";
+      document.getElementById('notfound-tracking-display').textContent = q;
+      document.getElementById('modal-notfound').classList.add('is-open');
+      /* Pre-fill input so user can edit without retyping */
+      input.value = q;
+    })();
+  {% endif %}
+</script>
+
 {% endblock %}

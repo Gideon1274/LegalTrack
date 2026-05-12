@@ -1,14 +1,236 @@
-{% extends "base.html" %}
-{% block title %}Not Found{% endblock %}
-{% block container_class %}container--narrow{% endblock %}
+{% comment %} {% extends 'base_new.html' %} {% endcomment %}
+{% load static %}
+{% comment %} {% block title %}Not Found{% endblock %} {% endcomment %}
 
 {% block content %}
-<div class="card" style="text-align:center;">
-    <h1 class="page-title">Request {{ tracking|default:"" }} Not Found</h1>
-    <p class="page-subtitle">We couldn’t find a request matching that Tracking Number.</p>
-    <div style="display:flex; justify-content:center; gap:10px; flex-wrap:wrap;">
-        <a class="btn btn-secondary" href="{% url 'track_case' %}">Try Again</a>
-        <a class="btn btn-secondary" href="{% url 'support' %}">Need Help?</a>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap');
+
+  :root {
+    --c-blue: #1a56db;
+    --c-blue-hover: #1648c0;
+    --c-surface: #f3f4f6;
+    --c-white: #ffffff;
+    --c-border: #e5e7eb;
+    --c-border-strong: #d1d5db;
+    --c-text: #111827;
+    --c-text-muted: #6b7280;
+    --c-red-bg: #fef2f2;
+    --c-red-border: #fecaca;
+    --c-red-text: #991b1b;
+    --c-yellow: #f5c400;
+    --r-card: 14px;
+    --r-input: 8px;
+    --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.05);
+    --font: 'DM Sans', system-ui, sans-serif;
+    --mono: 'DM Mono', monospace;
+  }
+
+  .pas-shell {
+    min-height: 100vh;
+    background: var(--c-surface);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 2.5rem 1.5rem;
+    font-family: var(--font);
+  }
+
+  .pas-inner {
+    width: 100%;
+    max-width: 540px; /* Narrow layout for simple status pages */
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    animation: fadein .4s ease both;
+  }
+
+  @keyframes fadein {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── Brand ── */
+  .pas-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: .25rem;
+  }
+  .pas-logo-box {
+    width: 40px; height: 40px;
+    background: var(--c-white);
+    border: 1px solid var(--c-border);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .pas-logo-box img { width: 30px; height: auto; }
+  .pas-wordmark {
+    font-size: 1.35rem;
+    font-weight: 600;
+    letter-spacing: -.025em;
+    color: var(--c-text);
+    line-height: 1;
+  }
+  .pas-wordmark span { color: var(--c-yellow); }
+
+  /* ── Card ── */
+  .pas-card {
+    background: var(--c-white);
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-card);
+    box-shadow: var(--shadow);
+    padding: 2.5rem 2rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  /* ── Error Icon ── */
+  .pas-error-icon {
+    width: 64px; height: 64px;
+    background: var(--c-red-bg);
+    border: 2px solid var(--c-red-border);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 1.25rem;
+  }
+  .pas-error-icon svg {
+    width: 28px; height: 28px;
+    stroke: var(--c-red-text); fill: none;
+    stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  }
+
+  /* ── Typography ── */
+  .pas-title {
+    font-size: 1.35rem;
+    font-weight: 600;
+    color: var(--c-text);
+    letter-spacing: -.02em;
+    margin: 0 0 .5rem;
+  }
+  .pas-sub {
+    font-size: .9rem;
+    color: var(--c-text-muted);
+    line-height: 1.6;
+    margin: 0 0 1.5rem;
+    max-width: 400px;
+  }
+
+  /* ── Tracking Chip ── */
+  .pas-tracking-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--c-red-bg);
+    border: 1px dashed var(--c-red-border);
+    color: var(--c-red-text);
+    font-family: var(--mono);
+    font-size: 1rem;
+    font-weight: 500;
+    padding: 8px 16px;
+    border-radius: 8px;
+    margin-bottom: 2rem;
+  }
+  .pas-tracking-chip svg {
+    width: 16px; height: 16px;
+    stroke: var(--c-red-text);
+    fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  }
+
+  /* ── Actions ── */
+  .pas-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+    width: 100%;
+  }
+  .pas-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 42px;
+    padding: 0 20px;
+    font-family: var(--font);
+    font-size: .9rem;
+    font-weight: 600;
+    border-radius: var(--r-input);
+    cursor: pointer;
+    text-decoration: none;
+    transition: background .15s, transform .1s, border-color .15s;
+  }
+  .pas-btn:active { transform: scale(.97); }
+  .pas-btn svg {
+    width: 16px; height: 16px;
+    fill: none;
+    stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  }
+  .pas-btn--primary {
+    background: var(--c-blue);
+    color: #fff;
+    border: 1px solid var(--c-blue);
+  }
+  .pas-btn--primary svg { stroke: #fff; }
+  .pas-btn--primary:hover { background: var(--c-blue-hover); border-color: var(--c-blue-hover); }
+  
+  .pas-btn--secondary {
+    background: var(--c-white);
+    color: var(--c-text);
+    border: 1px solid var(--c-border-strong);
+  }
+  .pas-btn--secondary svg { stroke: var(--c-text-muted); }
+  .pas-btn--secondary:hover { background: var(--c-surface); }
+</style>
+
+<div class="pas-shell">
+  <div class="pas-inner">
+
+    <div class="pas-brand">
+      <div class="pas-logo-box">
+        <img src="{% static 'core/logo.png' %}" alt="PAStrack" />
+      </div>
+      <div class="pas-wordmark">PAS<span>track</span></div>
     </div>
+
+    <div class="pas-card">
+      
+      <div class="pas-error-icon">
+        <svg viewBox="0 0 24 24">
+          <circle cx="11" cy="11" r="8"/>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          <line x1="8" y1="11" x2="14" y2="11"/>
+        </svg>
+      </div>
+
+      <h1 class="pas-title">Tracking Number Not Found</h1>
+      <p class="pas-sub">
+        We searched our records but couldn't find an active request matching the tracking number below.
+      </p>
+
+      <div class="pas-tracking-chip">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        <span>{{ tracking|default:"Unknown" }}</span>
+      </div>
+
+      <div class="pas-actions">
+        <a class="pas-btn pas-btn--primary" href="/">
+          <svg viewBox="0 0 24 24" stroke="currentColor"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          Search Again
+        </a>
+        <a class="pas-btn pas-btn--secondary" href="{% url 'support' %}">
+          <svg viewBox="0 0 24 24" stroke="currentColor"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          Need Help?
+        </a>
+      </div>
+
+    </div>
+
+  </div>
 </div>
 {% endblock %}

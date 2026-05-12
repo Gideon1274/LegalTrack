@@ -1,40 +1,253 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}Login{% endblock %}
-{% block container_class %}container--narrow{% endblock %}
 
 {% block auth_content %}
-<div class="card" style="text-align:center;">
-    <div class="avatar" style="width:58px; height:58px; margin:0 auto 12px auto;"></div>
-    <h1 class="page-title">Login</h1>
-    <p class="page-subtitle">Sign in to your staff account.</p>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+
+  :root {
+    --c-blue: #1a56db;
+    --c-blue-hover: #1648c0;
+    --c-blue-gradient: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+    --c-surface: #f8faff;
+    --c-white: #ffffff;
+    --c-border: #e2e8f0;
+    --c-text: #1e293b;
+    --c-text-muted: #64748b;
+    --c-red-bg: #fef2f2;
+    --c-red-text: #991b1b;
+    --font: 'DM Sans', sans-serif;
+  }
+
+  body, html {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    font-family: var(--font);
+    background: var(--c-surface);
+  }
+
+  /* ── Split Layout Container ── */
+  .login-container {
+    display: flex;
+    min-height: 100vh;
+    width: 100%;
+  }
+
+  /* ── Left Side: Large Branding ── */
+  .brand-section {
+    flex: 1.2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--c-surface);
+    padding: 2rem;
+    position: relative;
+  }
+
+  .large-logo {
+    width: 100%;
+    max-width: 420px;
+    height: auto;
+    filter: drop-shadow(0 20px 30px rgba(0,0,0,0.05));
+    animation: slideIn .8s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* ── Right Side: Form ── */
+  .form-section {
+    flex: 1;
+    background: var(--c-white);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 0 10%;
+    box-shadow: -10px 0 50px rgba(0,0,0,0.02);
+    position: relative;
+  }
+
+  /* Province Seal (Top Right) */
+  .province-seal {
+    position: absolute;
+    top: 20px;
+    right: 40px;
+    width: 110px;
+    height: auto;
+  }
+
+  .login-header {
+    margin-bottom: 2.5rem;
+  }
+
+  .pas-wordmark {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: #1e1b4b; /* Dark Navy */
+    margin: 0;
+    letter-spacing: -0.04em;
+  }
+
+  .pas-wordmark span {
+    color: #ea580c; /* High Contrast Orange/Red */
+  }
+
+  .pas-subtitle {
+    color: var(--c-text-muted);
+    font-size: 1.1rem;
+    margin-top: 0.5rem;
+  }
+
+  /* ── Input Styling ── */
+  .input-wrapper {
+    position: relative;
+    margin-bottom: 1.25rem;
+  }
+
+  .input-wrapper svg {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 18px;
+    height: 18px;
+    color: var(--c-text-muted);
+  }
+
+  .input-wrapper input {
+    width: 100%;
+    padding: 14px 14px 14px 44px;
+    box-sizing: border-box;
+    border: 1.5px solid var(--c-border);
+    border-radius: 12px;
+    font-size: 1rem;
+    transition: all 0.2s;
+    background: #fcfcfd;
+  }
+
+  .input-wrapper input:focus {
+    outline: none;
+    border-color: var(--c-blue);
+    background: #fff;
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+  }
+
+  .show-password {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--c-blue);
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  /* ── Button ── */
+  .btn-login {
+    width: 100%;
+    padding: 14px;
+    background: var(--c-blue-gradient);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.1s, box-shadow 0.2s;
+    box-shadow: 0 4px 12px rgba(29, 78, 216, 0.2);
+    margin-top: 1rem;
+  }
+
+  .btn-login:hover {
+    box-shadow: 0 6px 20px rgba(29, 78, 216, 0.3);
+  }
+
+  .btn-login:active {
+    transform: scale(0.98);
+  }
+
+  .error-banner {
+    background: var(--c-red-bg);
+    color: var(--c-red-text);
+    padding: 12px;
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+    border: 1px solid #fecaca;
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(-30px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  /* Responsive Mobile */
+  @media (max-width: 900px) {
+    .brand-section { display: none; }
+    .form-section { padding: 2rem; }
+    .province-seal { top: 20px; right: 20px; width: 45px; }
+  }
+</style>
+
+<div class="login-container">
+  <div class="brand-section">
+    <img src="{% static 'core/logo.png' %}" alt="PAStrack Large" class="large-logo">
+  </div>
+
+  <div class="form-section">
+    <img src="{% static 'core/capitol-logo.png' %}" alt="Province Seal" class="province-seal">
+
+    <div class="login-header">
+      <h1 class="pas-wordmark">PAS<span>track</span></h1>
+      <p class="pas-subtitle">Continue to the Capitol's workspace.</p>
+    </div>
 
     {% if form.errors %}
-        <div class="msg error">Invalid credentials. Please try again.</div>
+      <div class="error-banner">
+        Invalid credentials. Please verify your Staff ID and password.
+      </div>
     {% endif %}
 
-    <form method="post" style="text-align:left;">
-        {% csrf_token %}
-        {{ form.non_field_errors }}
+    <form method="post" novalidate>
+      {% csrf_token %}
 
-        <label for="id_username">Staff ID</label>
-        {{ form.username }}
+      <div class="input-wrapper">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 12a4 4 0 11-8 0 4 4 0 018 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
+        </svg>
+        <input type="text" name="username" id="id_username" placeholder="johncarter@brix.com" required>
+      </div>
 
-        <div style="display:flex; align-items:end; justify-content:space-between; gap:10px; margin-top:10px;">
-            <div style="flex:1;">
-                <label for="id_password">Password</label>
-                {{ form.password }}
-            </div>
-        </div>
+      <div class="input-wrapper">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+        </svg>
+        <input type="password" name="password" id="id_password" placeholder="••••••••••••••••" required>
+        {% comment %} <span class="show-password" onclick="togglePass()">Show</span> {% endcomment %}
+      </div>
 
-        <button class="btn btn-primary" type="submit" style="width:100%; margin-top:14px;">Login</button>
+      <button type="submit" class="btn-login">Login</button>
 
-        <div style="margin-top:12px; text-align:right;">
-            <a class="link-muted" href="{% url 'forgot_password' %}">Forgot password?</a>
-        </div>
-
-        {% if next %}
-            <input type="hidden" name="next" value="{{ next }}">
-        {% endif %}
+      {% if next %}
+        <input type="hidden" name="next" value="{{ next }}">
+      {% endif %}
     </form>
+  </div>
 </div>
+
+<script>
+  function togglePass() {
+    const p = document.getElementById('id_password');
+    const s = document.querySelector('.show-password');
+    {% comment %} if (p.type === 'password') {
+      p.type = 'text';
+      s.innerText = '';
+    } else {
+      p.type = 'password';
+      s.innerText = '';
+    } {% endcomment %}
+  }
+</script>
 {% endblock %}
