@@ -434,22 +434,6 @@ function closeAssignModal() {
 }
 
 // Auto-refresh Receiver Dashboard every 5 seconds
-document.addEventListener('DOMContentLoaded', function () {
-    setInterval(function () {
-        // Do not refresh while assignment modal is open
-        const modal = document.getElementById('assignModal');
-        if (modal && modal.classList.contains('active')) {
-            return;
-        }
 
-        // Do not refresh if user is typing in a form field
-        const active = document.activeElement;
-        if (active && ['INPUT', 'SELECT', 'TEXTAREA'].includes(active.tagName)) {
-            return;
-        }
-
-        window.location.reload();
-    }, 5000);
-});
 </script>
 {% endblock %}

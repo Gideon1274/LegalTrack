@@ -264,8 +264,8 @@
     </style>
 </head>
 <body data-theme="{% if user.is_authenticated %}{{ user.theme_preference|default:'light' }}{% else %}light{% endif %}">
-    {% if user.is_authenticated %}
-        <div class="app">
+    <div class="{% if user.is_authenticated %}app{% endif %}">
+        {% if user.is_authenticated %}
             <aside class="sidebar {% block sidebar_class %}{% endblock %}" aria-label="Sidebar">
                 <div class="sidebar__brand">
                     <a href="{% url 'dashboard' %}">
@@ -374,8 +374,10 @@
                     </button>
                 </form>
             </aside>
+        {% endif %}
 
-            <div class="app-main">
+        <div class="{% if user.is_authenticated %}app-main{% endif %}">
+            {% if user.is_authenticated %}
                 <header class="app-header">
                     <div class="header-user">
                         <h1 class="header-user__title">{% block header_title %}{{ user.full_name|default:user.email }}{% endblock %}</h1>
@@ -385,28 +387,18 @@
                         {% block header_actions %}{% endblock %}
                     </div>
                 </header>
-
-                <main class="container {% block container_class %}{% endblock %}">
-                    {% if messages %}
-                        {% for msg in messages %}
-                            <div class="msg {{ msg.tags|default:'info' }}">{{ msg }}</div>
-                        {% endfor %}
-                    {% endif %}
-                    {% block content %}{% endblock %}
-                </main>
-            </div>
-        </div>
-    {% else %}
-        <main class="container {% block container_class_anon %}{% endblock %}">
-            {% if messages %}
-                {% for msg in messages %}
-                    <div class="msg {{ msg.tags|default:'info' }}">{{ msg }}</div>
-                {% endfor %}
             {% endif %}
-            {% block auth_content %}
-            {% endblock %}
-        </main>
-    {% endif %}
+
+            <main class="container {% block container_class %}{% endblock %}">
+                {% if messages %}
+                    {% for msg in messages %}
+                        <div class="msg {{ msg.tags|default:'info' }}">{{ msg }}</div>
+                    {% endfor %}
+                {% endif %}
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+    </div>
 
     <script>
         (function () {

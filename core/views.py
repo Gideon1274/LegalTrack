@@ -411,16 +411,18 @@ def _public_status_label(case: Case) -> str:
     # Module 4: Simplified, public-friendly status labels.
     status = getattr(case, "status", "")
     mapping = {
-        "not_received": "Pending",
+        "not_received": "Submitted",
         "received": "Received",
-        "in_review": "Reviewed",
-        "for_taxmapping": "Tax Mapping",
-        "for_approval": "Approved",
-        "approved": "Approved",
-        "for_numbering": "Numbered",
-        "for_release": "For Release",
+        "to_examine": "Received",
+        "in_review": "In Review",
+        "for_review": "For Review",
+        "for_taxmapping": "In Review",
+        "for_approval": "For Approval",
+        "approved": "For Approval",
+        "for_numbering": "For Numbering",
+        "for_release": "For Releasing",
         "released": "Released",
-        "client_correction": "Returned to Client (Correction Window)",
+        "client_correction": "Returned for Correction",
         "returned": "Returned",
         "withdrawn": "Withdrawn",
     }
@@ -436,9 +438,10 @@ def _build_public_timeline(case: Case) -> list[dict[str, object]]:
             events.append({"label": label, "when": when})
 
     # Initial creation
-    add("Transaction Created", case.created_at)
+    add("Submitted", case.created_at)
     
     # Key transitions from audit logs
+    from core.models import AuditLog
     history_qs = (
         AuditLog.objects.filter(target_object=f"Case: {case.tracking_id}")
         .order_by("created_at")
@@ -451,7 +454,7 @@ def _build_public_timeline(case: Case) -> list[dict[str, object]]:
         action = getattr(h, "action", "")
         if action == "case_receipt":
             if not physically_received_added:
-                add("Physically Received", h.created_at)
+                add("Received", h.created_at)
                 physically_received_added = True
             continue
         if action in {"case_status_change", "case_approval", "case_rejection", "case_release"}:
@@ -464,12 +467,12 @@ def _build_public_timeline(case: Case) -> list[dict[str, object]]:
                 # If the status change is 'received', handle it carefully to avoid duplicates
                 if new_status == "received":
                     if not physically_received_added:
-                        add("Physically Received", h.created_at)
+                        add("Received", h.created_at)
                         physically_received_added = True
                     continue
 
                 label = _public_status_label(type("obj", (), {"status": new_status})())
-                add(f"Status: {label}", h.created_at)
+                add(label, h.created_at)
             continue
 
     # Add current status if not already reflected (though audit logs should cover it)
@@ -527,6 +530,42 @@ def track_case_detail(request, tracking_id: str):
         "show_internal_status": show_internal_status,
         "updated_at": case.updated_at,
         "timeline": timeline,
+        "case_type": case.get_case_type_display(),
+        "area": case.area,
+        "created_at": case.created_at,
+    })
+
+
+def public_track_api(request, tracking_id: str):
+    """API version of track_case_detail for the React frontend."""
+    tracking = (tracking_id or "").strip().upper()
+    
+    # Validation: Empty or too short
+    if not tracking:
+        return JsonResponse({"detail": "Tracking ID is required."}, status=400)
+    
+    case = Case.objects.filter(tracking_id__iexact=tracking, lgu_submitted_at__isnull=False).first()
+    if not case:
+        return JsonResponse({"detail": f"No record found for Tracking ID: {tracking}"}, status=404)
+
+    public_status = _public_status_label(case)
+    timeline_raw = _build_public_timeline(case)
+    
+    # Format timeline for JSON
+    timeline = []
+    for event in timeline_raw:
+        timeline.append({
+            "label": event["label"],
+            "when": event["when"].isoformat() if hasattr(event["when"], "isoformat") else str(event["when"])
+        })
+
+    return JsonResponse({
+        "tracking_id": case.tracking_id,
+        "status": public_status,
+        "updated_at": case.updated_at.isoformat(),
+        "timeline": timeline,
+        "client_name": f"{case.client_first_name} {case.client_last_name}" if case.client_first_name else case.client_name,
+        "case_type": case.get_case_type_display(),
     })
 
 
