@@ -91,7 +91,7 @@ def _env(key: str, default: str | None = None) -> str | None:
     if val is not None and str(val).strip() != "":
         return str(val).strip()
     res = os.getenv(key)
-    if res is not None:
+    if res is not None and res.strip() != "":
         return res.strip()
     return default
 
@@ -568,6 +568,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 LOGIN_REDIRECT_URL = "dashboard"
 LOGOUT_REDIRECT_URL = "login"
+LOGIN_URL = "/login/"
 
 
 # MEDIA

@@ -1,0 +1,311 @@
+{% extends 'base_new.html' %}
+{% load static %}
+
+{% block title %}Approver Dashboard | PAStrack{% endblock %}
+
+{% block extra_css %}
+    <style>
+        /* ===== DASHBOARD LAYOUT & HEADER ===== */
+        .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2rem; }
+        .greeting h1 { font-size: 1.75rem; font-weight: 700; color: #0f172a; margin-bottom: 0.25rem; }
+        .greeting p { color: #64748b; margin-top: 0.25rem; font-family: 'Inter', sans-serif; font-weight: 500; }
+        
+        .btn-primary {
+            background-color: var(--primary); color: white; border: none;
+            padding: 0.6rem 1.25rem; border-radius: 6px;
+            font-size: 0.875rem; font-weight: 500; cursor: pointer; transition: 0.2s;
+            display: flex; align-items: center; gap: 0.5rem; box-shadow: var(--shadow-sm); text-decoration: none;
+        }
+        .btn-primary:hover { background-color: var(--primary-hover); box-shadow: var(--shadow-md); transform: translateY(-1px); color: white; }
+
+        /* ===== KPI CARDS ===== */
+        .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.25rem; margin-bottom: 2rem; }
+        .kpi-card {
+            background: white; border: 1px solid #e2e8f0;
+            border-radius: 12px; padding: 1.25rem;
+            display: flex; align-items: center; gap: 1rem;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05); transition: 0.3s;
+        }
+        .kpi-card:hover { border-color: var(--primary); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); transform: translateY(-2px); }
+        
+        .kpi-icon-box {
+            width: 48px; height: 48px; border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.5rem; flex-shrink: 0;
+        }
+        .kpi-data h2 { font-size: 1.5rem; font-weight: 800; margin-bottom: 0.15rem; color: #0f172a; line-height: 1; }
+        .kpi-data span { display: block; font-size: 0.75rem; color: #64748b; margin-top: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.02em;}
+
+        /* ===== PANELS & TABS ===== */
+        .panel {
+            background: white; border: 1px solid #e2e8f0;
+            border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            padding: 1.5rem; display: flex; flex-direction: column; margin-bottom: 2rem;
+        }
+        
+        .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .panel-title { font-size: 1.1rem; font-weight: 700; color: #1e293b; margin: 0; }
+        .view-all-link { font-size: 0.85rem; color: var(--primary); text-decoration: none; font-weight: 500; transition: 0.2s; }
+        .view-all-link:hover { text-decoration: underline; }
+
+        /* ===== TABLE STYLING ===== */
+        .table-responsive { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th { font-size: 0.75rem; font-weight: 700; color: #64748b; padding: 1rem 0.5rem; border-bottom: 2px solid #f1f5f9; text-transform: uppercase; }
+        td { padding: 1rem 0.5rem; border-bottom: 1px solid #f1f5f9; font-size: 0.875rem; vertical-align: middle; transition: 0.2s; color: #1e293b; }
+        tbody tr:hover td { background-color: #f8fafc; }
+
+        .owner-info strong { display: block; font-size: 0.875rem; font-weight: 600; color: #1e293b; margin-bottom: 0.1rem; }
+        .owner-info span { font-size: 0.75rem; color: #64748b; }
+
+        /* Action Links */
+        .action-link { 
+            font-size: 0.75rem; font-weight: 600; text-decoration: none; margin-left: 0.5rem; 
+            padding: 0.4rem 0.75rem; border-radius: 6px; transition: 0.2s; display: inline-flex; align-items: center; gap: 0.3rem;
+        }
+        .action-link.primary { color: white; background: var(--primary); }
+        .action-link.primary:hover { background: var(--primary-hover); }
+        .action-link.secondary { color: #475569; border: 1px solid #e2e8f0; background: white; }
+        .action-link.secondary:hover { background: #f1f5f9; color: #0f172a; border-color: #cbd5e1; }
+
+        /* Status Pills (Royal Blue for Approval) */
+        .status-pill {
+            display: inline-flex; align-items: center; gap: 0.4rem;
+            padding: 0.25rem 0.75rem; border-radius: 999px;
+            font-size: 0.75rem; font-weight: 600; text-transform: capitalize; border: 1px solid transparent;
+        }
+        .status-pill::before { content: ''; display: block; width: 6px; height: 6px; border-radius: 50%; }
+        
+        .status-for_approval { background: #dbeafe; color: #1d4ed8; border-color: #bfdbfe; }
+        .status-for_approval::before { background-color: #1d4ed8; }
+
+        /* ===== BOTTOM GRID & ACTIVITY ===== */
+        .bottom-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+
+        .activity-list { display: flex; flex-direction: column; gap: 1.25rem; }
+        .activity-item { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 0.75rem; border-bottom: 1px solid #f1f5f9; }
+        .activity-item:last-child { border-bottom: none; }
+        .activity-left { display: flex; gap: 1rem; align-items: flex-start; }
+        .activity-icon { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0; background: #f8fafc; border: 1px solid #e2e8f0; color: #64748b; }
+        
+        .activity-text strong { display: block; font-size: 0.85rem; font-weight: 600; color: #334155; margin-bottom: 0.15rem; }
+        .activity-text span { font-size: 0.75rem; color: #64748b; line-height: 1.4; display: block; }
+        .activity-time { font-size: 0.7rem; color: #94a3b8; white-space: nowrap; margin-top: 0.2rem; font-weight: 500; }
+
+        /* Quick View Drawer */
+        .drawer-backdrop { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(2px); z-index: 1040; opacity: 0; visibility: hidden; transition: 0.3s ease; }
+        .drawer-backdrop.active { opacity: 1; visibility: visible; }
+        .drawer-panel { position: fixed; top: 0; right: -550px; width: 500px; max-width: 90vw; height: 100vh; background: white; z-index: 1050; box-shadow: -4px 0 24px rgba(0, 0, 0, 0.1); transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1); display: flex; flex-direction: column; }
+        .drawer-panel.active { right: 0; }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <div class="header">
+        <div class="greeting">
+            <h1>Hi, {{ request.user.first_name|default:"Approver" }}!</h1>
+            <p>
+                <span style="color: #3b82f6; font-weight: 700;">{{ request.user.staff_id|default:"APR-001" }}</span> 
+                <span style="margin: 0 8px; color: #cbd5e1;">|</span> 
+                Capitol Approver
+            </p>
+        </div>
+        <div class="header-actions">
+            <a href="{% url 'submissions' %}?scope=me" class="btn-primary">
+                View My Workspace <i class="ri-arrow-right-line"></i>
+            </a>
+        </div>
+    </div>
+
+    <div class="kpi-grid">
+        <div class="kpi-card" {% if stats_pending_approval > 0 %}style="border-color: #bfdbfe; background: #eff6ff;"{% endif %}>
+            <div class="kpi-icon-box" style="color: #0284c7; background: #e0f2fe;"><i class="ri-file-edit-line"></i></div>
+            <div class="kpi-data">
+                <h2>{{ stats_pending_approval|default:"0" }}</h2>
+                <span {% if stats_pending_approval > 0 %}style="color: #0284c7;"{% endif %}>Pending Approvals</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon-box" style="color: #16a34a; background: #dcfce7;"><i class="ri-checkbox-circle-line"></i></div>
+            <div class="kpi-data">
+                <h2>{{ stats_approved_today|default:"0" }}</h2>
+                <span>Approved Today</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon-box" style="color: #7e22ce; background: #f3e8ff;"><i class="ri-quill-pen-line"></i></div>
+            <div class="kpi-data">
+                <h2>{{ stats_total_signed|default:"0" }}</h2>
+                <span>Total Signed</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon-box" style="color: #dc2626; background: #fee2e2;"><i class="ri-arrow-go-back-line"></i></div>
+            <div class="kpi-data">
+                <h2>{{ stats_cases_denied|default:"0" }}</h2>
+                <span>Returned for Edits</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="panel">
+        <div class="panel-header">
+            <h3 class="panel-title">Pending My Approval</h3>
+            <a href="{% url 'submissions' %}?scope=me" class="view-all-link">View All Queued <i class="ri-arrow-right-line" style="vertical-align: middle;"></i></a>
+        </div>
+
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Case Number</th>
+                        <th>Client / Request</th>
+                        <th>LGU Origin</th>
+                        <th>Assigned Examiner</th>
+                        <th>Date Forwarded</th>
+                        <th style="text-align: right;">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for case in page_obj %}
+                    <tr>
+                        <td style="font-family: monospace; font-weight: 700; color: #0f172a; font-size: 0.9rem;">{{ case.tracking_id }}</td>
+                        <td>
+                            <div class="owner-info">
+                                <strong>{{ case.client_name }}</strong>
+                                <span>{{ case.get_case_type_display }}</span>
+                            </div>
+                        </td>
+                        <td><span style="color: #64748b;">{{ case.submitted_by.lgu_municipality|default:"—" }}</span></td>
+                        <td>
+                            <span style="background: #f8fafc; padding: 0.3rem 0.6rem; border-radius: 4px; font-size: 0.75rem; color: #334155; border: 1px solid #e2e8f0; display: inline-flex; align-items: center; gap: 0.3rem;">
+                                <i class="ri-user-line" style="color: var(--primary);"></i> {{ case.assigned_to.full_name|default:case.assigned_to.email|default:"Unassigned" }}
+                            </span>
+                        </td>
+                        <td style="color: #64748b;">{{ case.updated_at|date:"M d, g:i A" }}</td>
+                        <td style="text-align: right; white-space: nowrap;">
+                            <a href="#" onclick="openQuickView('{{ case.tracking_id }}'); return false;" class="action-link secondary"><i class="ri-eye-line"></i> Quick View</a>
+                            <a href="{% url 'case_detail' case.tracking_id %}" class="action-link primary"><i class="ri-quill-pen-line"></i> Review & Sign</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" style="text-align: center; padding: 4rem 2rem; color: #94a3b8;">
+                            <i class="ri-check-double-line" style="font-size: 3rem; color: #cbd5e1; display: block; margin-bottom: 1rem;"></i>
+                            <h3 style="color: #475569; font-weight: 600; margin: 0 0 0.25rem 0; font-size: 1.1rem;">All caught up!</h3>
+                            <p style="font-size: 0.85rem; margin: 0;">There are no cases waiting for your approval right now.</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="bottom-grid" style="align-items: stretch;">
+        
+        <div class="panel" style="margin-bottom: 0;">
+            <div class="panel-header">
+                <h3 class="panel-title">Approved Today</h3>
+                <a href="{% url 'submissions' %}?scope=all&tab=for_numbering" class="view-all-link">View Output <i class="ri-arrow-right-line" style="vertical-align: middle;"></i></a>
+            </div>
+            
+            <div class="activity-list">
+                {% for c in approved_today_cases %}
+                <div class="activity-item">
+                    <div class="activity-left" style="align-items: center;">
+                        <div class="activity-icon" style="background: #dcfce7; color: #16a34a; border-color: #bbf7d0;">
+                            <i class="ri-checkbox-circle-line"></i>
+                        </div>
+                        <div class="activity-text">
+                            <strong style="font-family: monospace; color: #15803d; font-size: 0.9rem;">{{ c.tracking_id }}</strong>
+                            <span>{{ c.client_name }}</span>
+                        </div>
+                    </div>
+                    <a href="#" onclick="openQuickView('{{ c.tracking_id }}'); return false;" class="action-link secondary" style="padding: 0.3rem 0.6rem;"><i class="ri-eye-line"></i></a>
+                </div>
+                {% empty %}
+                <div style="text-align: center; padding: 2rem; color: #94a3b8; font-size: 0.85rem;">
+                    No cases approved today yet.
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="panel" style="margin-bottom: 0;">
+            <div class="panel-header">
+                <h3 class="panel-title">Department Activity</h3>
+                <a href="{% url 'audit_logs' %}" class="view-all-link">Full History <i class="ri-arrow-right-line" style="vertical-align: middle;"></i></a>
+            </div>
+
+            <div class="activity-list">
+                {% for log in staff_activity %}
+                <div class="activity-item">
+                    <div class="activity-left">
+                        <!-- Proper style handling for no-red-lines -->
+                        <div class="activity-icon"
+                             {% if log.action == 'case_status_change' %} style="color: #2563eb;" 
+                             {% elif log.action == 'case_assignment' %} style="color: #7e22ce;" 
+                             {% else %} style="color: #16a34a;" {% endif %}>
+                            <i class="{% if log.action == 'case_status_change' %}ri-exchange-line
+                                      {% elif log.action == 'case_assignment' %}ri-user-shared-2-line
+                                      {% else %}ri-inbox-archive-line{% endif %}"></i>
+                        </div>
+                        <div class="activity-text">
+                            <strong>{{ log.actor.full_name|default:log.actor.email }}</strong>
+                            <span>
+                                {{ log.get_action_display|lower }} 
+                                <span style="font-family: monospace; font-weight: 600; color: #64748b;">{{ log.target_object|slice:"6:" }}</span>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="activity-time">{{ log.created_at|timesince }} ago</div>
+                </div>
+                {% empty %}
+                <div style="text-align: center; padding: 2rem; color: #94a3b8; font-size: 0.85rem;">
+                    No recent staff activity.
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        
+    </div>
+
+    <!-- Quick View Drawer -->
+    <div id="quickViewBackdrop" class="drawer-backdrop" onclick="closeQuickView()"></div>
+    <div id="quickViewDrawer" class="drawer-panel">
+        <div style="display:flex; height:100%; align-items:center; justify-content:center;">
+            <i class="ri-loader-4-line ri-spin" style="font-size: 2rem; color: var(--primary);"></i>
+        </div>
+    </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const backdrop = document.getElementById('quickViewBackdrop');
+    const drawer = document.getElementById('quickViewDrawer');
+
+    function openQuickView(trackingId) {
+        drawer.innerHTML = '<div style="display:flex; height:100%; align-items:center; justify-content:center;"><i class="ri-loader-4-line ri-spin" style="font-size: 2.5rem; color: var(--primary);"></i></div>';
+        backdrop.classList.add('active');
+        drawer.classList.add('active');
+        document.body.style.overflow = 'hidden';
+
+        fetch(`/case/${trackingId}/quick-view/`)
+            .then(response => {
+                if (!response.ok) throw new Error('Network response was not ok');
+                return response.text();
+            })
+            .then(html => { drawer.innerHTML = html; })
+            .catch(error => {
+                drawer.innerHTML = '<div style="padding: 2rem; text-align: center; color: #dc2626;">Error loading preview.</div>';
+            });
+    }
+
+    function closeQuickView() {
+        backdrop.classList.remove('active');
+        drawer.classList.remove('active');
+        document.body.style.overflow = '';
+    }
+</script>
+{% endblock %}

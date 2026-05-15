@@ -1,0 +1,142 @@
+{% extends 'base_new.html' %}
+
+{% block content %}
+<div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
+    
+    <div style="background: linear-gradient(135deg, #2563eb, #3b82f6); color: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); display: flex; flex-direction: column; justify-content: center; position: relative; overflow: hidden;">
+        <i class="ri-hashtag" style="position: absolute; right: -5%; top: -15%; font-size: 8rem; opacity: 0.1; transform: rotate(15deg);"></i>
+        
+        <div style="font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: #bfdbfe; font-weight: 600;">
+            Live Sequence Tracker
+        </div>
+        
+        {% if featured_sequence %}
+            <div style="font-size: 2.75rem; font-weight: 800; margin: 0.5rem 0; line-height: 1;">
+                {{ featured_sequence.prefix }}{{ featured_sequence.current_count|stringformat:"03d" }}
+            </div>
+            <div style="font-size: 0.95rem; color: #eff6ff;">
+                Next available TD number for <strong>{{ featured_sequence.lgu_name|title }}</strong>
+            </div>
+        {% else %}
+            <div style="font-size: 1.5rem; font-weight: 700; margin: 1rem 0;">No Sequences Active</div>
+            <div style="font-size: 0.9rem; color: #eff6ff;">Awaiting first number generation.</div>
+        {% endif %}
+    </div>
+
+    <div style="background: white; padding: 1.5rem; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <div style="font-size: 0.85rem; color: #64748b; font-weight: 600; text-transform: uppercase;">Pending Assignment</div>
+            <div style="font-size: 2.5rem; font-weight: 700; color: #0f172a; margin-top: 0.25rem; line-height: 1;">{{ stats_pending }}</div>
+        </div>
+        <div style="width: 48px; height: 48px; background: #f8fafc; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+            <i class="ri-inbox-unarchive-line" style="font-size: 1.5rem; color: #64748b;"></i>
+        </div>
+    </div>
+
+    <div style="background: white; padding: 1.5rem; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <div style="font-size: 0.85rem; color: #64748b; font-weight: 600; text-transform: uppercase;">Numbered Today</div>
+            <div style="font-size: 2.5rem; font-weight: 700; color: #10b981; margin-top: 0.25rem; line-height: 1;">{{ stats_numbered_today }}</div>
+        </div>
+        <div style="width: 48px; height: 48px; background: #ecfdf5; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+            <i class="ri-checkbox-circle-line" style="font-size: 1.5rem; color: #10b981;"></i>
+        </div>
+    </div>
+
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 350px; gap: 1.5rem; align-items: start;">
+    
+    <div class="panel" style="background: white; border-radius: 12px; border: 1px solid #e2e8f0; padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+        <div class="panel-header" style="margin-bottom: 1.5rem;">
+            <h3 style="font-weight: 700; color: #1e293b; font-size: 1.1rem; margin: 0;">Pending Numbering Queue</h3>
+            <p class="text-muted" style="font-size: 0.85rem; margin-top: 4px;">Cases approved and waiting for official TD Numbers.</p>
+        </div>
+
+        <div style="overflow-x: auto;">
+            <table class="legal-table" style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="border-bottom: 2px solid #f1f5f9; text-align: left;">
+                        <th style="padding: 1rem 0.5rem; font-size: 0.75rem; color: #64748b; text-transform: uppercase;">Case Number</th>
+                        <th style="padding: 1rem 0.5rem; font-size: 0.75rem; color: #64748b; text-transform: uppercase;">Client & Request</th>
+                        <th style="padding: 1rem 0.5rem; font-size: 0.75rem; color: #64748b; text-transform: uppercase;">LGU Origin</th>
+                        <th style="padding: 1rem 0.5rem; font-size: 0.75rem; color: #64748b; text-transform: uppercase;">Status</th>
+                        <th style="padding: 1rem 0.5rem; font-size: 0.75rem; color: #64748b; text-transform: uppercase; text-align: right;">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for case in page_obj %}
+                    <tr style="border-bottom: 1px solid #f1f5f9;">
+                        <td style="padding: 1rem 0.5rem;">
+                            <span class="tracking-code" style="font-family: monospace; font-weight: 600; color: #0f172a; background: #f8fafc; padding: 0.25rem 0.5rem; border-radius: 4px; border: 1px solid #e2e8f0;">{{ case.tracking_id }}</span>
+                        </td>
+                        <td style="padding: 1rem 0.5rem;">
+                            <div style="font-weight: 600; color: #1e293b; font-size: 0.9rem;">{{ case.client_name }}</div>
+                            <div style="font-size: 0.75rem; color: #64748b; margin-top: 2px;">{{ case.get_case_type_display }}</div>
+                        </td>
+                        <td style="padding: 1rem 0.5rem;">
+                            <span style="font-weight: 600; color: #3b82f6; font-size: 0.85rem;">{{ case.submitted_by.lgu_municipality }}</span>
+                        </td>
+                        <td style="padding: 1rem 0.5rem;">
+                            <span class="status-pill status-{{ case.status }}">
+                                {{ case.get_status_display }}
+                            </span>
+                        </td>
+                        <td style="padding: 1rem 0.5rem; text-align: right;">
+                            <form action="{% url 'assign_td_number' case.tracking_id %}" method="POST" style="margin: 0;">
+                                {% csrf_token %}
+                                <button type="submit" title="Generate Number & Forward" onclick="return confirm('Generate official sequential TD number for {{ case.submitted_by.lgu_municipality }}?');" style="border: none; background: #eff6ff; color: #2563eb; padding: 0.5rem; border-radius: 6px; cursor: pointer; transition: all 0.2s;">
+                                    <i class="ri-key-2-line" style="font-size: 1.2rem;"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" style="text-align: center; padding: 4rem 1rem; color: #94a3b8;">
+                            <i class="ri-inbox-archive-line" style="font-size: 3rem; display: block; margin-bottom: 1rem; color: #cbd5e1;"></i>
+                            <div style="font-size: 1.05rem; font-weight: 600; color: #475569;">No cases currently pending numbering.</div>
+                            <div style="font-size: 0.85rem; margin-top: 4px;">When an Approver signs a case, it will appear here.</div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="panel" style="background: white; border-radius: 12px; border: 1px solid #e2e8f0; padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+        <div class="panel-header" style="margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid #f1f5f9;">
+            <h3 style="font-size: 1rem; font-weight: 700; color: #1e293b; margin: 0;">Recent Activity</h3>
+        </div>
+        
+        <div class="activity-feed">
+            {% for log in recent_activity %}
+                <div style="display: flex; gap: 1rem; margin-bottom: 1.25rem;">
+                    <div style="width: 36px; height: 36px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                        {% if log.action == 'case_numbered' %}
+                            <i class="ri-key-2-fill" style="color: #10b981; font-size: 1rem;"></i>
+                        {% else %}
+                            <i class="ri-user-settings-line" style="color: #64748b; font-size: 1rem;"></i>
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        <div style="font-size: 0.85rem; font-weight: 600; color: #334155;">{{ log.get_action_display }}</div>
+                        <div style="font-size: 0.75rem; color: #64748b; margin-top: 2px;">
+                            {% if log.target_object %}{{ log.target_object }}{% else %}System Activity{% endif %}
+                        </div>
+                        <div style="font-size: 0.7rem; color: #94a3b8; margin-top: 4px;">{{ log.created_at|timesince }} ago</div>
+                    </div>
+                </div>
+            {% empty %}
+                <div style="text-align: center; padding: 2rem 0;">
+                    <i class="ri-history-line" style="font-size: 2rem; color: #cbd5e1; margin-bottom: 0.5rem; display: block;"></i>
+                    <p style="font-size: 0.85rem; color: #94a3b8;">No recent actions found.</p>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+
+</div>
+{% endblock %}

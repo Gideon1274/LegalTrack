@@ -5,11 +5,12 @@ from datetime import timedelta
 import json
 import mimetypes
 import os
-
+from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.forms import SetPasswordForm
+from django.contrib.auth.forms import PasswordChangeForm
 from django.conf import settings
 from django import forms
 from django.core.paginator import Paginator
@@ -20,7 +21,264 @@ from django.utils.dateparse import parse_date
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
 from django.shortcuts import get_object_or_404, redirect, render
-from django.http import FileResponse, Http404, HttpResponse
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse
+from django.template.loader import render_to_string
+from django.urls import reverse
+
+import random
+from .models import Case, CustomUser, AuditLog, LGUTaxDeclarationSequence # <--- Add it here
+
+@login_required
+def case_quick_view(request, tracking_id):
+    # Fetch the case
+    case = get_object_or_404(Case, tracking_id=tracking_id)
+    
+    # Fetch recent remarks/logs
+    recent_remarks = AuditLog.objects.filter(
+        target_object=f"Case: {case.tracking_id}", 
+        action__icontains="remark"
+    ).order_by("-created_at")[:5]
+
+    # Check if the user is the current owner using your existing helper function
+    is_owner = _user_is_current_owner_for_internal_sections(request.user, case)
+
+    # Render just the HTML snippet
+    context = {
+        "case": case,
+        "remarks": recent_remarks,
+        "is_owner": is_owner,
+    }
+    html = render_to_string("core/case_detail_drawer.html", context, request=request)
+    
+    return HttpResponse(html)
+
+@login_required
+def lgu_submissions_view(request):
+    if request.user.role != "lgu_admin":
+        messages.error(request, "Not authorized.")
+        return redirect("dashboard")
+
+    tab = (request.GET.get("tab") or "").strip().lower() or "all"
+    query = (request.GET.get("q") or "").strip()
+
+    base_qs = (
+        Case.objects.filter(submitted_by=request.user, lgu_submitted_at__isnull=False)
+        .exclude(status="draft")
+        .order_by("-lgu_submitted_at", "-created_at")
+    )
+
+    tab_map = {
+        "all": None,
+        "pending": {"not_received", "pending", "client_correction"},
+        "processing": {"received", "to_examine", "in_review", "for_taxmapping", "for_approval", "for_numbering", "for_release"},
+        "released": {"released"},
+        "returned": {"returned"},
+    }
+
+    counts = {
+        "all": base_qs.count(),
+        "pending": base_qs.filter(status__in=tab_map["pending"]).count(),
+        "processing": base_qs.filter(status__in=tab_map["processing"]).count(),
+        "released": base_qs.filter(status__in=tab_map["released"]).count(),
+        "returned": base_qs.filter(status__in=tab_map["returned"]).count(),
+    }
+
+    qs = base_qs
+    statuses = tab_map.get(tab)
+    if statuses:
+        qs = qs.filter(status__in=statuses)
+    elif tab not in tab_map:
+        tab = "all"
+
+    if query:
+        qs = qs.filter(
+            Q(tracking_id__icontains=query)
+            | Q(client_name__icontains=query)
+            | Q(client_first_name__icontains=query)
+            | Q(client_last_name__icontains=query)
+            | Q(client_middle_name__icontains=query)
+            | Q(client_suffix__icontains=query)
+        )
+
+    paginator = Paginator(qs, 15)
+    page_obj = paginator.get_page(request.GET.get("page") or 1)
+
+    context = {
+        "page_obj": page_obj,
+        "tab": tab,
+        "query": query,
+        "counts": counts,
+        "tabs": [
+            ("all", "All Submissions"),
+            ("pending", "Pending"),
+            ("processing", "Processing"),
+            ("returned", "Returned"),
+            ("released", "Released"),
+        ],
+    }
+    return render(request, "lgu_submissions.html", context)
+
+
+@login_required
+def system_settings(request):
+    user = request.user
+
+    profile_form = SettingsProfileForm(instance=user)
+    password_form = PasswordChangeForm(user=user)
+    notifications_form = SettingsNotificationsForm(instance=user)
+    preferences_form = SettingsPreferencesForm(instance=user)
+
+    if request.method == "POST":
+        section = (request.POST.get("section") or "").strip().lower()
+
+        if section == "profile":
+            profile_form = SettingsProfileForm(request.POST, request.FILES, instance=user)
+            if profile_form.is_valid():
+                profile_form.save()
+                messages.success(request, "Profile updated.")
+                return redirect(f"{reverse('settings')}#profile")
+
+        elif section == "security":
+            password_form = PasswordChangeForm(user=user, data=request.POST)
+            if password_form.is_valid():
+                now = timezone.now()
+                if user.last_password_change_at and user.last_password_change_at.month != now.month:
+                    user.password_change_count_this_month = 0
+
+                if user.role != "super_admin":
+                    if user.password_change_count_this_month >= 2:
+                        messages.error(request, "Password change limit (twice a month) reached. Contact the Super Admin for approval.")
+                        return redirect(f"{reverse('settings')}#security")
+
+                password_form.save()
+                user.must_change_password = False
+                user.password_change_count_this_month += 1
+                user.last_password_change_at = now
+                user.save(update_fields=["must_change_password", "password_change_count_this_month", "last_password_change_at"])
+                update_session_auth_hash(request, user)
+
+                AuditLog.objects.create(
+                    actor=user,
+                    action="reset_password",
+                    target_object=f"User: {user.email}",
+                    details={"forced_reset": False, "count_this_month": user.password_change_count_this_month},
+                )
+
+                messages.success(request, "Password updated.")
+                return redirect(f"{reverse('settings')}#security")
+
+        elif section == "notifications":
+            notifications_form = SettingsNotificationsForm(request.POST, instance=user)
+            if notifications_form.is_valid():
+                updated = notifications_form.save(commit=False)
+                if user.role == "super_admin":
+                    updated.notify_critical_system_alerts = True
+                updated.save(update_fields=[
+                    "notify_new_account_activations",
+                    "notify_weekly_activity_report",
+                    "notify_critical_system_alerts",
+                ])
+                messages.success(request, "Notification settings updated.")
+                return redirect(f"{reverse('settings')}#notifications")
+
+        elif section == "system":
+            preferences_form = SettingsPreferencesForm(request.POST, instance=user)
+            if preferences_form.is_valid():
+                preferences_form.save()
+                messages.success(request, "Preferences updated.")
+                return redirect(f"{reverse('settings')}#system")
+
+    return render(request, "settings.html", {
+        "role_display": user.get_role_display(),
+        "profile_form": profile_form,
+        "password_form": password_form,
+        "notifications_form": notifications_form,
+        "preferences_form": preferences_form,
+    })
+    
+@login_required
+def user_list_api(request):
+    """API endpoint for fetching filtered users for the Super Admin dashboard tabs."""
+    if request.user.role != "super_admin":
+        return JsonResponse({"error": "Unauthorized"}, status=403)
+
+    tab_id = request.GET.get("tab", "total")
+    q = request.GET.get("q", "").strip()
+    role = request.GET.get("role", "")
+    lgu = request.GET.get("lgu", "")
+    page = request.GET.get("page", 1)
+
+    qs = CustomUser.objects.exclude(id=request.user.id).order_by("-date_joined")
+
+    if tab_id == "pending":
+        qs = qs.filter(account_status="pending")
+    elif tab_id == "deactivated":
+        qs = qs.filter(account_status="inactive")
+
+    if q:
+        qs = qs.filter(
+            Q(full_name__icontains=q) |
+            Q(email__icontains=q) |
+            Q(username__icontains=q)
+        )
+    if role:
+        qs = qs.filter(role=role)
+    if lgu:
+        qs = qs.filter(lgu_municipality=lgu)
+
+    total_count = qs.count()
+    paginator = Paginator(qs, 5)
+    page_obj = paginator.get_page(page)
+
+    users = []
+    for user in page_obj:
+        # Determine initials
+        name_parts = (user.full_name or user.email).split()
+        initials = "".join([p[0].upper() for p in name_parts[:2]]) if name_parts else "??"
+
+        # Determine role class/string
+        role_map = {
+            "super_admin": ("role-approver", "Super Admin"),
+            "lgu_admin": ("role-assessor", "LGU Admin"),
+            "capitol_receiving": ("role-receiver", "Receiver"),
+            "capitol_examiner": ("role-examiner", "Examiner"),
+            "capitol_approver": ("role-approver", "Approver"),
+            "capitol_taxmapper": ("role-examiner", "Tax Mapper"),
+            "capitol_numberer": ("role-receiver", "Numberer"),
+            "capitol_releaser": ("role-receiver", "Releaser"),
+        }
+        role_class, role_str = role_map.get(user.role, ("role-receiver", user.get_role_display()))
+
+        # Determine status class/string
+        status_map = {
+            "active": ("status-active", "Active"),
+            "pending": ("status-pending", "Pending"),
+            "inactive": ("status-inactive", "Inactive"),
+        }
+        status_class, status_str = status_map.get(user.account_status, ("status-inactive", user.get_account_status_display()))
+
+        users.append({
+            "id": user.id,
+            "initials": initials,
+            "name": user.full_name or user.email,
+            "email": user.email,
+            "role_class": role_class,
+            "role_str": role_str,
+            "lgu": user.lgu_municipality or "Capitol",
+            "status_class": status_class,
+            "status_str": status_str,
+            "is_pending": user.account_status == "pending",
+            "is_inactive": user.account_status == "inactive",
+        })
+
+    return JsonResponse({
+        "users": users,
+        "total_count": total_count,
+        "current_page": page_obj.number,
+        "has_next": page_obj.has_next(),
+        "has_previous": page_obj.has_previous(),
+        "num_pages": paginator.num_pages,
+    })
 from django.utils.html import format_html
 
 from .forms import (
@@ -28,6 +286,9 @@ from .forms import (
     CaseRemarkForm,
     ChecklistItemForm,
     ProfileUpdateForm,
+    SettingsNotificationsForm,
+    SettingsPreferencesForm,
+    SettingsProfileForm,
     PublicCaseSearchForm,
     ReportFilterForm,
     StaffAccountCreateForm,
@@ -144,8 +405,6 @@ def landing(request):
     if request.user.is_authenticated:
         return redirect("dashboard")
     return render(request, "core/landing.html")
-
-
 def healthz(request):
     try:
         with connection.cursor() as cursor:
@@ -160,16 +419,17 @@ def _public_status_label(case: Case) -> str:
     # Module 4: Simplified, public-friendly status labels.
     status = getattr(case, "status", "")
     mapping = {
-        "not_received": "Pending",
+        "not_received": "Submitted",
         "received": "Received",
-        "in_review": "Reviewed",
-        "for_taxmapping": "Tax Mapping",
-        "for_approval": "Approved",
-        "approved": "Approved",
-        "for_numbering": "Numbered",
-        "for_release": "For Release",
+        "to_examine": "Under Examination",
+        "in_review": "Under Examination",
+        "for_taxmapping": "In Review",
+        "for_approval": "For Approval",
+        "approved": "For Approval",
+        "for_numbering": "For Numbering",
+        "for_release": "For Releasing",
         "released": "Released",
-        "client_correction": "Returned to Client (Correction Window)",
+        "client_correction": "Returned for Correction",
         "returned": "Returned",
         "withdrawn": "Withdrawn",
     }
@@ -185,9 +445,10 @@ def _build_public_timeline(case: Case) -> list[dict[str, object]]:
             events.append({"label": label, "when": when})
 
     # Initial creation
-    add("Transaction Created", case.created_at)
+    add("Submitted", case.created_at)
     
     # Key transitions from audit logs
+    from core.models import AuditLog
     history_qs = (
         AuditLog.objects.filter(target_object=f"Case: {case.tracking_id}")
         .order_by("created_at")
@@ -200,7 +461,7 @@ def _build_public_timeline(case: Case) -> list[dict[str, object]]:
         action = getattr(h, "action", "")
         if action == "case_receipt":
             if not physically_received_added:
-                add("Physically Received", h.created_at)
+                add("Received", h.created_at)
                 physically_received_added = True
             continue
         if action in {"case_status_change", "case_approval", "case_rejection", "case_release"}:
@@ -213,12 +474,12 @@ def _build_public_timeline(case: Case) -> list[dict[str, object]]:
                 # If the status change is 'received', handle it carefully to avoid duplicates
                 if new_status == "received":
                     if not physically_received_added:
-                        add("Physically Received", h.created_at)
+                        add("Received", h.created_at)
                         physically_received_added = True
                     continue
 
                 label = _public_status_label(type("obj", (), {"status": new_status})())
-                add(f"Status: {label}", h.created_at)
+                add(label, h.created_at)
             continue
 
     # Add current status if not already reflected (though audit logs should cover it)
@@ -276,6 +537,42 @@ def track_case_detail(request, tracking_id: str):
         "show_internal_status": show_internal_status,
         "updated_at": case.updated_at,
         "timeline": timeline,
+        "case_type": case.get_case_type_display(),
+        "area": case.area,
+        "created_at": case.created_at,
+    })
+
+
+def public_track_api(request, tracking_id: str):
+    """API version of track_case_detail for the React frontend."""
+    tracking = (tracking_id or "").strip().upper()
+    
+    # Validation: Empty or too short
+    if not tracking:
+        return JsonResponse({"detail": "Tracking ID is required."}, status=400)
+    
+    case = Case.objects.filter(tracking_id__iexact=tracking, lgu_submitted_at__isnull=False).first()
+    if not case:
+        return JsonResponse({"detail": f"No record found for Tracking ID: {tracking}"}, status=404)
+
+    public_status = _public_status_label(case)
+    timeline_raw = _build_public_timeline(case)
+    
+    # Format timeline for JSON
+    timeline = []
+    for event in timeline_raw:
+        timeline.append({
+            "label": event["label"],
+            "when": event["when"].isoformat() if hasattr(event["when"], "isoformat") else str(event["when"])
+        })
+
+    return JsonResponse({
+        "tracking_id": case.tracking_id,
+        "status": public_status,
+        "updated_at": case.updated_at.isoformat(),
+        "timeline": timeline,
+        "client_name": f"{case.client_first_name} {case.client_last_name}" if case.client_first_name else case.client_name,
+        "case_type": case.get_case_type_display(),
     })
 
 
@@ -356,9 +653,10 @@ def analytics_dashboard(request):
 
 @login_required
 def reports(request):
-    denial = _require_super_admin(request)
-    if denial:
-        return denial
+    # Security Gate: Allow Super Admins, LGU Admins, and Capitol Staff
+    if request.user.role not in ['super_admin', 'lgu_admin'] and not getattr(request.user, 'role', '').startswith('capitol_'):
+        messages.error(request, "Not authorized.")
+        return redirect("dashboard")
 
     form = ReportFilterForm(request.GET or None)
     rows = []
@@ -371,7 +669,13 @@ def reports(request):
         status = (form.cleaned_data.get("status") or "").strip()
         sort = (form.cleaned_data.get("sort") or "-created_at").strip()
 
-        qs = Case.objects.all()
+        # Contextual Data Filtering: LGU Admins only see their municipality's data
+        if request.user.role == 'lgu_admin':
+            mun = getattr(request.user, "lgu_municipality", "")
+            qs = Case.objects.filter(submitted_by__lgu_municipality=mun)
+        else:
+            qs = Case.objects.all()
+
         if status:
             qs = qs.filter(status=status)
         if date_from:
@@ -411,7 +715,6 @@ def reports(request):
         "rows": rows,
     })
 
-
 @login_required
 def staff_reports(request):
     if not (_is_capitol_staff(request.user) or request.user.role == "super_admin"):
@@ -442,9 +745,10 @@ def staff_reports(request):
 
 @login_required
 def export_reports_csv(request):
-    denial = _require_super_admin(request)
-    if denial:
-        return denial
+    # Security Gate: Allow Super Admins, LGU Admins, and Capitol Staff
+    if request.user.role not in ['super_admin', 'lgu_admin'] and not getattr(request.user, 'role', '').startswith('capitol_'):
+        messages.error(request, "Not authorized.")
+        return redirect("dashboard")
 
     form = ReportFilterForm(request.GET or None)
     if not form.is_valid():
@@ -456,7 +760,13 @@ def export_reports_csv(request):
     date_to = form.cleaned_data.get("date_to")
     status = (form.cleaned_data.get("status") or "").strip()
 
-    qs = Case.objects.all()
+    # Contextual Data Filtering: LGU Admins only see their municipality's data
+    if request.user.role == 'lgu_admin':
+        mun = getattr(request.user, "lgu_municipality", "")
+        qs = Case.objects.filter(submitted_by__lgu_municipality=mun)
+    else:
+        qs = Case.objects.all()
+
     if status:
         qs = qs.filter(status=status)
     if date_from:
@@ -478,7 +788,6 @@ def export_reports_csv(request):
 
     if report_type == "monthly_accomplishment":
         from django.db.models.functions import TruncMonth
-
         writer.writerow(["month", "total"])
         for r in qs.annotate(month=TruncMonth("created_at")).values("month").annotate(total=Count("id")).order_by("month"):
             writer.writerow([r["month"].date().isoformat() if r["month"] else "", r["total"]])
@@ -491,7 +800,6 @@ def export_reports_csv(request):
         days = round(delta.total_seconds() / 86400, 2) if delta else ""
         writer.writerow([c.tracking_id, c.created_at.isoformat(), c.released_at.isoformat(), days])
     return response
-
 
 def _require_super_admin(request):
     if not request.user.is_authenticated:
@@ -530,7 +838,7 @@ def _user_is_current_owner_for_internal_sections(user: CustomUser, case: Case) -
     if role == "capitol_receiving":
         return getattr(case, "status", "") in {"not_received", "received"} and getattr(case, "assigned_to_id", None) is None
     if role == "capitol_examiner":
-        return getattr(case, "status", "") in {"for_review", "under_review", "in_review"} and getattr(case, "assigned_to_id", None) == getattr(user, "id", None)
+        return getattr(case, "status", "") in {"to_examine", "in_review"} and getattr(case, "assigned_to_id", None) == getattr(user, "id", None)
     if role == "capitol_approver":
         return getattr(case, "status", "") == "for_approval"
     if role == "capitol_taxmapper":
@@ -541,7 +849,7 @@ def _user_is_current_owner_for_internal_sections(user: CustomUser, case: Case) -
         return getattr(case, "status", "") == "for_release"
     return False
 
-
+@xframe_options_sameorigin
 @login_required
 def download_case_document(request, doc_id: int):
     doc = get_object_or_404(CaseDocument.objects.select_related("case"), id=doc_id)
@@ -560,6 +868,12 @@ def download_case_document(request, doc_id: int):
     guessed, _ = mimetypes.guess_type(filename)
     if guessed:
         response["Content-Type"] = guessed
+    else:
+        if filename.lower().endswith(".pdf"):
+            response["Content-Type"] = "application/pdf"
+        elif filename.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp")):
+            response["Content-Type"] = "image/*"
+    response["Content-Disposition"] = f'inline; filename="{filename}"'
     response["X-Content-Type-Options"] = "nosniff"
     return response
 
@@ -779,89 +1093,10 @@ def dashboard(request):
         "role_display": user.get_role_display(),
     }
 
-    if user.role == "super_admin":
-        total_users = CustomUser.objects.exclude(id=user.id).count()
-        total_cases = Case.objects.exclude(status="draft").count()
-        pending_intake = Case.objects.filter(status="not_received").count()
-        for_approval = Case.objects.filter(status="for_approval").count()
-        released = Case.objects.filter(status="released").count()
-        context.update({
-            "section": "super_admin",
-            "total_users": total_users,
-            "stat_cards": [
-                {"value": total_users, "label": "Total Staff Accounts"},
-                {"value": total_cases, "label": "Total Transactions"},
-                {"value": pending_intake, "label": "Pending Intake"},
-                {"value": for_approval, "label": "For Approval"},
-                {"value": released, "label": "Released"},
-            ],
-        })
-        template = "core/dashboard_superadmin.html"
-
-    elif user.role == "lgu_admin":
-        tab = (request.GET.get("tab") or "").strip().lower() or "all"
-        q = (request.GET.get("q") or "").strip()
-
-        mun = (getattr(user, "lgu_municipality", "") or "").strip()
-        base_qs = Case.objects.filter(lgu_submitted_at__isnull=False).select_related("submitted_by").order_by("-created_at")
-        if mun:
-            base_qs = base_qs.filter(submitted_by__lgu_municipality=mun)
-        else:
-            base_qs = base_qs.filter(submitted_by=user)
-
-        base_qs = base_qs.exclude(status="client_correction", client_correction_deadline__lt=timezone.now())
-
-        tab_map = {
-            "all": None,
-            "pending": {"not_received", "client_correction"},
-            "received": {"received", "in_review", "for_taxmapping", "for_approval", "for_numbering", "for_release", "released"},
-        }
-        statuses = tab_map.get(tab)
-        qs = base_qs
-        if statuses:
-            qs = qs.filter(status__in=statuses)
-
-        if q:
-            qs = qs.filter(
-                Q(tracking_id__icontains=q) |
-                Q(client_name__icontains=q) |
-                Q(client_email__icontains=q) |
-                Q(submitted_by__lgu_municipality__icontains=q) |
-                Q(case_type__icontains=q)
-            )
-
-        # Counts for tab badges (computed on the municipality-wide base set)
-        all_count = base_qs.count()
-        pending_count = base_qs.filter(status__in=tab_map["pending"]).count()
-        received_count = base_qs.filter(status__in=tab_map["received"]).count()
-        released_count = base_qs.filter(status="released").count()
-        correction_count = base_qs.filter(status="client_correction").count()
-
-        paginator = Paginator(qs, 10)
-        page_obj = paginator.get_page(request.GET.get("page") or 1)
-
-        raw = list(base_qs.values("status").annotate(count=Count("id")).order_by("status"))
-        status_labels = dict(Case.STATUS_CHOICES)
-        status_counts = [{"status": status_labels.get(r["status"], r["status"]), "count": r["count"]} for r in raw]
-
-        context.update({
-            "section": "lgu_admin",
-            "tab": tab,
-            "tabs": [("all", "All", all_count), ("pending", "Pending", pending_count), ("received", "Received", received_count)],
-            "page_obj": page_obj,
-            "status_counts": status_counts,
-            "filter_q": q,
-            "stat_cards": [
-                {"value": all_count, "label": "Total Submissions"},
-                {"value": pending_count, "label": "Pending"},
-                {"value": received_count, "label": "In Process"},
-                {"value": released_count, "label": "Released"},
-                {"value": correction_count, "label": "For Correction"},
-            ],
-        })
-        template = "core/dashboard_lgu.html"
-
-    else:  # Capitol roles
+    # ==========================================
+    # COMMON CAPITOL STAFF LOGIC
+    # ==========================================
+    if user.role.startswith("capitol_"):
         activity_raw = list(
             AuditLog.objects.filter(actor=user, action__startswith="case_")
             .values("action")
@@ -877,347 +1112,437 @@ def dashboard(request):
         context.update({
             "activity_counts": activity_counts,
             "activity_total": sum(int(r.get("count") or 0) for r in activity_raw),
-        })
-
-        context.update({
             "section": "capitol_staff",
             "capitol_role": user.get_role_display(),
         })
 
-        if user.role == "capitol_receiving":
-            tab = (request.GET.get("tab") or "").strip().lower() or "pending"
-            q = (request.GET.get("q") or "").strip()
-            status_filter = (request.GET.get("status") or "").strip()
-            lgu_filter = (request.GET.get("lgu") or "").strip()
-            type_filter = (request.GET.get("case_type") or "").strip()
+    # ==========================================
+    # ROLE-SPECIFIC DASHBOARDS
+    # ==========================================
+    if user.role == "super_admin":
+        # 1. KPIs
+        total_users_count = CustomUser.objects.count()
+        total_lgus_count = CustomUser.objects.filter(role="lgu_admin").values("lgu_municipality").distinct().count()
+        active_cases_count = Case.objects.exclude(status__in=["released", "withdrawn", "returned", "draft"]).count()
+        
+        seven_days_ago = timezone.now() - timedelta(days=7)
+        new_users_count = CustomUser.objects.filter(date_joined__gte=seven_days_ago).count()
+        
+        pending_users_count = CustomUser.objects.filter(account_status="pending").count()
+        deactivated_users_count = CustomUser.objects.filter(account_status="inactive").count()
 
-            base_pending_qs = Case.objects.filter(status="not_received")
-            base_received_qs = Case.objects.filter(status="received", assigned_to__isnull=True)
+        # 2. Recent Logs
+        recent_logs = AuditLog.objects.filter(
+            action__in=["create_user", "deactivate_user", "reactivate_user", "update_user", "reset_password", "login", "logout", "activate_account"]
+        ).select_related("actor", "target_user").order_by("-created_at")[:5]
 
-            if q:
-                base_pending_qs = base_pending_qs.filter(
-                    Q(tracking_id__icontains=q) |
-                    Q(client_name__icontains=q) |
-                    Q(client_email__icontains=q) |
-                    Q(submitted_by__lgu_municipality__icontains=q) |
-                    Q(case_type__icontains=q)
-                )
-                base_received_qs = base_received_qs.filter(
-                    Q(tracking_id__icontains=q) |
-                    Q(client_name__icontains=q) |
-                    Q(client_email__icontains=q) |
-                    Q(submitted_by__lgu_municipality__icontains=q) |
-                    Q(case_type__icontains=q)
-                )
+        # 3. Chart Data (Role Distribution)
+        role_map = {
+            "lgu_admin": 0,
+            "capitol_receiving": 1,
+            "capitol_examiner": 2,
+            "capitol_approver": 3,
+            "capitol_numberer": 4,
+        }
+        role_distribution_array = [0] * 5
+        role_counts = CustomUser.objects.values("role").annotate(count=Count("id"))
+        for item in role_counts:
+            idx = role_map.get(item["role"])
+            if idx is not None:
+                role_distribution_array[idx] = item["count"]
 
-            if lgu_filter:
-                base_pending_qs = base_pending_qs.filter(submitted_by__lgu_municipality=lgu_filter)
-                base_received_qs = base_received_qs.filter(submitted_by__lgu_municipality=lgu_filter)
+        # 4. User List (Initial Load - Total Users)
+        users_qs = CustomUser.objects.exclude(id=user.id).order_by("-date_joined")
+        paginator = Paginator(users_qs, 5)
+        page_number = request.GET.get("page", 1)
+        page_obj = paginator.get_page(page_number)
 
-            if type_filter:
-                base_pending_qs = base_pending_qs.filter(case_type=type_filter)
-                base_received_qs = base_received_qs.filter(case_type=type_filter)
+        context.update({
+            "section": "super_admin",
+            "total_users_count": total_users_count,
+            "total_lgus_count": total_lgus_count,
+            "active_cases_count": active_cases_count,
+            "new_users_count": new_users_count,
+            "pending_users_count": pending_users_count,
+            "deactivated_users_count": deactivated_users_count,
+            "recent_logs": recent_logs,
+            "role_distribution_array": role_distribution_array,
+            "page_obj": page_obj,
+            "role_choices": CustomUser.ROLE_CHOICES,
+            "lgu_choices": CustomUser.LGU_MUNICIPALITY_CHOICES,
+        })
+        template = "core/dashboard_superadmin.html"
 
-            if status_filter:
-                base_pending_qs = base_pending_qs.filter(status=status_filter)
-                base_received_qs = base_received_qs.filter(status=status_filter)
+    elif user.role == "lgu_admin":
+        tab = (request.GET.get("tab") or "").strip().lower() or "all"
+        mun = (getattr(user, "lgu_municipality", "") or "").strip()
+        
+        base_qs = Case.objects.filter(lgu_submitted_at__isnull=False).select_related("submitted_by").order_by("-created_at")
+        
+        if mun:
+            base_qs = base_qs.filter(submitted_by__lgu_municipality=mun)
+        else:
+            base_qs = base_qs.filter(submitted_by=user)
 
-            pending_qs = base_pending_qs.select_related("submitted_by").order_by("-created_at")
-            received_qs = base_received_qs.select_related("submitted_by").order_by("-received_at")
+        base_qs = base_qs.exclude(status="client_correction", client_correction_deadline__lt=timezone.now())
 
-            pending_count = pending_qs.count()
-            received_count = received_qs.count()
+        total_cases_count = base_qs.count()
+        todays_cases_count = base_qs.filter(lgu_submitted_at__date=timezone.localdate()).count()
 
-            if tab == "received":
-                paginator = Paginator(received_qs, 10)
-            else:
-                tab = "pending"
-                paginator = Paginator(pending_qs, 10)
-            page_obj = paginator.get_page(request.GET.get("page") or 1)
+        tab_map = {
+            "all": None,
+            "pending": {"not_received", "client_correction"},
+            "received": {"received", "to_examine", "in_review", "for_taxmapping", "for_approval", "for_numbering", "for_release", "released"},
+        }
+        
+        statuses = tab_map.get(tab)
+        qs = base_qs
+        if statuses:
+            qs = qs.filter(status__in=statuses)
 
-            today = timezone.localdate()
-            stats_received_today = Case.objects.filter(received_by=user, received_at__date=today).count()
-            stats_pending_intake = Case.objects.filter(status="not_received").count()
-            stats_for_assignment = Case.objects.filter(status="received", assigned_to__isnull=True).count()
-            stats_returned_to_owner = Case.objects.filter(status="client_correction").count()
-            stats_total_handled = AuditLog.objects.filter(actor=user, action__in={"case_receipt", "case_assignment", "case_return"}).count()
+        # Counts for tab badges
+        all_count = total_cases_count
+        pending_count = base_qs.filter(status__in=tab_map["pending"]).count()
+        received_count = base_qs.filter(status__in=tab_map["received"]).count()
 
-            ready_for_assignment = Case.objects.filter(status="received", assigned_to__isnull=True).select_related("submitted_by").order_by("-received_at")[:8]
-            returned_to_me = Case.objects.filter(returned_by=user).select_related("submitted_by").order_by("-returned_at")[:8]
-            recent_activity = AuditLog.objects.filter(actor=user).order_by("-created_at")[:10]
+        paginator = Paginator(qs, 10)
+        page_obj = paginator.get_page(request.GET.get("page") or 1)
 
-            context.update({
-                "tab": tab,
-                "tabs": [("pending", "Pending", pending_count), ("received", "Received", received_count)],
-                "page_obj": page_obj,
-                "filter_q": q,
-                "filter_status": status_filter,
-                "filter_lgu": lgu_filter,
-                "filter_case_type": type_filter,
-                "lgu_choices": CustomUser.LGU_MUNICIPALITY_CHOICES,
-                "case_type_choices": Case.CASE_TYPE_CHOICES,
-                "receiver_stats": {
-                    "received_today": stats_received_today,
-                    "pending_intake": stats_pending_intake,
-                    "for_assignment": stats_for_assignment,
-                    "returned_to_owner": stats_returned_to_owner,
-                    "total_handled": stats_total_handled,
-                },
-                "stat_cards": [
-                    {"value": stats_received_today, "label": "Received Today"},
-                    {"value": stats_pending_intake, "label": "Pending Intake"},
-                    {"value": stats_for_assignment, "label": "For Assignment"},
-                    {"value": stats_returned_to_owner, "label": "Returned to Owner"},
-                    {"value": stats_total_handled, "label": "Total Transactions Handled"},
-                ],
-                "ready_for_assignment": ready_for_assignment,
-                "returned_to_me": returned_to_me,
-                "recent_activity": recent_activity,
-            })
+        raw = list(base_qs.values("status").annotate(count=Count("id")).order_by("status"))
+        status_labels = dict(Case.STATUS_CHOICES)
+        status_counts = [{"status": status_labels.get(r["status"], r["status"]), "count": r["count"]} for r in raw]
 
-        elif user.role == "capitol_examiner":
-            q = (request.GET.get("q") or "").strip()
-            lgu_filter = (request.GET.get("lgu") or "").strip()
-            type_filter = (request.GET.get("case_type") or "").strip()
-            status_filter = (request.GET.get("status") or "").strip()
+        recent_logs = AuditLog.objects.filter(actor=user).order_by("-created_at")[:5]
 
-            base_all = Case.objects.filter(assigned_to=user).exclude(status="draft")
-            qs = base_all.select_related("submitted_by").order_by("-assigned_at", "-updated_at")
+        context.update({
+            "section": "lgu_admin",
+            "tab": tab,
+            "tabs": [("all", "All", all_count), ("pending", "Pending", pending_count), ("received", "Received", received_count)],
+            "page_obj": page_obj,
+            "status_counts": status_counts,
+            "total_cases_count": total_cases_count,
+            "todays_cases_count": todays_cases_count,
+            "recent_logs": recent_logs,
+        })
+        template = "core/dashboard_lgu.html"
 
-            if q:
-                qs = qs.filter(
-                    Q(tracking_id__icontains=q) |
-                    Q(client_name__icontains=q) |
-                    Q(client_email__icontains=q) |
-                    Q(submitted_by__lgu_municipality__icontains=q) |
-                    Q(case_type__icontains=q)
-                )
-            if lgu_filter:
-                qs = qs.filter(submitted_by__lgu_municipality=lgu_filter)
-            if type_filter:
-                qs = qs.filter(case_type=type_filter)
-            if status_filter:
-                qs = qs.filter(status=status_filter)
+    elif user.role == "capitol_receiving":
+        tab = (request.GET.get("tab") or "").strip().lower() or "pending"
+        q = (request.GET.get("q") or "").strip()
 
-            paginator = Paginator(qs, 10)
-            page_obj = paginator.get_page(request.GET.get("page") or 1)
+        # Base Queries
+        base_pending_qs = Case.objects.filter(status="not_received")
+        base_received_qs = Case.objects.filter(status="received", assigned_to__isnull=True)
 
-            today = timezone.localdate()
-            reviewed_today = AuditLog.objects.filter(actor=user, action="case_document_review", created_at__date=today).count()
+        if q:
+            filt = Q(tracking_id__icontains=q) | Q(client_name__icontains=q) | Q(submitted_by__lgu_municipality__icontains=q)
+            base_pending_qs = base_pending_qs.filter(filt)
+            base_received_qs = base_received_qs.filter(filt)
+        
+        pending_count = base_pending_qs.count()
+        received_count = base_received_qs.count()
 
-            context.update({
-                "page_obj": page_obj,
-                "filter_q": q,
-                "filter_status": status_filter,
-                "filter_lgu": lgu_filter,
-                "filter_case_type": type_filter,
-                "lgu_choices": CustomUser.LGU_MUNICIPALITY_CHOICES,
-                "case_type_choices": Case.CASE_TYPE_CHOICES,
-                "status_choices": Case.STATUS_CHOICES,
-                "stat_cards": [
-                    {"value": base_all.count(), "label": "Assigned to Me"},
-                    {"value": base_all.filter(status="in_review").count(), "label": "In Review"},
-                    {"value": base_all.filter(status="for_taxmapping").count(), "label": "For Taxmapping"},
-                    {"value": base_all.filter(status="for_approval").count(), "label": "For Approval"},
-                    {"value": reviewed_today, "label": "Docs Reviewed Today"},
-                ],
-            })
+        if tab == "received":
+            active_qs = base_received_qs.select_related("submitted_by").order_by("-received_at")
+        else:
+            tab = "pending"
+            active_qs = base_pending_qs.select_related("submitted_by").order_by("-created_at")
+            
+        paginator = Paginator(active_qs, 10)
+        page_obj = paginator.get_page(request.GET.get("page") or 1)
 
-        elif user.role == "capitol_approver":
-            q = (request.GET.get("q") or "").strip()
-            lgu_filter = (request.GET.get("lgu") or "").strip()
-            type_filter = (request.GET.get("case_type") or "").strip()
+        # KPIs
+        today = timezone.localdate()
+        stats_pending_intake = Case.objects.filter(status="not_received").count()
+        stats_ready_assign = Case.objects.filter(status="received", assigned_to__isnull=True).count()
+        stats_received_today = AuditLog.objects.filter(actor=user, action="case_receipt", created_at__date=today).count()
+        stats_returned_lgu = Case.objects.filter(status="client_correction").count()
 
-            base_all = Case.objects.filter(status="for_approval")
-            qs = base_all.select_related("submitted_by").order_by("-updated_at")
+        # Secondary Panels
+        returned_cases = Case.objects.filter(
+            status="received", 
+            assigned_to__isnull=True, 
+            returned_by__isnull=False 
+        ).select_related("returned_by").order_by("-returned_at")[:5]
 
-            if q:
-                qs = qs.filter(
-                    Q(tracking_id__icontains=q) |
-                    Q(client_name__icontains=q) |
-                    Q(client_email__icontains=q) |
-                    Q(submitted_by__lgu_municipality__icontains=q) |
-                    Q(case_type__icontains=q)
-                )
-            if lgu_filter:
-                qs = qs.filter(submitted_by__lgu_municipality=lgu_filter)
-            if type_filter:
-                qs = qs.filter(case_type=type_filter)
+        cases_to_assign = Case.objects.filter(
+            status="received", 
+            assigned_to__isnull=True, 
+            returned_by__isnull=True 
+        ).select_related("submitted_by").order_by("updated_at")[:3]
 
-            paginator = Paginator(qs, 10)
-            page_obj = paginator.get_page(request.GET.get("page") or 1)
+        examiners = CustomUser.objects.filter(role="capitol_examiner", is_active=True)
+        recent_logs = AuditLog.objects.filter(actor=user).order_by("-created_at")[:6]
 
-            today = timezone.localdate()
-            approved_today = AuditLog.objects.filter(actor=user, action="case_approval", created_at__date=today).count()
-            rejected_today = AuditLog.objects.filter(actor=user, action="case_rejection", created_at__date=today).count()
+        context.update({
+            "section": "capitol_receiving",
+            "tab": tab,
+            "tabs": [("pending", "Pending Intake", pending_count), ("received", "Received (Unassigned)", received_count)],
+            "page_obj": page_obj,
+            "stats_pending_intake": stats_pending_intake,
+            "stats_ready_assign": stats_ready_assign,
+            "stats_received_today": stats_received_today,
+            "stats_returned_lgu": stats_returned_lgu,
+            "returned_cases": returned_cases,
+            "cases_to_assign": cases_to_assign,
+            "recent_logs": recent_logs,
+            "examiners": examiners,
+            "q": q,
+        })
+        template = "core/dashboard_receiver.html"
 
-            context.update({
-                "page_obj": page_obj,
-                "filter_q": q,
-                "filter_lgu": lgu_filter,
-                "filter_case_type": type_filter,
-                "lgu_choices": CustomUser.LGU_MUNICIPALITY_CHOICES,
-                "case_type_choices": Case.CASE_TYPE_CHOICES,
-                "stat_cards": [
-                    {"value": base_all.count(), "label": "For Approval"},
-                    {"value": approved_today, "label": "Approved Today"},
-                    {"value": rejected_today, "label": "Rejected Today"},
-                    {"value": Case.objects.filter(status="for_release").count(), "label": "For Release"},
-                    {"value": context.get("activity_total", 0), "label": "My Total Actions"},
-                ],
-            })
+    elif user.role == "capitol_examiner":
+        today = timezone.localdate()
+        
+        q = (request.GET.get("q") or "").strip()
+        case_type_filter = (request.GET.get("case_type") or "").strip()
+        lgu_filter = (request.GET.get("lgu") or "").strip()
+        
+        base_qs = Case.objects.filter(assigned_to=user).select_related("submitted_by")
+        
+        # KPIs
+        stats_assigned_today = base_qs.filter(assigned_at__date=today).count()
+        stats_pending_intake = base_qs.filter(status="to_examine").count()
+        stats_under_review = base_qs.filter(status="in_review").count()
+        stats_returned = base_qs.filter(status="client_correction").count()
+        stats_total_handled = AuditLog.objects.filter(actor=user, action="case_status_change", details__new_status="for_approval").count()
 
-        elif user.role == "capitol_taxmapper":
-            q = (request.GET.get("q") or "").strip()
-            lgu_filter = (request.GET.get("lgu") or "").strip()
-            type_filter = (request.GET.get("case_type") or "").strip()
-
-            base_all = Case.objects.filter(status="for_taxmapping", taxmapper_assigned_to=user)
-            qs = base_all.select_related("submitted_by").order_by("-updated_at")
-
-            if q:
-                qs = qs.filter(
-                    Q(tracking_id__icontains=q) |
-                    Q(client_name__icontains=q) |
-                    Q(client_email__icontains=q) |
-                    Q(submitted_by__lgu_municipality__icontains=q) |
-                    Q(case_type__icontains=q)
-                )
-            if lgu_filter:
-                qs = qs.filter(submitted_by__lgu_municipality=lgu_filter)
-            if type_filter:
-                qs = qs.filter(case_type=type_filter)
-
-            paginator = Paginator(qs, 10)
-            page_obj = paginator.get_page(request.GET.get("page") or 1)
-
-            today = timezone.localdate()
-            status_changed_today = AuditLog.objects.filter(actor=user, action="case_status_change", created_at__date=today).count()
-
-            context.update({
-                "page_obj": page_obj,
-                "filter_q": q,
-                "filter_lgu": lgu_filter,
-                "filter_case_type": type_filter,
-                "lgu_choices": CustomUser.LGU_MUNICIPALITY_CHOICES,
-                "case_type_choices": Case.CASE_TYPE_CHOICES,
-                "stat_cards": [
-                    {"value": base_all.count(), "label": "My Taxmapping Queue"},
-                    {"value": status_changed_today, "label": "Status Updates Today"},
-                    {"value": Case.objects.filter(status="for_approval").count(), "label": "For Approval"},
-                    {"value": Case.objects.filter(status="client_correction").count(), "label": "For Correction"},
-                    {"value": context.get("activity_total", 0), "label": "My Total Actions"},
-                ],
-            })
-
-        elif user.role == "capitol_numberer":
-            queue_cases = (
-                Case.objects.filter(status="for_numbering")
-                .select_related("submitted_by")
-                .prefetch_related("numbers")
-                .order_by("-updated_at")
+        # Main Table Queue
+        active_qs = base_qs.filter(status__in=["to_examine", "in_review", "client_correction"]).order_by("-assigned_at")
+        
+        if q:
+            active_qs = active_qs.filter(
+                Q(tracking_id__icontains=q) | 
+                Q(client_name__icontains=q) |
+                Q(client_first_name__icontains=q) |
+                Q(client_last_name__icontains=q)
             )
+        if case_type_filter:
+            active_qs = active_qs.filter(case_type=case_type_filter)
+        if lgu_filter:
+            active_qs = active_qs.filter(submitted_by__lgu_municipality=lgu_filter)
 
-            lgu = (request.GET.get("lgu") or "").strip()
-            date_from_raw = (request.GET.get("date_from") or "").strip()
-            date_to_raw = (request.GET.get("date_to") or "").strip()
-            number_q = (request.GET.get("number") or "").strip()
+        paginator = Paginator(active_qs, 5)
+        page_obj = paginator.get_page(request.GET.get("page") or 1)
 
-            date_from = parse_date(date_from_raw) if date_from_raw else None
-            date_to = parse_date(date_to_raw) if date_to_raw else None
+        under_review_cases = base_qs.filter(status="in_review").order_by("assigned_at")[:4]
+        recent_logs = AuditLog.objects.filter(actor=user).order_by("-created_at")[:4]
 
-            if lgu:
-                queue_cases = queue_cases.filter(submitted_by__lgu_municipality=lgu)
-            if date_from:
-                queue_cases = queue_cases.filter(created_at__date__gte=date_from)
-            if date_to:
-                queue_cases = queue_cases.filter(created_at__date__lte=date_to)
-            if number_q:
-                if number_q.isdigit():
-                    padded = number_q.zfill(5) if len(number_q) <= 5 else number_q
-                    queue_cases = queue_cases.filter(
-                        Q(numbers__number=padded) |
-                        Q(tracking_id__icontains=number_q)
-                    )
-                else:
-                    queue_cases = queue_cases.filter(
-                        Q(tracking_id__icontains=number_q)
-                    )
-                queue_cases = queue_cases.distinct()
+        context.update({
+            "section": "capitol_examiner",
+            "stats_assigned_today": stats_assigned_today,
+            "stats_pending_intake": stats_pending_intake,
+            "stats_under_review": stats_under_review,
+            "stats_returned": stats_returned,
+            "stats_total_handled": stats_total_handled,
+            "page_obj": page_obj,
+            "under_review_cases": under_review_cases,
+            "recent_logs": recent_logs,
+            "filter_q": q,
+            "filter_case_type": case_type_filter,
+            "filter_lgu": lgu_filter,
+            "lgu_choices": CustomUser.LGU_MUNICIPALITY_CHOICES,
+            "case_type_choices": Case.CASE_TYPE_CHOICES,
+        })
+        template = "core/dashboard_examiner.html"
 
-            last_used = CaseNumber.objects.order_by("-number").values_list("number", flat=True).first()
-            suggested_next = (int(last_used) + 1) if (last_used and str(last_used).isdigit()) else 1
-            suggested_next_str = str(suggested_next).zfill(5)
+    elif user.role == "capitol_approver":
+        today = timezone.localdate()
 
-            context.update({
-                "queue_cases": queue_cases[:50],
-                "numberer_lgu_choices": CustomUser.LGU_MUNICIPALITY_CHOICES,
-                "filter_lgu": lgu,
-                "filter_date_from": date_from_raw,
-                "filter_date_to": date_to_raw,
-                "filter_number": number_q,
-                "last_used_number": last_used,
-                "suggested_next_number": suggested_next_str,
-                "stat_cards": [
-                    {"value": Case.objects.filter(status="for_numbering").count(), "label": "For Numbering"},
-                    {"value": last_used or "—", "label": "Last Used Number"},
-                    {"value": suggested_next_str, "label": "Suggested Next"},
-                    {"value": Case.objects.filter(status="for_release").count(), "label": "For Release"},
-                    {"value": context.get("activity_total", 0), "label": "My Total Actions"},
-                ],
-            })
+        stats_pending_approval = Case.objects.filter(status="for_approval").count()
+        stats_approved_today = AuditLog.objects.filter(actor=user, action="case_approval", created_at__date=today).count()
+        stats_total_signed = AuditLog.objects.filter(actor=user, action="case_approval").count()
+        stats_cases_denied = AuditLog.objects.filter(actor=user, action="case_status_change", details__new_status="in_review").count()
 
-        elif user.role == "capitol_releaser":
-            q = (request.GET.get("q") or "").strip()
-            lgu_filter = (request.GET.get("lgu") or "").strip()
-            type_filter = (request.GET.get("case_type") or "").strip()
+        qs = Case.objects.filter(status="for_approval").select_related("assigned_to", "submitted_by").order_by("updated_at")
+        paginator = Paginator(qs, 10)
+        page_obj = paginator.get_page(request.GET.get("page") or 1)
 
-            base_all = Case.objects.filter(status="for_release")
-            qs = base_all.select_related("submitted_by").order_by("-updated_at")
+        approved_logs = AuditLog.objects.filter(actor=user, action="case_approval", created_at__date=today).order_by("-created_at")[:5]
+        approved_tracking_ids = [log.target_object.replace("Case: ", "") for log in approved_logs]
+        
+        approved_today_cases = []
+        if approved_tracking_ids:
+            cases_dict = {c.tracking_id: c for c in Case.objects.filter(tracking_id__in=approved_tracking_ids)}
+            approved_today_cases = [cases_dict[tid] for tid in approved_tracking_ids if tid in cases_dict]
 
-            if q:
-                qs = qs.filter(
-                    Q(tracking_id__icontains=q) |
-                    Q(client_name__icontains=q) |
-                    Q(client_email__icontains=q) |
-                    Q(submitted_by__lgu_municipality__icontains=q) |
-                    Q(case_type__icontains=q)
-                )
-            if lgu_filter:
-                qs = qs.filter(submitted_by__lgu_municipality=lgu_filter)
-            if type_filter:
-                qs = qs.filter(case_type=type_filter)
+        staff_activity = AuditLog.objects.filter(
+            action__in=["case_status_change", "case_receipt", "case_assignment"]
+        ).exclude(actor=user).order_by("-created_at")[:6]
 
-            paginator = Paginator(qs, 10)
-            page_obj = paginator.get_page(request.GET.get("page") or 1)
+        context.update({
+            "section": "capitol_approver",
+            "stats_pending_approval": stats_pending_approval,
+            "stats_approved_today": stats_approved_today,
+            "stats_total_signed": stats_total_signed,
+            "stats_cases_denied": stats_cases_denied,
+            "page_obj": page_obj,
+            "approved_today_cases": approved_today_cases,
+            "staff_activity": staff_activity,
+        })
+        template = "core/dashboard_approver.html"
 
-            today = timezone.localdate()
-            released_today = AuditLog.objects.filter(actor=user, action="case_release", created_at__date=today).count()
-            released_total = AuditLog.objects.filter(actor=user, action="case_release").count()
-            since = timezone.now() - timedelta(days=7)
-            released_week = AuditLog.objects.filter(actor=user, action="case_release", created_at__gte=since).count()
+    elif user.role == "capitol_taxmapper":
+        today = timezone.localdate()
 
-            context.update({
-                "page_obj": page_obj,
-                "filter_q": q,
-                "filter_lgu": lgu_filter,
-                "filter_case_type": type_filter,
-                "lgu_choices": CustomUser.LGU_MUNICIPALITY_CHOICES,
-                "case_type_choices": Case.CASE_TYPE_CHOICES,
-                "stat_cards": [
-                    {"value": base_all.count(), "label": "For Release"},
-                    {"value": released_today, "label": "Released Today"},
-                    {"value": released_week, "label": "Released (7 days)"},
-                    {"value": released_total, "label": "Total Released"},
-                    {"value": context.get("activity_total", 0), "label": "My Total Actions"},
-                ],
-            })
+        stats_pending_mapping = Case.objects.filter(status="for_taxmapping", taxmapper_assigned_to=user).count()
+        stats_completed_today = AuditLog.objects.filter(actor=user, action="case_status_change", details__taxmapped=True, created_at__date=today).count()
+        stats_total_mapped = AuditLog.objects.filter(actor=user, action="case_status_change", details__taxmapped=True).count()
 
-        template = "core/dashboard_capitol.html"
+        qs = Case.objects.filter(status="for_taxmapping", taxmapper_assigned_to=user).select_related("submitted_by").order_by("updated_at")
+        paginator = Paginator(qs, 10)
+        page_obj = paginator.get_page(request.GET.get("page") or 1)
+
+        mapped_logs = AuditLog.objects.filter(actor=user, action="case_status_change", details__taxmapped=True).order_by("-created_at")[:5]
+        mapped_tracking_ids = [log.target_object.replace("Case: ", "") for log in mapped_logs]
+        
+        recently_mapped_cases = []
+        if mapped_tracking_ids:
+            cases_dict = {c.tracking_id: c for c in Case.objects.filter(tracking_id__in=mapped_tracking_ids)}
+            recently_mapped_cases = [cases_dict[tid] for tid in mapped_tracking_ids if tid in cases_dict]
+
+        routing_activity = AuditLog.objects.filter(
+            action="case_status_change", 
+            details__new_status="for_taxmapping"
+        ).exclude(actor=user).order_by("-created_at")[:6]
+
+        context.update({
+            "section": "capitol_taxmapper",
+            "stats_pending_mapping": stats_pending_mapping,
+            "stats_completed_today": stats_completed_today,
+            "stats_total_mapped": stats_total_mapped,
+            "page_obj": page_obj,
+            "recently_mapped_cases": recently_mapped_cases,
+            "routing_activity": routing_activity,
+        })
+        template = "core/dashboard_taxmapper.html"
+
+    elif user.role == "capitol_numberer":
+        today = timezone.localdate()
+
+        qs = Case.objects.filter(status="for_numbering").select_related("assigned_to", "submitted_by").order_by("updated_at")
+        paginator = Paginator(qs, 10)
+        page_obj = paginator.get_page(request.GET.get("page") or 1)
+
+        stats_pending = qs.count()
+        stats_numbered_today = AuditLog.objects.filter(actor=user, action="case_numbered", created_at__date=today).count()
+
+        sequences = list(LGUTaxDeclarationSequence.objects.all())
+        featured_sequence = random.choice(sequences) if sequences else None
+
+        recent_activity = AuditLog.objects.filter(
+            actor=user,
+            action__in=["login", "logout", "case_numbered"]
+        ).order_by("-created_at")[:3]
+
+        context.update({
+            "section": "capitol_numberer",
+            "page_obj": page_obj,
+            "recent_activity": recent_activity,
+            "stats_pending": stats_pending,
+            "stats_numbered_today": stats_numbered_today,
+            "featured_sequence": featured_sequence,
+        })
+        template = "core/dashboard_numberer.html"
+
+    elif user.role == "capitol_releaser":
+        today = timezone.localdate()
+        start_of_week = today - timedelta(days=today.weekday())
+
+        qs = Case.objects.filter(status="for_release").select_related("assigned_to", "submitted_by").order_by("updated_at")
+        paginator = Paginator(qs, 10)
+        page_obj = paginator.get_page(request.GET.get("page") or 1)
+
+        stats_pending = qs.count()
+        stats_released_today = AuditLog.objects.filter(actor=user, action="case_released", created_at__date=today).count()
+        stats_released_week = AuditLog.objects.filter(actor=user, action="case_released", created_at__date__gte=start_of_week).count()
+        stats_total_released = AuditLog.objects.filter(actor=user, action="case_released").count()
+
+        recent_activity = AuditLog.objects.filter(
+            actor=user,
+            action__in=["login", "logout", "case_released"]
+        ).order_by("-created_at")[:4]
+
+        context.update({
+            "section": "capitol_releaser",
+            "page_obj": page_obj,
+            "stats_pending": stats_pending,
+            "stats_released_today": stats_released_today,
+            "stats_released_week": stats_released_week,
+            "stats_total_released": stats_total_released,
+            "recent_activity": recent_activity,
+        })
+        template = "core/dashboard_releaser.html"
+        
+    else:
+        template = "core/dashboard_capitol.html" # Fallback if no matching role
 
     return render(request, template, context)
 
+@login_required
+def assign_td_number(request, tracking_id):
+    if request.user.role != "capitol_numberer" and request.user.role != "super_admin":
+        messages.error(request, "Unauthorized.")
+        return redirect("dashboard")
 
+    case = get_object_or_404(Case, tracking_id=tracking_id, status="for_numbering")
+
+    if request.method == "POST":
+        lgu_origin = case.submitted_by.lgu_municipality
+        
+        try:
+            # 1. Generate the strictly sequential number safely
+            new_td_number = LGUTaxDeclarationSequence.get_next_number(lgu_origin)
+            
+            # 2. Assign and move to next phase
+            case.td_number = new_td_number
+            case.status = "for_release"
+            case.save()
+
+            # 3. Create the Audit Log for the timeline feed
+            AuditLog.objects.create(
+                actor=request.user,
+                action="case_numbered",
+                target_object=f"Case: {case.tracking_id}",
+                details={"td_number": new_td_number, "lgu": lgu_origin}
+            )
+
+            messages.success(request, f"Successfully assigned TD No. {new_td_number} to {case.tracking_id}.")
+        except Exception as e:
+            messages.error(request, f"Error generating number: {str(e)}")
+            
+    return redirect("dashboard")
+
+
+
+@login_required
+def release_case(request, tracking_id):
+    """Marks a case as officially released to the client/LGU."""
+    # Ensure only releasers or superadmins can do this
+    if request.user.role not in ["capitol_releaser", "super_admin"]:
+        messages.error(request, "Unauthorized access.")
+        return redirect("dashboard")
+
+    case = get_object_or_404(Case, tracking_id=tracking_id, status="for_release")
+
+    if request.method == "POST":
+        # 1. Update Status and Timestamp
+        case.status = "released"
+        case.released_at = timezone.now()
+        case.save()
+
+        # 2. Create Audit Log for the Activity Feed
+        AuditLog.objects.create(
+            actor=request.user,
+            action="case_released",
+            target_object=f"Case: {case.tracking_id}",
+            details={"client": case.client_name, "td_number": case.td_number}
+        )
+
+        messages.success(request, f"Case {case.tracking_id} has been successfully released!")
+            
+    return redirect("dashboard")
+    
 @login_required
 def user_management(request):
     denial = _require_super_admin(request)
@@ -1250,46 +1575,23 @@ def user_management(request):
     })
 
 
-@login_required
-def audit_logs(request):
-    denial = _require_super_admin(request)
-    if denial:
-        return denial
-
-    qs = AuditLog.objects.select_related("actor", "target_user").all()
-    action = (request.GET.get("action") or "").strip()
-    q = (request.GET.get("q") or "").strip()
-
-    if action:
-        qs = qs.filter(action=action)
-    if q:
-        qs = qs.filter(
-            Q(target_object__icontains=q) |
-            Q(actor__email__icontains=q) |
-            Q(target_user__email__icontains=q)
-        )
-
-    paginator = Paginator(qs, 25)
-    page_obj = paginator.get_page(request.GET.get("page") or 1)
-
-    return render(request, "core/audit_logs.html", {
-        "role_display": request.user.get_role_display(),
-        "page_obj": page_obj,
-        "action_filter": action,
-        "q_filter": q,
-        "actions": AuditLog.ACTION_CHOICES,
-    })
-
 
 @login_required
 def export_audit_logs_csv(request):
-    denial = _require_super_admin(request)
-    if denial:
-        return denial
+    # Security Gate: Allow Super Admins and LGU Admins
+    if request.user.role not in ['super_admin', 'lgu_admin']:
+        messages.error(request, "Not authorized.")
+        return redirect("dashboard")
 
-    qs = AuditLog.objects.select_related("actor", "target_user").all()
+    # Filter logs so LGU Admins only export their own actions
+    if request.user.role == 'lgu_admin':
+        qs = AuditLog.objects.filter(actor=request.user).select_related("actor", "target_user")
+    else:
+        qs = AuditLog.objects.select_related("actor", "target_user").all()
+
     action = (request.GET.get("action") or "").strip()
     q = (request.GET.get("q") or "").strip()
+    
     if action:
         qs = qs.filter(action=action)
     if q:
@@ -1304,6 +1606,7 @@ def export_audit_logs_csv(request):
     response["Content-Disposition"] = 'attachment; filename="audit_logs.csv"'
     writer = csv.writer(response)
     writer.writerow(["created_at", "action", "actor_email", "target_user_email", "target_object", "ip_address"])
+    
     for row in qs.order_by("-created_at"):
         writer.writerow([
             row.created_at.isoformat(),
@@ -1314,7 +1617,6 @@ def export_audit_logs_csv(request):
             row.ip_address or "",
         ])
     return response
-
 
 @login_required
 def create_staff_account(request):
@@ -1668,7 +1970,7 @@ def reset_password_final(request):
 @login_required
 def profile(request):
     if request.method == "POST":
-        form = ProfileUpdateForm(request.POST, instance=request.user, user=request.user)
+        form = ProfileUpdateForm(request.POST, request.FILES, instance=request.user, user=request.user)
         if form.is_valid():
             form.save()
             AuditLog.objects.create(
@@ -1811,7 +2113,7 @@ def submit_case(request):
         return redirect("dashboard")
 
     if request.method == "POST":
-        form = CaseDetailsForm(request.POST, request.FILES)
+        form = CaseDetailsForm(request.POST, request.FILES, user=request.user)
         if form.is_valid():
             cleaned = form.cleaned_data
 
@@ -1900,10 +2202,10 @@ def submit_case(request):
                 messages.success(request, "Draft saved.")
                 return redirect("drafts")
 
-            messages.success(request, "Draft saved. Continue uploading documents.")
+
             return redirect("draft_wizard", draft_id=case.draft_id, step=2)
     else:
-        form = CaseDetailsForm()
+        form = CaseDetailsForm(user=request.user)
 
     return render(request, "core/submit_case.html", {
         "step": 1,
@@ -1942,7 +2244,7 @@ def case_wizard(request, tracking_id, step: int):
         if request.method == "POST":
             old_case_type = (case.case_type or "").strip()
             old_title_type = (case.property_title_type or "").strip()
-            form = CaseDetailsForm(request.POST, request.FILES, instance=case)
+            form = CaseDetailsForm(request.POST, request.FILES, instance=case, user=request.user)
             if form.is_valid():
                 updated = form.save(commit=False)
                 
@@ -1969,7 +2271,7 @@ def case_wizard(request, tracking_id, step: int):
                 messages.success(request, "Details saved.")
                 return redirect("case_wizard", tracking_id=case.tracking_id, step=2)
         else:
-            form = CaseDetailsForm(instance=case)
+            form = CaseDetailsForm(instance=case, user=request.user)
 
         return render(request, "core/submit_case.html", {
             "step": 1,
@@ -2209,7 +2511,7 @@ def draft_wizard(request, draft_id, step: int):
         if request.method == "POST":
             old_case_type = (case.case_type or "").strip()
             old_title_type = (case.property_title_type or "").strip()
-            form = CaseDetailsForm(request.POST, request.FILES, instance=case)
+            form = CaseDetailsForm(request.POST, request.FILES, instance=case, user=request.user)
             if form.is_valid():
                 case = form.save(commit=False)
                 case.status = "draft"
@@ -2236,7 +2538,7 @@ def draft_wizard(request, draft_id, step: int):
                 messages.success(request, "Draft details saved.")
                 return redirect("draft_wizard", draft_id=case.draft_id, step=2)
         else:
-            form = CaseDetailsForm(instance=case)
+            form = CaseDetailsForm(instance=case, user=request.user)
 
         return render(request, "core/submit_case.html", {
             "step": 1,
@@ -2466,6 +2768,31 @@ def case_detail(request, tracking_id):
     if not _user_can_view_case(request.user, case):
         raise Http404()
 
+    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+
+    if not is_ajax and request.user.role == "capitol_receiving" and case.status == "not_received":
+        case.status = "received"
+        case.received_at = timezone.now()
+        case.received_by = request.user
+        case.save(update_fields=["status", "received_at", "received_by", "updated_at"])
+        AuditLog.objects.create(
+            actor=request.user,
+            action="case_receipt",
+            target_object=f"Case: {case.tracking_id}",
+            details={"old_status": "not_received", "new_status": "received", "note": "Receiver opened the case."},
+        )
+
+    if not is_ajax and request.user.role == "capitol_examiner" and case.assigned_to == request.user and case.status == "to_examine":
+        old_status = case.status
+        case.status = "in_review"
+        case.save(update_fields=["status", "updated_at"])
+        AuditLog.objects.create(
+            actor=request.user,
+            action="case_status_change",
+            target_object=f"Case: {case.tracking_id}",
+            details={"old_status": old_status, "new_status": "in_review", "note": "Examiner opened the case."},
+        )
+
     can_edit = _lgu_can_edit_details(request.user, case)
 
     can_receive = (
@@ -2487,13 +2814,13 @@ def case_detail(request, tracking_id):
 
     can_submit_for_approval = (
         request.user.role == "capitol_examiner" and
-        case.status in {"for_review", "under_review", "in_review"} and
+        case.status in {"to_examine", "in_review"} and
         case.assigned_to_id == request.user.id
     )
 
     can_return_to_receiving = (
         request.user.role == "capitol_examiner" and
-        case.status in {"for_review", "under_review", "in_review"} and
+        case.status in {"to_examine", "in_review"} and
         case.assigned_to_id == request.user.id
     )
 
@@ -2539,7 +2866,7 @@ def case_detail(request, tracking_id):
         if role == "capitol_receiving":
             return case.status in {"not_received", "received"} and case.assigned_to_id is None
         if role == "capitol_examiner":
-            return case.status in {"for_review", "under_review", "in_review"} and case.assigned_to_id == user.id
+            return case.status in {"to_examine", "in_review"} and case.assigned_to_id == user.id
         if role == "capitol_approver":
             return case.status == "for_approval"
         if role == "capitol_taxmapper":
@@ -2551,7 +2878,7 @@ def case_detail(request, tracking_id):
         return False
 
     is_capitol = bool(request.user.is_authenticated and (_is_capitol_staff(request.user) or request.user.role == "super_admin"))
-    show_internal = bool(is_capitol and case.status != "client_correction" and _is_owner_for_internal_sections(request.user, case))
+    show_internal = bool(is_capitol and case.status != "client_correction" and _user_is_current_owner_for_internal_sections(request.user, case))
 
     remarks = []
     history = []
@@ -2562,7 +2889,7 @@ def case_detail(request, tracking_id):
         remarks_qs = CaseRemark.objects.filter(case=case).select_related("created_by")
         history_qs = (
             AuditLog.objects.filter(target_object=f"Case: {case.tracking_id}")
-            .filter(action__in=["case_create", "case_receipt", "case_assignment", "case_status_change", "case_approval", "case_rejection", "case_release"])
+            .filter(action__in=["case_create", "case_receipt", "case_assignment", "case_status_change", "case_approval", "case_rejection", "case_release", "case_remark"])
             .select_related("actor")
             .order_by("-created_at")
         )
@@ -2616,60 +2943,100 @@ def case_detail(request, tracking_id):
 
     return render(request, "core/case_detail.html", response_context)
 
+@login_required
+@require_POST
+def forward_for_approval(request, tracking_id):
+    case = get_object_or_404(Case, tracking_id=tracking_id)
+    
+    # Auth Check: Only the assigned examiner can forward it
+    if request.user.role != "capitol_examiner" or case.assigned_to != request.user:
+        messages.error(request, "Unauthorized action.")
+        return redirect("case_detail", tracking_id=case.tracking_id)
+
+    if case.status not in {"to_examine", "in_review"}:
+        messages.error(request, "This case is not eligible for approval submission.")
+        return redirect("case_detail", tracking_id=case.tracking_id)
+
+    # Validation: Ensure all docs are checked (optional but recommended)
+    if case.documents.filter(reviewed_ok=False).exists():
+        messages.error(request, "Please check all documents before forwarding.")
+        return redirect("case_detail", tracking_id=case.tracking_id)
+
+    old_status = case.status
+    case.status = "for_approval"
+    case.save(update_fields=["status", "updated_at"])
+
+    AuditLog.objects.create(
+        actor=request.user,
+        action="case_status_change",
+        target_object=f"Case: {case.tracking_id}",
+        details={"old_status": old_status, "new_status": "for_approval", "note": "Examiner approved documents."}
+    )
+
+    messages.success(request, f"Case {case.tracking_id} forwarded for approval.")
+    return redirect("submissions") # Redirect to workspace since it's no longer their task
 
 @login_required
 @require_POST
 def add_case_remark(request, tracking_id):
     case = get_object_or_404(Case, tracking_id=tracking_id)
     role = getattr(request.user, "role", "") or ""
+
+    # --- 1. Authorization Logic ---
+    # We maintain your strict rules: users can only remark if the case is in their "hand"
+    is_authorized = False
+
     if role == "super_admin":
-        pass
+        is_authorized = True
     elif role == "capitol_receiving":
-        if not (case.status in {"not_received", "received"} and case.assigned_to_id is None and case.status != "client_correction"):
-            messages.error(request, "Not authorized to remark on this case right now.")
-            return redirect("case_detail", tracking_id=case.tracking_id)
+        if case.status in {"not_received", "received"} and case.assigned_to_id is None and case.status != "client_correction":
+            is_authorized = True
     elif role == "capitol_examiner":
-        if not (case.status == "in_review" and case.assigned_to_id == request.user.id and case.status != "client_correction"):
-            messages.error(request, "Not authorized to remark on this case right now.")
-            return redirect("case_detail", tracking_id=case.tracking_id)
+        if case.status in {"to_examine", "in_review"} and case.assigned_to_id == request.user.id and case.status != "client_correction":
+            is_authorized = True
     elif role == "capitol_approver":
-        if not (case.status == "for_approval" and case.status != "client_correction"):
-            messages.error(request, "Not authorized to remark on this case right now.")
-            return redirect("case_detail", tracking_id=case.tracking_id)
+        if case.status == "for_approval" and case.status != "client_correction":
+            is_authorized = True
     elif role == "capitol_taxmapper":
-        if not (case.status == "for_taxmapping" and case.taxmapper_assigned_to_id == request.user.id and case.status != "client_correction"):
-            messages.error(request, "Not authorized to remark on this case right now.")
-            return redirect("case_detail", tracking_id=case.tracking_id)
+        if case.status == "for_taxmapping" and case.taxmapper_assigned_to_id == request.user.id and case.status != "client_correction":
+            is_authorized = True
     elif role == "capitol_numberer":
-        if not (case.status == "for_numbering" and case.status != "client_correction"):
-            messages.error(request, "Not authorized to remark on this case right now.")
-            return redirect("case_detail", tracking_id=case.tracking_id)
+        if case.status == "for_numbering" and case.status != "client_correction":
+            is_authorized = True
     elif role == "capitol_releaser":
-        if not (case.status == "for_release" and case.status != "client_correction"):
-            messages.error(request, "Not authorized to remark on this case right now.")
-            return redirect("case_detail", tracking_id=case.tracking_id)
-    else:
-        messages.error(request, "Not authorized.")
+        if case.status == "for_release" and case.status != "client_correction":
+            is_authorized = True
+
+    if not is_authorized:
+        messages.error(request, "Not authorized to remark on this case right now.")
         return redirect("case_detail", tracking_id=case.tracking_id)
 
-    form = CaseRemarkForm(request.POST)
-    if not form.is_valid():
+    # --- 2. Form Processing ---
+    # We use 'text' as the key to match your manual <textarea name="text">
+    remark_content = request.POST.get("text", "").strip()
+    
+    if not remark_content:
         messages.error(request, "Please enter a valid remark.")
         return redirect("case_detail", tracking_id=case.tracking_id)
 
-    text = form.cleaned_data["text"]
-    CaseRemark.objects.create(case=case, text=text, created_by=request.user)
+    # --- 3. Data Persistence ---
+    # Create the internal CaseRemark object
+    CaseRemark.objects.create(
+        case=case, 
+        text=remark_content, 
+        created_by=request.user
+    )
 
+    # Create the AuditLog entry (Fixing the previous 'remark_text' NameError)
     AuditLog.objects.create(
         actor=request.user,
         action="case_remark",
         target_object=f"Case: {case.tracking_id}",
-        details={"text": text[:2000]},
+        details={"remark": remark_content}
     )
 
-    messages.success(request, "Remark added.")
+    messages.success(request, "Internal note added.")
     return redirect("case_detail", tracking_id=case.tracking_id)
-
 
 @login_required
 def submissions(request):
@@ -2677,7 +3044,9 @@ def submissions(request):
         messages.error(request, "Not authorized.")
         return redirect("dashboard")
 
-    tab = (request.GET.get("tab") or "").strip().lower() or "all"
+    scope = (request.GET.get("scope") or "me").strip().lower()
+    tab = (request.GET.get("tab") or "").strip().lower()
+    
     q = (request.GET.get("q") or "").strip()
     case_type = (request.GET.get("case_type") or "").strip()
     lgu = (request.GET.get("lgu") or "").strip()
@@ -2687,55 +3056,114 @@ def submissions(request):
     date_from = parse_date(date_from_raw) if date_from_raw else None
     date_to = parse_date(date_to_raw) if date_to_raw else None
 
+    # Base: Everything submitted by LGUs
     qs = Case.objects.filter(lgu_submitted_at__isnull=False).select_related("submitted_by", "assigned_to").order_by("-created_at")
 
-    if request.user.role == "capitol_examiner":
-        qs = qs.filter(assigned_to=request.user)
-    elif request.user.role == "capitol_approver":
-        qs = qs.filter(status="for_approval")
-    elif request.user.role == "capitol_taxmapper":
-        qs = qs.filter(status="for_taxmapping", taxmapper_assigned_to=request.user)
-    elif request.user.role == "capitol_numberer":
-        qs = qs.filter(status="for_numbering")
-    elif request.user.role == "capitol_releaser":
-        qs = qs.filter(status="for_release")
+    examiners = None  # Will populate only if the user needs the Assignment Modal
 
-    tab_map = {
-        "all": None,
-        "pending": {"not_received", "client_correction"},
-        "received": {"received"},
-        "in_review": {"in_review", "for_review", "under_review"},
-        "for_taxmapping": {"for_taxmapping"},
-        "for_approval": {"for_approval"},
-        "for_numbering": {"for_numbering"},
-        "for_release": {"for_release"},
-        "released": {"released"},
-    }
-    statuses = tab_map.get(tab)
-    if statuses:
-        qs = qs.filter(status__in=statuses)
+    # ==========================================
+    # SCOPE & TAB LOGIC
+    # ==========================================
+    if scope == "me" and request.user.role != "super_admin":
+        page_title = "My Workspace"
+        page_subtitle = "Cases specifically assigned to your queue."
+        
+        # 1. Scope Filter & Dynamic Tabs based on Role
+        if request.user.role == "capitol_receiving":
+            tabs = [
+                ("all", f"All Case Intake ({qs.count()})"), 
+                ("received", f"Received ({qs.filter(status='received', assigned_to__isnull=True).count()})"), 
+                ("to_examine", f"To Examine ({qs.filter(status__in=['to_examine','in_review']).count()})")
+            ]
+            if not tab: tab = "all"
 
+            # Fetch examiners to populate the Assign modal
+            examiners = CustomUser.objects.filter(role="capitol_examiner", is_active=True)
+
+            if tab == "received":
+                qs = qs.filter(status="received", assigned_to__isnull=True)
+            elif tab == "to_examine":
+                qs = qs.filter(status__in=["to_examine", "in_review"])
+            # If tab == "all", it keeps the base `qs` (everything)
+            
+        elif request.user.role == "capitol_examiner":
+            tabs = [("all_assigned", "All Assigned"), ("under_review", "Under Review")]
+            if not tab: tab = "all_assigned"
+            
+            # Note: Included "to_examine" so freshly assigned cases show up for them
+            qs = qs.filter(assigned_to=request.user, status__in=["to_examine", "in_review", "client_correction"])
+            
+            if tab == "under_review":
+                qs = qs.filter(status="in_review")
+                
+        elif request.user.role == "capitol_approver":
+            tabs = [("all_assigned", "All Assigned")]
+            if not tab: tab = "all_assigned"
+            qs = qs.filter(status="for_approval")
+            
+        elif request.user.role == "capitol_taxmapper":
+            tabs = [("all_assigned", "All Assigned")]
+            if not tab: tab = "all_assigned"
+            qs = qs.filter(status="for_taxmapping", taxmapper_assigned_to=request.user)
+            
+        elif request.user.role == "capitol_numberer":
+            tabs = [("all_assigned", "All Assigned")]
+            if not tab: tab = "all_assigned"
+            qs = qs.filter(status="for_numbering")
+            
+        elif request.user.role == "capitol_releaser":
+            tabs = [("all_assigned", "All Assigned")]
+            if not tab: tab = "all_assigned"
+            qs = qs.filter(status="for_release")
+
+    else:
+        # GLOBAL TRANSACTIONS SCOPE
+        page_title = "All Transactions"
+        page_subtitle = "Global view of all submitted cases."
+        
+        tabs = [
+            ("all", "All"), ("pending", "Pending"), ("received", "Received"),
+            ("to_examine", "To Examine"), ("for_taxmapping", "For Taxmapping"),
+            ("for_approval", "For Approval"), ("for_numbering", "For Numbering"),
+            ("for_release", "For Release"), ("released", "Released"),
+        ]
+        
+        tab_map = {
+            "pending": ["not_received", "client_correction"],
+            "received": ["received"],
+            "to_examine": ["to_examine", "in_review"],
+            "for_taxmapping": ["for_taxmapping"],
+            "for_approval": ["for_approval"],
+            "for_numbering": ["for_numbering"],
+            "for_release": ["for_release"],
+            "released": ["released"],
+        }
+
+        # CRITICAL FIX: Update the 'qs' based on the selected tab
+        if tab in tab_map:
+            qs = qs.filter(status__in=tab_map[tab])
+            
+            # Additional logic for 'received' tab to show only unassigned ones
+            if tab == "received":
+                qs = qs.filter(assigned_to__isnull=True)
+    # ==========================================
+    # SEARCH & FILTERS
+    # ==========================================
     if q:
         qs = qs.filter(
             Q(tracking_id__icontains=q) |
             Q(client_name__icontains=q) |
             Q(client_first_name__icontains=q) |
             Q(client_last_name__icontains=q) |
-            Q(client_middle_name__icontains=q) |
             Q(client_email__icontains=q) |
-            Q(client_number__icontains=q) |
-            Q(client_contact__icontains=q) |
             Q(submitted_by__email__icontains=q)
         )
 
-    if case_type:
-        qs = qs.filter(case_type=case_type)
-    if lgu:
-        qs = qs.filter(submitted_by__lgu_municipality=lgu)
-    if date_from:
-        qs = qs.filter(created_at__date__gte=date_from)
-    if date_to:
-        qs = qs.filter(created_at__date__lte=date_to)
+    # Only apply advanced filters if they are actually passed
+    if case_type: qs = qs.filter(case_type=case_type)
+    if lgu: qs = qs.filter(submitted_by__lgu_municipality=lgu)
+    if date_from: qs = qs.filter(created_at__date__gte=date_from)
+    if date_to: qs = qs.filter(created_at__date__lte=date_to)
 
     number_q = (request.GET.get("number") or "").strip()
     if number_q:
@@ -2745,34 +3173,23 @@ def submissions(request):
         else:
             qs = qs.filter(Q(tracking_id__icontains=number_q))
 
+    # Preserve parameters for pagination
     query = request.GET.copy()
-    with contextlib.suppress(Exception):
-        query.pop("page")
-
-    query_no_tab = request.GET.copy()
-    with contextlib.suppress(Exception):
-        query_no_tab.pop("page")
-        query_no_tab.pop("tab")
+    with contextlib.suppress(Exception): query.pop("page")
+    
+    query_no_tab = query.copy()
+    with contextlib.suppress(Exception): query_no_tab.pop("tab")
 
     paginator = Paginator(qs, 15)
     page_obj = paginator.get_page(request.GET.get("page") or 1)
-
-    tabs = [
-        ("all", "All"),
-        ("pending", "Pending"),
-        ("received", "Received"),
-        ("in_review", "In Review"),
-        ("for_taxmapping", "For Taxmapping"),
-        ("for_approval", "For Approval"),
-        ("for_numbering", "For Numbering"),
-        ("for_release", "For Release"),
-        ("released", "Released"),
-    ]
 
     return render(request, "core/submissions.html", {
         "role_display": request.user.get_role_display(),
         "page_obj": page_obj,
         "tab": tab,
+        "scope": scope,
+        "page_title": page_title,
+        "page_subtitle": page_subtitle,
         "q": q,
         "tabs": tabs,
         "filter_case_type": case_type,
@@ -2783,6 +3200,50 @@ def submissions(request):
         "lgu_choices": list(getattr(CustomUser, "LGU_MUNICIPALITY_CHOICES", [])),
         "qs_params": query.urlencode(),
         "qs_params_no_tab": query_no_tab.urlencode(),
+        "examiners": examiners,  # Injected here for the modal logic
+    })
+
+@login_required
+def audit_logs(request):
+    # Allow Super Admins, LGU Admins, AND Capitol Staff
+    if request.user.role not in ['super_admin', 'lgu_admin'] and not getattr(request.user, 'role', '').startswith('capitol_'):
+        messages.error(request, "Not authorized.")
+        return redirect("dashboard")
+
+    # Super Admins see everything. Everyone else sees ONLY their own activity.
+    if request.user.role == 'super_admin':
+        qs = AuditLog.objects.select_related("actor", "target_user").all()
+    else:
+        qs = AuditLog.objects.filter(actor=request.user).select_related("actor", "target_user")
+
+    action = (request.GET.get("action") or "").strip()
+    q = (request.GET.get("q") or "").strip()
+
+    if action: qs = qs.filter(action=action)
+    if q:
+        qs = qs.filter(
+            Q(target_object__icontains=q) |
+            Q(actor__email__icontains=q) |
+            Q(target_user__email__icontains=q)
+        )
+
+    paginator = Paginator(qs.order_by("-created_at"), 25)
+    page_obj = paginator.get_page(request.GET.get("page") or 1)
+
+    current = int(getattr(page_obj, "number", 1) or 1)
+    num_pages = int(getattr(paginator, "num_pages", 1) or 1)
+    start = max(1, current - 5)
+    end = min(num_pages, current + 5)
+    page_window = list(range(start, end + 1))
+
+    return render(request, "core/audit_logs.html", {
+        "role_display": request.user.get_role_display(),
+        "page_obj": page_obj,
+        "action_filter": action,
+        "q_filter": q,
+        "actions": AuditLog.ACTION_CHOICES,
+        "page_window": page_window,
+        "num_pages": num_pages,
     })
 
 
@@ -2896,42 +3357,58 @@ def return_case(request, tracking_id):
     messages.success(request, f"Case {case.tracking_id} returned to client (30-day correction window).")
     return redirect("case_detail", tracking_id=case.tracking_id)
 
-
 @login_required
-@require_POST
 def assign_case(request, tracking_id):
+    # 1. Fetch the case at the very beginning so it always exists for this function
     case = get_object_or_404(Case, tracking_id=tracking_id)
 
     if request.user.role != "capitol_receiving":
         messages.error(request, "Only Receiver can assign cases.")
         return redirect("case_detail", tracking_id=case.tracking_id)
 
-    if case.status != "received" or case.assigned_to_id is not None:
-        messages.error(request, "This case is not eligible for assignment.")
+    if request.method == "POST":
+        if case.status != "received" or case.assigned_to_id is not None:
+            messages.error(request, "This case is not eligible for assignment.")
+            return redirect("case_detail", tracking_id=case.tracking_id)
+
+        examiner_id = request.POST.get("assigned_to")
+        
+        # Prevent 404/Error if the user clicked 'Confirm' without picking an examiner
+        if not examiner_id:
+            messages.error(request, "Please select an examiner before confirming.")
+            # Use META referer to send them back to exactly where they were
+            return redirect(request.META.get('HTTP_REFERER', 'dashboard'))
+            
+        # Fetch the selected examiner staff account
+        examiner = get_object_or_404(CustomUser, id=examiner_id, role="capitol_examiner", is_active=True)
+        
+        # --- WORKFLOW TRANSITION ---
+        # We assign the user AND update the status to push it to the next phase
+        case.assigned_to = examiner
+        case.status = "to_examine" 
+        case.assigned_at = timezone.now()
+        case.save(update_fields=["assigned_to", "assigned_at", "status", "updated_at"])
+        
+        # Create Audit Log for transparency
+        AuditLog.objects.create(
+            actor=request.user,
+            action="case_assignment",
+            target_object=f"Case: {case.tracking_id}",
+            details={
+                "new_status": case.status,
+                "assigned_to": f"{examiner.get_full_name()} - {examiner.get_role_display()}",
+            }
+        )
+
+        messages.success(request, f"Case {case.tracking_id} successfully assigned to {examiner.get_full_name()}.")
+        
+        # After assigning, redirecting to case_detail will now show the 
+        # "Assigned" status and lock the controls for the Receiver.
         return redirect("case_detail", tracking_id=case.tracking_id)
 
-    examiner_id = request.POST.get("examiner_id")
-    examiner = get_object_or_404(CustomUser, id=examiner_id, role="capitol_examiner", is_active=True)
-
-    case.assigned_to = examiner
-    case.assigned_at = timezone.now()
-    case.status = "in_review"
-    case.save()
-
-    AuditLog.objects.create(
-        actor=request.user,
-        action="case_assignment",
-        target_object=f"Case: {case.tracking_id}",
-        details={
-            "new_status": case.status,
-            "assigned_to": f"{examiner.get_full_name()} - {examiner.get_role_display()}",
-        }
-    )
-
-    messages.success(request, f"Case {case.tracking_id} assigned.")
-    return redirect("case_detail", tracking_id=case.tracking_id)
-
-
+    # 2. Fallback: If it's a GET request (e.g. manual URL entry), return to dashboard
+    return redirect('dashboard')
+    
 @login_required
 @require_POST
 def submit_for_approval(request, tracking_id):
@@ -2941,7 +3418,7 @@ def submit_for_approval(request, tracking_id):
         messages.error(request, "Only Examiners can submit cases for approval.")
         return redirect("case_detail", tracking_id=case.tracking_id)
 
-    if case.status not in {"in_review", "for_review", "under_review"} or case.assigned_to_id != request.user.id:
+    if case.status not in {"to_examine", "in_review"} or case.assigned_to_id != request.user.id:
         messages.error(request, "This case is not eligible for approval submission.")
         return redirect("case_detail", tracking_id=case.tracking_id)
 
@@ -3140,7 +3617,7 @@ def return_to_receiving(request, tracking_id):
         messages.error(request, "Only Examiners can return cases to Receiving.")
         return redirect("case_detail", tracking_id=case.tracking_id)
 
-    if case.status not in {"in_review", "for_review", "under_review"} or case.assigned_to_id != request.user.id:
+    if case.status not in {"to_examine", "in_review"} or case.assigned_to_id != request.user.id:
         messages.error(request, "This case is not eligible for return to Receiving.")
         return redirect("case_detail", tracking_id=case.tracking_id)
 

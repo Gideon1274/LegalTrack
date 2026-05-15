@@ -3,18 +3,63 @@
 {% block container_class %}container--narrow{% endblock %}
 
 {% block content %}
-<div class="card" style="text-align:center;">
-    <h1 class="page-title">How can we help?</h1>
-    <p class="page-subtitle">Find answers, contact support, or send feedback.</p>
-
-    <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:14px;">
-        <a class="btn btn-secondary" href="{% url 'faq' %}">FAQ</a>
-        <a class="btn btn-secondary" href="{% url 'submit_feedback' %}">Contact Support</a>
-        <a class="btn btn-primary" href="{% url 'submit_feedback' %}">Feedback</a>
+<div class="card card-elevated" style="padding: 0; overflow: hidden; border: none; border-bottom: 4px solid #f7d400;">
+    <div style="background: #1e40af; padding: 40px 24px; color: white; text-align: center;">
+        <h1 class="page-title" style="margin: 0; color: white; font-size: 2rem; font-weight: 800;">How can we help?</h1>
+        <p class="page-subtitle" style="color: rgba(255,255,255,0.9); margin-top: 10px; font-size: 1.1rem;">Find answers, contact support, or track your application.</p>
     </div>
+    
+    <div style="padding: 40px;">
+        <div style="display: grid; grid-template-columns: 1fr; gap: 20px;">
+            <!-- FAQ Card -->
+            <a href="{% url 'faq' %}" class="card" style="display: flex; align-items: center; gap: 20px; text-decoration: none; padding: 25px; transition: all 0.2s; border: 1px solid var(--border);" onmouseover="this.style.borderColor='#1e40af'; this.style.transform='translateY(-2px)';" onmouseout="this.style.borderColor='var(--border)'; this.style.transform='translateY(0)';" >
+                <div style="background: #eff6ff; width: 60px; height: 60px; border-radius: 16px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: #1e40af;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                </div>
+                <div>
+                    <h3 style="margin: 0; font-size: 1.25rem; color: var(--text); font-weight: 800;">Frequently Asked Questions</h3>
+                    <p class="muted" style="margin: 5px 0 0 0; font-size: 0.95rem;">Browse common questions and detailed guides.</p>
+                </div>
+                <div style="margin-left: auto; color: var(--muted);">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </div>
+            </a>
 
-    <div class="muted" style="margin-top:14px;">
-        You can also track a case from the home page.
+            <!-- Feedback Card -->
+            <a href="{% url 'submit_feedback' %}" class="card" style="display: flex; align-items: center; gap: 20px; text-decoration: none; padding: 25px; transition: all 0.2s; border: 1px solid var(--border);" onmouseover="this.style.borderColor='#b42318'; this.style.transform='translateY(-2px)';" onmouseout="this.style.borderColor='var(--border)'; this.style.transform='translateY(0)';" >
+                <div style="background: #fef2f2; width: 60px; height: 60px; border-radius: 16px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: #b42318;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                </div>
+                <div>
+                    <h3 style="margin: 0; font-size: 1.25rem; color: var(--text); font-weight: 800;">Send Feedback</h3>
+                    <p class="muted" style="margin: 5px 0 0 0; font-size: 0.95rem;">Tell us how we can improve your experience.</p>
+                </div>
+                <div style="margin-left: auto; color: var(--muted);">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </div>
+            </a>
+
+            <!-- Track Card -->
+            <a href="{% url 'landing' %}" class="card" style="display: flex; align-items: center; gap: 20px; text-decoration: none; padding: 25px; transition: all 0.2s; border: 1px solid var(--border); background: #f8fafc;" onmouseover="this.style.borderColor='#3b82f6'; this.style.transform='translateY(-2px)';" onmouseout="this.style.borderColor='var(--border)'; this.style.transform='translateY(0)';" >
+                <div style="background: #3b82f6; width: 60px; height: 60px; border-radius: 16px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: white;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                </div>
+                <div>
+                    <h3 style="margin: 0; font-size: 1.25rem; color: var(--text); font-weight: 800;">Track a Case</h3>
+                    <p class="muted" style="margin: 5px 0 0 0; font-size: 0.95rem;">Go back to the search portal to check status.</p>
+                </div>
+                <div style="margin-left: auto; color: var(--muted);">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </div>
+            </a>
+        </div>
+
+        <div style="margin-top: 40px; text-align: center;">
+            <a href="{% url 'landing' %}" class="btn btn-secondary" style="padding: 12px 30px; font-weight: 800;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                Back to Home
+            </a>
+        </div>
     </div>
 </div>
 {% endblock %}

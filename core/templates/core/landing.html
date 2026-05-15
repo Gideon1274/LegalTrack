@@ -1,35 +1,833 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}Welcome{% endblock %}
-{% block container_class %}container--narrow{% endblock %}
+{% block title %}Public Portal | PASTrack{% endblock %}
+{% block container_class %}landing-full-width{% endblock %}
+
+{% block extra_head %}
+<style>
+    :root {
+        --primary-blue: #1e40af;
+        --secondary-blue: #3b82f6;
+        --light-blue: #eff6ff;
+        --accent-yellow: #f7d400;
+        --accent-red: #b42318;
+        --text-dark: #1e293b;
+        --text-muted: #64748b;
+        --bg-white: #ffffff;
+        --bg-gray: #f8fafc;
+    }
+
+    .landing-full-width {
+        max-width: 100% !important;
+        padding: 0 !important;
+    }
+
+    /* Header Styling */
+    .public-header {
+        background: var(--bg-white);
+        padding: 15px 50px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+    .public-brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    .public-brand img {
+        height: 40px;
+        width: auto;
+    }
+    .brand-info h1 {
+        font-size: 1.2rem;
+        font-weight: 800;
+        margin: 0;
+        color: var(--primary-blue);
+        line-height: 1;
+    }
+    .brand-info p {
+        font-size: 0.65rem;
+        font-weight: 700;
+        margin: 2px 0 0 0;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    .public-nav {
+        display: flex;
+        align-items: center;
+        gap: 30px;
+    }
+    .nav-link {
+        font-weight: 600;
+        color: var(--text-dark);
+        font-size: 0.95rem;
+        transition: color 0.2s;
+    }
+    .nav-link:hover {
+        color: var(--primary-blue);
+        text-decoration: none;
+    }
+    .btn-staff-login {
+        background: var(--text-dark);
+        color: white;
+        padding: 10px 24px;
+        border-radius: 99px;
+        font-weight: 700;
+        font-size: 0.9rem;
+        transition: all 0.2s;
+    }
+    .btn-staff-login:hover {
+        background: var(--primary-blue);
+        color: white;
+        text-decoration: none;
+        transform: translateY(-1px);
+    }
+
+    /* Hero Section */
+    .hero-section {
+        background: var(--bg-white);
+        padding: 100px 50px;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+    .hero-headline {
+        font-size: 3.8rem;
+        font-weight: 900;
+        color: var(--text-dark);
+        line-height: 1.1;
+        margin-bottom: 25px;
+        max-width: 800px;
+    }
+    .hero-headline span {
+        color: var(--secondary-blue);
+        font-style: italic;
+    }
+    .hero-subheadline {
+        font-size: 1.25rem;
+        color: var(--text-muted);
+        max-width: 650px;
+        line-height: 1.6;
+        margin-bottom: 50px;
+    }
+    .search-container {
+        width: 100%;
+        max-width: 600px;
+        position: relative;
+        display: flex;
+        align-items: center;
+        background: #f1f5f9;
+        border-radius: 16px;
+        padding: 8px;
+        margin-bottom: 40px;
+    }
+    .search-input {
+        flex: 1;
+        background: transparent;
+        border: none;
+        padding: 12px 20px;
+        font-size: 1.1rem;
+        font-weight: 500;
+        color: var(--text-dark);
+        outline: none;
+    }
+    .search-input::placeholder {
+        color: #94a3b8;
+    }
+    .btn-track {
+        background: var(--secondary-blue);
+        color: white;
+        padding: 12px 30px;
+        border-radius: 12px;
+        font-weight: 800;
+        font-size: 1rem;
+        transition: all 0.2s;
+        border: none;
+        cursor: pointer;
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+    }
+    .btn-track:hover {
+        background: var(--primary-blue);
+        transform: scale(1.02);
+    }
+    .search-icon {
+        margin-left: 15px;
+        color: #94a3b8;
+    }
+
+    .hero-mini-cards {
+        display: flex;
+        gap: 40px;
+        width: 100%;
+    }
+    .mini-card {
+        max-width: 300px;
+        background: var(--bg-gray);
+        padding: 20px;
+        border-radius: 16px;
+        border: 1px solid var(--border);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+        transition: all 0.2s ease;
+    }
+    .mini-card:hover {
+        border-color: var(--secondary-blue);
+        background: var(--bg-white);
+        transform: translateY(-3px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.05);
+    }
+    .mini-card h4 {
+        font-size: 0.75rem;
+        font-weight: 800;
+        color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-bottom: 8px;
+    }
+    .mini-card p {
+        font-size: 0.95rem;
+        color: var(--text-dark);
+        font-weight: 500;
+        line-height: 1.4;
+    }
+
+    /* Sections Shared */
+    .section-container {
+        padding: 100px 50px;
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+    .section-header {
+        margin-bottom: 60px;
+    }
+    .section-badge {
+        color: var(--secondary-blue);
+        font-weight: 800;
+        text-transform: uppercase;
+        font-size: 0.85rem;
+        letter-spacing: 0.1em;
+        margin-bottom: 12px;
+        display: block;
+    }
+    .section-h2 {
+        font-size: 2.5rem;
+        font-weight: 900;
+        color: var(--text-dark);
+        margin-bottom: 20px;
+    }
+    .section-p {
+        color: var(--text-muted);
+        font-size: 1.15rem;
+        max-width: 700px;
+        line-height: 1.6;
+    }
+
+    /* Journey Section */
+    .journey-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 40px;
+    }
+    .journey-item {
+        background: var(--bg-white);
+        padding: 40px;
+        border-radius: 24px;
+        border: 1px solid var(--border);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        transition: all 0.3s ease;
+    }
+    .journey-item:hover {
+        border-color: var(--secondary-blue);
+        box-shadow: 0 20px 40px rgba(0,0,0,0.08);
+        transform: translateY(-5px);
+    }
+    .step-tag {
+        background: var(--primary-blue);
+        color: white;
+        padding: 4px 12px;
+        border-radius: 8px;
+        font-size: 0.75rem;
+        font-weight: 800;
+        display: inline-block;
+        margin-bottom: 20px;
+    }
+    .journey-item h3 {
+        font-size: 1.35rem;
+        font-weight: 800;
+        color: var(--text-dark);
+        margin-bottom: 12px;
+    }
+    .journey-item p {
+        color: var(--text-muted);
+        font-size: 0.95rem;
+        line-height: 1.5;
+    }
+
+    /* Partners Section */
+    .partners-section {
+        background: var(--bg-gray);
+        border-radius: 40px;
+        margin: 0 20px;
+        padding: 100px 50px;
+    }
+    .partners-list {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 20px;
+        margin-bottom: 40px;
+    }
+    .partner-item {
+        background: white;
+        padding: 20px 30px;
+        border-radius: 16px;
+        font-weight: 700;
+        color: var(--text-dark);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        border: 1px solid var(--border);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        transition: all 0.2s ease;
+    }
+    .partner-item:hover {
+        border-color: var(--secondary-blue);
+        transform: scale(1.02);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.05);
+    }
+    .partner-icon {
+        color: var(--secondary-blue);
+        flex-shrink: 0;
+    }
+    .partner-dot {
+        width: 8px;
+        height: 8px;
+        background: var(--accent-yellow);
+        border-radius: 50%;
+    }
+
+    .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 50px;
+    }
+    .feature-card {
+        background: white;
+        padding: 40px;
+        border-radius: 20px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+        transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+        border: 1px solid var(--border);
+        border-top: 4px solid transparent;
+    }
+    .feature-card:hover {
+        transform: translateY(-10px);
+        border-color: var(--secondary-blue);
+        box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+    }
+
+    .faq-container {
+        max-width: 800px;
+        margin: 0 auto;
+        background: white;
+        padding: 40px;
+        border-radius: 24px;
+        border: 1px solid var(--border);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.04);
+    }
+    .faq-item {
+        margin-bottom: 30px;
+        padding-bottom: 30px;
+        border-bottom: 1px solid #f1f5f9;
+    }
+    .faq-item:last-child {
+        margin-bottom: 0;
+        padding-bottom: 0;
+        border-bottom: none;
+    }
+    .faq-question {
+        font-weight: 800;
+        color: var(--primary-blue);
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+    .faq-question::before {
+        content: "•";
+        color: var(--accent-yellow);
+        font-size: 1.5rem;
+    }
+    .faq-answer {
+        color: var(--text-muted);
+        line-height: 1.6;
+        padding-left: 25px;
+    }
+    .btn-view-all {
+        background: transparent;
+        border: 2px solid var(--primary-blue);
+        color: var(--primary-blue);
+        padding: 12px 30px;
+        border-radius: 12px;
+        font-weight: 800;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .btn-view-all:hover {
+        background: var(--primary-blue);
+        color: white;
+    }
+
+    /* User Guide Section */
+    .guide-container {
+        display: flex;
+        gap: 80px;
+        align-items: flex-start;
+    }
+    .checklist-card {
+        background: var(--primary-blue);
+        color: white;
+        padding: 50px;
+        border-radius: 32px;
+        flex: 1;
+        box-shadow: 0 30px 60px rgba(30, 64, 175, 0.2);
+    }
+    .checklist-card h3 {
+        font-size: 1.8rem;
+        font-weight: 900;
+        margin-bottom: 30px;
+    }
+    .checklist-list {
+        list-style: none;
+        padding: 0;
+    }
+    .checklist-item {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        margin-bottom: 18px;
+        font-weight: 600;
+        font-size: 1.05rem;
+    }
+    .check-icon {
+        background: rgba(255,255,255,0.2);
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    /* Securing Rights Section */
+    .rights-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 30px;
+    }
+    .rights-card {
+        border: 1px solid var(--border);
+        padding: 40px;
+        border-radius: 24px;
+        background: white;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        transition: all 0.3s ease;
+    }
+    .rights-card:hover {
+        border-color: var(--accent-red);
+        transform: translateY(-5px);
+        box-shadow: 0 20px 40px rgba(0,0,0,0.08);
+    }
+    .rights-icon {
+        color: var(--accent-red);
+        margin-bottom: 25px;
+        display: block;
+    }
+
+    /* Footer */
+    .public-footer {
+        background: var(--bg-white);
+        padding: 40px 50px;
+        border-top: 1px solid var(--border);
+    }
+    .footer-content {
+        max-width: 1200px;
+        margin: 0 auto;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-weight: 700;
+        font-size: 0.85rem;
+        color: var(--text-dark);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    .footer-links {
+        display: flex;
+        gap: 40px;
+    }
+    .footer-links a {
+        color: var(--text-dark);
+    }
+    .footer-contact {
+        display: flex;
+        gap: 20px;
+        color: var(--text-muted);
+    }
+
+    /* Modal Styling */
+    .modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.6);
+        backdrop-filter: blur(4px);
+        z-index: 2000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+    }
+    .modal-content {
+        background: white;
+        border-radius: 32px;
+        width: 100%;
+        max-width: 900px;
+        max-height: 80vh;
+        overflow-y: auto;
+        padding: 60px;
+        position: relative;
+    }
+    .modal-close {
+        position: absolute;
+        top: 30px;
+        right: 30px;
+        background: #f1f5f9;
+        border: none;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-dark);
+    }
+    .partners-full-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 15px;
+    }
+
+    @media (max-width: 1024px) {
+        .hero-headline { font-size: 3rem; }
+        .journey-grid, .partners-list, .rights-grid, .partners-full-grid { grid-template-columns: repeat(2, 1fr); }
+        .guide-container { flex-direction: column; }
+    }
+    @media (max-width: 768px) {
+        .public-header { padding: 15px 20px; }
+        .public-nav { display: none; }
+        .hero-section, .section-container, .partners-section { padding: 60px 20px; }
+        .hero-headline { font-size: 2.2rem; }
+        .hero-mini-cards { flex-direction: column; gap: 20px; }
+        .journey-grid, .partners-list, .rights-grid, .partners-full-grid { grid-template-columns: 1fr; }
+        .footer-content { flex-direction: column; gap: 20px; text-align: center; }
+        .footer-links { flex-direction: column; gap: 10px; }
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="card text-center">
-    <div style="display:flex; justify-content:center; margin:0 auto 12px auto;">
-        <img src="{% static 'core/PAStrackLOGO.png' %}" alt="PAStrack" style="max-width:340px; width:100%; height:auto;" />
-    </div>
-    <h1 class="page-title">PAStrack</h1>
-    <p class="page-subtitle">Track your request status using your Tracking Number.</p>
-
-    <form method="get" action="{% url 'track_case' %}" class="searchbar searchbar--center mt-14" style="margin:0;">
-        <div class="grow">
-            <label for="id_tracking" class="muted">Tracking Number</label>
-            <input id="id_tracking" name="q" placeholder="e.g., PAS26010001" />
+<div x-data="{ showAllPartners: false }">
+    <!-- Custom Header -->
+    <header class="public-header">
+        <div class="public-brand">
+            <img src="{% static 'core/logo.png' %}" alt="PASTrack Logo" />
+            <div class="brand-info">
+                <h1>PASTrack</h1>
+                <p>Cebu Provincial Assessment Office</p>
+            </div>
         </div>
-        <div>
-            <button class="btn btn-primary" type="submit">Track Request</button>
+        <nav class="public-nav">
+            <a href="#services" class="nav-link">Services</a>
+            <a href="#partners" class="nav-link">LGU Partners</a>
+            <a href="#guide" class="nav-link">User Guide</a>
+            <a href="#faqs" class="nav-link">FAQs</a>
+            <a href="{% url 'support' %}" class="nav-link" style="color: var(--accent-red);">Need Help?</a>
+            <a href="{% url 'login' %}" class="btn-staff-login">Staff Login</a>
+        </nav>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero-section">
+        <h1 class="hero-headline">Track Your Property Tax Declaration in <span>Real-Time.</span></h1>
+        <p class="hero-subheadline">Bringing transparency and speed to the Cebu Provincial Assessment Office. Monitor your application status from submission to release.</p>
+        
+        <form method="get" action="{% url 'track_case' %}" class="search-container">
+            <div class="search-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            </div>
+            <input name="q" class="search-input" placeholder="Enter Tracking ID (e.g. PAS26XXXXXX)" required />
+            <button type="submit" class="btn-track">Track Status</button>
+        </form>
+
+        <div class="hero-mini-cards">
+            <div class="mini-card">
+                <h4>LGU Partners</h4>
+                <p>San Remigio, Balamban, Carmen, <BR>and 41 others.</p>
+            </div>
+            <div class="mini-card">
+                <h4>Requirements</h4>
+                <p>View checklists for New Declarations or Re-assessments.</p>
+            </div>
         </div>
-    </form>
+    </section>
 
-    <div class="mt-14">
-        <a class="link-muted" href="{% url 'support' %}">Need help?</a>
-        <span class="muted">•</span>
-        <a class="link-muted" href="{% url 'login' %}">Staff Login</a>
+    <!-- What is PASTrack Section -->
+    <section class="section-container">
+        <div class="section-header">
+            <span class="section-badge">The Platform</span>
+            <h2 class="section-h2">What is PASTrack?</h2>
+            <p class="section-p">PASTrack is a unified digital ecosystem that bridges the gap between Municipal Assessor's Offices and the Provincial Capitol, creating a seamless flow of data and documentation.</p>
+        </div>
+        <div class="grid">
+            <div class="feature-card blue">
+                <div class="feature-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                </div>
+                <h3 style="font-weight: 800; margin-bottom: 15px;">Digital Coordination</h3>
+                <p class="muted">Centralized platform for real-time synchronization of property records across the province.</p>
+            </div>
+            <div class="feature-card red">
+                <div class="feature-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                </div>
+                <h3 style="font-weight: 800; margin-bottom: 15px;">Efficiency Focused</h3>
+                <p class="muted">Optimized workflows to reduce processing time from weeks to just a few business days.</p>
+            </div>
+            <div class="feature-card yellow">
+                <div class="feature-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                </div>
+                <h3 style="font-weight: 800; margin-bottom: 15px;">High Accountability</h3>
+                <p class="muted">Complete audit trails for every transaction, ensuring transparency for every citizen.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Services Section (The Journey) -->
+    <section id="services" class="section-container">
+        <div class="section-header">
+            <span class="section-badge">The Services</span>
+            <h2 class="section-h2">The PASTrack Journey</h2>
+            <p class="section-p">Our 6-step high-efficiency process ensures that every property declaration is handled with utmost accuracy and speed.</p>
+        </div>
+        <div class="journey-grid">
+            <div class="journey-item">
+                <span class="step-tag">Step 01</span>
+                <h3>Intake</h3>
+                <p>Initial document receiving and logging into the PASTrack ecosystem at the LGU level.</p>
+            </div>
+            <div class="journey-item">
+                <span class="step-tag">Step 02</span>
+                <h3>Examiner Review</h3>
+                <p>Comprehensive verification of documents and property details by assigned examiners.</p>
+            </div>
+            <div class="journey-item">
+                <span class="step-tag">Step 03</span>
+                <h3>Tax Mapping</h3>
+                <p>Precise plotting and field verification on digital and physical tax maps for spatial accuracy.</p>
+            </div>
+            <div class="journey-item">
+                <span class="step-tag">Step 04</span>
+                <h3>For Approval</h3>
+                <p>Final review and formal signature by the Provincial Assessor for legal validation.</p>
+            </div>
+            <div class="journey-item">
+                <span class="step-tag">Step 05</span>
+                <h3>Numbering</h3>
+                <p>Official assignment of the unique Tax Declaration number for government records.</p>
+            </div>
+            <div class="journey-item">
+                <span class="step-tag">Step 06</span>
+                <h3>Ready for Release</h3>
+                <p>Final dispatching of approved documents back to the owner or LGU representative.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- LGU Partners Section -->
+    <section id="partners" class="partners-section">
+        <div class="section-header">
+            <span class="section-badge">Our Network</span>
+            <h2 class="section-h2">LGU Partners</h2>
+            <p class="section-p">PASTrack supports all municipalities and component cities under the jurisdiction of the Province of Cebu.</p>
+        </div>
+        <div class="partners-list">
+            <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> San Remigio</div>
+            <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Balamban</div>
+            <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Carmen</div>
+            <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Bantayan</div>
+            <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Argao</div>
+            <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Dalaguete</div>
+        </div>
+        <div style="text-align: center;">
+            <button @click="showAllPartners = true" class="btn-view-all">View All Partners</button>
+        </div>
+    </section>
+
+    <!-- User Guide Section (Checklist) -->
+    <section id="guide" class="section-container">
+        <div class="guide-container">
+            <div class="checklist-card">
+                <h3>General Requirements</h3>
+                <ul class="checklist-list">
+                    <li class="checklist-item"><div class="check-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></div> Verified Secretary Certificate (if corp)</li>
+                    <li class="checklist-item"><div class="check-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></div> Certified True Copy of Title</li>
+                    <li class="checklist-item"><div class="check-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></div> Latest Tax Receipt / Tax Clearance</li>
+                    <li class="checklist-item"><div class="check-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></div> Affidavit of Ownership (if untitled)</li>
+                    <li class="checklist-item"><div class="check-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></div> Identification Cards (Government Issued)</li>
+                </ul>
+            </div>
+            <div style="flex: 1;">
+                <span class="section-badge">User Guide</span>
+                <h2 class="section-h2">Document Checklist for Your Smooth Transaction</h2>
+                <p class="section-p">Avoid delays in processing by ensuring you have all required documents beforehand. Our team follows strict regulatory standards for real property declarations.</p>
+                <div style="margin-top: 40px; padding: 30px; border-radius: 24px; background: var(--bg-gray); border-left: 6px solid var(--accent-yellow);">
+                    <p style="font-weight: 700; color: var(--text-dark); margin: 0;">Pro Tip:</p>
+                    <p class="muted" style="margin: 10px 0 0 0;">Ensure all photocopies are clear and readable. Original copies may be required for authentication during field verification.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Securing Your Property Rights Section -->
+    <section class="section-container" style="background: var(--bg-gray); border-radius: 40px; margin-bottom: 80px;">
+        <div class="section-header">
+            <span class="section-badge">Legal Foundation</span>
+            <h2 class="section-h2">Securing Your Property Rights</h2>
+            <p class="section-p">Proper land assessment is the cornerstone of legal property ownership and provincial growth.</p>
+        </div>
+        <div class="rights-grid">
+            <div class="rights-card">
+                <div class="rights-icon"><svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg></div>
+                <h3 style="font-weight: 800; margin-bottom: 15px;">Legal Validity</h3>
+                <p class="muted">A verified Tax Declaration establishes a formal legal record of your property value and ownership history.</p>
+            </div>
+            <div class="rights-card">
+                <div class="rights-icon"><svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg></div>
+                <h3 style="font-weight: 800; margin-bottom: 15px;">Loan Accessibility</h3>
+                <p class="muted">Banks and financial institutions require updated tax declarations as primary collateral documentation.</p>
+            </div>
+            <div class="rights-card">
+                <div class="rights-icon"><svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg></div>
+                <h3 style="font-weight: 800; margin-bottom: 15px;">Public Infrastructure</h3>
+                <p class="muted">Accurate assessments ensure fair revenue for provincial projects like roads, hospitals, and schools.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- FAQ Section -->
+    <section id="faqs" class="section-container">
+        <h2 class="section-title">Frequently Asked Questions</h2>
+        <div class="faq-container">
+            <div class="faq-item">
+                <div class="faq-question">How do I track my property request?</div>
+                <div class="faq-answer">Simply enter your <strong>Tracking ID</strong> in the search bar at the top of this page. The system will instantly show you the current location of your documents.</div>
+            </div>
+            <div class="faq-item">
+                <div class="faq-question">Where can I find my Tracking ID?</div>
+                <div class="faq-answer">Your Tracking ID is printed on the <strong>Acknowledgment Receipt</strong> provided to you by the Municipal Assessor's Office.</div>
+            </div>
+            <div class="faq-item">
+                <div class="faq-question">What should I do if my Tracking ID is not found?</div>
+                <div class="faq-answer">Double-check the characters. If it's still not found, your Municipal Assessor may not have uploaded it yet. Please contact them for confirmation.</div>
+            </div>
+            <div style="text-align: center; margin-top: 40px;">
+                <a href="{% url 'faq' %}" class="link-primary" style="font-weight: 800; text-decoration: underline;">View More FAQs →</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Partners Modal -->
+    <div x-show="showAllPartners" class="modal-overlay" x-cloak @click.self="showAllPartners = false">
+        <div class="modal-content" @click.stop>
+            <button @click="showAllPartners = false" class="modal-close">&times;</button>
+            <h2 class="section-h2" style="margin-bottom: 40px;">All LGU Partners</h2>
+            <div class="partners-full-grid">
+                <!-- Municipalities -->
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Alcantara</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Alcoy</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Alegria</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Aloguinsan</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Argao</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Asturias</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Badian</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Balamban</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Bantayan</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Barili</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Bogo City</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Boljoon</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Borbon</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Carcar City</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Carmen</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.getbootstrap.com" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Catmon</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Compostela</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Consolacion</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Cordova</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Daanbantayan</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Dalaguete</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Danao City</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Dumanjug</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Ginatilan</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Liloan</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Madridejos</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Malabuyoc</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Medellin</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Minglanilla</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Moalboal</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Naga City</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Oslob</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Pilar</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Pinamungajan</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Poro</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Ronda</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Samboan</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> San Fernando</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> San Francisco</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> San Remigio</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Santa Fe</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Santander</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Sibonga</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Sogod</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Tabogon</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Tabuelan</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Talisay City</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Toledo City</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Tuburan</div>
+                <div class="partner-item"><svg class="partner-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg> Tudela</div>
+            </div>
+        </div>
     </div>
-</div>
 
-<div class="card">
-    <h2 class="page-title" style="font-size:1.1rem; margin-bottom:6px;">Account Activation</h2>
-    <p class="muted">New staff accounts start as <strong>Pending Activation</strong>. Activate using the link (expires in 1 hour) and set a new strong password.</p>
+    <!-- Custom Footer -->
+    <footer class="public-footer">
+        <div class="footer-content">
+            <div>© 2026 Provincial Capitol, Cebu City</div>
+            <div class="footer-links">
+                <a href="#guide">USER GUIDE</a>
+                <a href="#faqs">FAQS</a>
+            </div>
+            <div class="footer-contact">
+                Support: (032) 253-2241 | pao@cebu.gov.ph
+            </div>
+        </div>
+    </footer>
 </div>
 {% endblock %}

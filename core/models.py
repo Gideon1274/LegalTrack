@@ -70,6 +70,21 @@ class CustomUser(AbstractUser):
     position = models.CharField(max_length=120, blank=True)
     role = models.CharField(max_length=50, choices=ROLE_CHOICES, null=False)
 
+    photo = models.ImageField(upload_to="profile_photos/", blank=True, null=True)
+
+    THEME_CHOICES: ClassVar[list[tuple[str, str]]] = [
+        ("light", "Light"),
+        ("dark", "Dark"),
+        ("system", "System"),
+    ]
+    theme_preference = models.CharField(max_length=16, choices=THEME_CHOICES, default="light")
+    timezone_preference = models.CharField(max_length=64, default="Asia/Manila")
+    date_format_preference = models.CharField(max_length=32, default="YYYY-MM-DD")
+
+    notify_new_account_activations = models.BooleanField(default=True)
+    notify_weekly_activity_report = models.BooleanField(default=False)
+    notify_critical_system_alerts = models.BooleanField(default=True)
+
     # Module 1.2: force password change on first login for admin-created accounts
     must_change_password = models.BooleanField(default=False)
 
@@ -251,11 +266,9 @@ class CustomUser(AbstractUser):
 
         temp_password: str | None = None
 
-        # Keep legacy `full_name` populated when first/last are used.
-        if not (self.full_name or "").strip():
-            computed = f"{(self.first_name or '').strip()} {(self.last_name or '').strip()}".strip()
-            if computed:
-                self.full_name = computed
+        computed = f"{(self.first_name or '').strip()} {(self.last_name or '').strip()}".strip()
+        if computed:
+            self.full_name = computed
 
         if is_new:
             # Generate Staff ID
@@ -296,7 +309,7 @@ class CustomUser(AbstractUser):
                 print(f"Email: {self.email}")
                 print(f"Staff ID: {self.username}")
                 print(f"Password: {temp_password}")
-                print("Login: http://127.0.0.1:8000/accounts/login/")
+                print("Login: http://127.0.0.1:8000/login/")
                 print("========================\n")
 
             # Audit log
@@ -399,6 +412,32 @@ class PasswordResetRequest(models.Model):
         ]
 
 
+class LGUTaxDeclarationSequence(models.Model):
+    """Tracks the current TD sequence for each LGU to ensure strict sequential numbering."""
+    lgu_name = models.CharField(max_length=100, unique=True, choices=CustomUser.LGU_MUNICIPALITY_CHOICES)
+    prefix = models.CharField(max_length=10, help_text="e.g., '120-' for Alcoy")
+    current_count = models.PositiveIntegerField(default=0)
+
+    def __str__(self):
+        return f"{self.lgu_name} ({self.prefix}) - Next: {self.current_count + 1:03d}"
+
+    @classmethod
+    def get_next_number(cls, lgu_name):
+        """Safely generates the next sequential number using a database lock."""
+        with transaction.atomic():
+            # select_for_update() locks this specific row until the transaction finishes.
+            # This completely prevents two cases from getting the same number.
+            sequence, created = cls.objects.select_for_update().get_or_create(
+                lgu_name=lgu_name,
+                defaults={'prefix': '000-'} # You can update prefixes in the Django Admin
+            )
+            
+            sequence.current_count += 1
+            sequence.save()
+            
+            # Formats as 120-001, 120-002, etc. (padding with 3 zeros)
+            return f"{sequence.prefix}{sequence.current_count:03d}"
+
 class Case(TimestampedModel):
     # ---------- Tracking ID ----------
     tracking_id = models.CharField(max_length=30, unique=True, editable=False, blank=True, null=True)
@@ -407,12 +446,14 @@ class Case(TimestampedModel):
     draft_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
 
     # ---------- Status ----------
+    # ---------- Status ----------
     STATUS_CHOICES: ClassVar[list[tuple[str, str]]] = [
         ("draft", "Draft"),
-        ("not_received", "Not Received"),          # LGU created, still editable
-        ("received", "Received"),                  # Capitol marked receipt
-        ("in_review", "In Review"),
-        ("for_taxmapping", "For Taxmapping"),      # Added for TaxMapper flow
+        ("not_received", "Not Received"),
+        ("received", "Received"),
+        ("to_examine", "To Examine"),       # Status after Receiver assigns it
+        ("in_review", "Under Examination"), # Status once Examiner starts working
+        ("for_taxmapping", "For Taxmapping"),
         ("for_approval", "For Approval"),
         ("approved", "Approved"),
         ("for_numbering", "For Numbering"),
@@ -527,8 +568,8 @@ class Case(TimestampedModel):
     lgu_submitted_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        ordering: ClassVar[list[str]] = ["-created_at"]
-        indexes: ClassVar[list] = [
+        ordering = ["-created_at"]
+        indexes = [
             models.Index(fields=["status"]),
             models.Index(fields=["created_at"]),
             models.Index(fields=["updated_at"]),
@@ -588,6 +629,14 @@ class Case(TimestampedModel):
         
         raise ValueError("Unable to generate unique tracking_id")
 
+
+    td_number = models.CharField(
+        max_length=50, 
+        blank=True, 
+        null=True, 
+        unique=True, 
+        help_text="Official Tax Declaration Number assigned by Numberer"
+    )
     # ------------------------------------------------------------------
     #  Save override
     # ------------------------------------------------------------------

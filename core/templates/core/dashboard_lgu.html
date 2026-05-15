@@ -1,135 +1,312 @@
-{% extends "base.html" %}
-{% block sidebar_class %}sidebar--wide{% endblock %}
-{% block title %}LGU Dashboard{% endblock %}
+{% extends 'base_new.html' %}
+{% load static %}
+
+{% block extra_css %}
+    <style>
+        /* ===== DASHBOARD LAYOUT & HEADER ===== */
+        .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2rem; }
+        .greeting h1 { font-size: 1.75rem; font-weight: 700; color: #0f172a; margin-bottom: 0.25rem; }
+        .greeting p { color: #64748b; margin-top: 0.25rem; font-family: 'Inter', sans-serif; font-weight: 500; }
+        
+        .header-actions { display: flex; gap: 1rem; }
+        .btn-primary {
+            background-color: var(--primary); color: white; border: none;
+            padding: 0.6rem 1.25rem; border-radius: 6px;
+            font-size: 0.875rem; font-weight: 500; cursor: pointer; transition: 0.2s;
+            display: flex; align-items: center; gap: 0.5rem; box-shadow: var(--shadow-sm); text-decoration: none;
+        }
+        .btn-primary:hover { background-color: var(--primary-hover); box-shadow: var(--shadow-md); transform: translateY(-1px); color: white; }
+
+        /* ===== KPI CARDS (Upgraded to 4-Card Grid) ===== */
+        .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; margin-bottom: 2rem; }
+        .kpi-card {
+            background: white; border: 1px solid #e2e8f0;
+            border-radius: 12px; padding: 1.25rem;
+            display: flex; align-items: center; gap: 1rem;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05); transition: 0.3s;
+        }
+        .kpi-card:hover { border-color: var(--primary); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); transform: translateY(-2px); }
+        
+        .kpi-icon-box {
+            width: 48px; height: 48px; border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.5rem; flex-shrink: 0;
+        }
+        .kpi-data h2 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.15rem; color: #0f172a; line-height: 1; }
+        .kpi-data span { display: block; font-size: 0.8rem; color: #64748b; margin-top: 4px; }
+
+        /* ===== PANELS & TABS ===== */
+        .panel {
+            background: white; border: 1px solid #e2e8f0;
+            border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            padding: 1.5rem; display: flex; flex-direction: column;
+        }
+        
+        .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .panel-title { font-size: 1.1rem; font-weight: 700; color: #1e293b; margin: 0; }
+        .view-all-link { font-size: 0.85rem; color: var(--primary); text-decoration: none; font-weight: 500; transition: 0.2s; }
+        .view-all-link:hover { text-decoration: underline; }
+
+        .tabs { display: flex; gap: 1rem; margin-bottom: 1.5rem; border-bottom: 1px solid #f1f5f9; padding-bottom: 0.5rem; }
+        .tab {
+            font-size: 0.875rem; font-weight: 500; color: #64748b; text-decoration: none;
+            padding: 0.5rem 1rem; border-radius: 6px;
+            display: flex; align-items: center; gap: 0.5rem; transition: 0.2s;
+        }
+        .tab:hover { color: #0f172a; background: #f8fafc; }
+        .tab.active { background-color: #eff6ff; color: var(--primary); font-weight: 600; }
+        .tab-badge {
+            background: #e2e8f0; color: #475569;
+            font-size: 0.7rem; padding: 0.1rem 0.4rem; border-radius: 10px; font-weight: 700; transition: 0.2s;
+        }
+        .tab.active .tab-badge { background: white; color: var(--primary); }
+
+        /* ===== TABLE STYLING ===== */
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th { font-size: 0.75rem; font-weight: 700; color: #64748b; padding: 1rem 0.5rem; border-bottom: 2px solid #f1f5f9; text-transform: uppercase; }
+        td { padding: 1rem 0.5rem; border-bottom: 1px solid #f1f5f9; font-size: 0.875rem; vertical-align: middle; transition: 0.2s; }
+        tbody tr:hover td { background-color: #f8fafc; }
+
+        .tracking-link { color: #0f172a; font-weight: 700; font-family: monospace; text-decoration: none; display: flex; align-items: center; gap: 0.5rem; }
+        .tracking-link:hover { color: var(--primary); }
+
+        .owner-info strong { display: block; font-size: 0.875rem; font-weight: 600; color: #1e293b; margin-bottom: 0.1rem; }
+        .owner-info span { font-size: 0.75rem; color: #64748b; }
+
+        /* ===== COMPREHENSIVE STATUS PILLS ===== */
+        .status-pill {
+            display: inline-flex; align-items: center; gap: 0.3rem;
+            padding: 0.25rem 0.75rem; border-radius: 999px;
+            font-size: 0.75rem; font-weight: 600; text-transform: capitalize;
+            border: 1px solid transparent;
+        }
+        .status-pill::before { content: ''; display: block; width: 6px; height: 6px; border-radius: 50%; }
+        
+        /* Needs Action / Pending */
+        .status-pending, .status-not_received { background: #fef3c7; color: #b45309; border-color: #fde68a; }
+        .status-pending::before, .status-not_received::before { background-color: #b45309; }
+        
+        /* Returned to LGU */
+        .status-returned, .status-client_correction { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
+        .status-returned::before, .status-client_correction::before { background-color: #991b1b; }
+        
+        /* Front Desk Received */
+        .status-received { background: #e0f2fe; color: #0369a1; border-color: #bae6fd; }
+        .status-received::before { background-color: #0369a1; }
+
+        /* Examiner Reviewing */
+        .status-for_review, .status-in_review, .status-under_review { background: #e0e7ff; color: #4338ca; border-color: #c7d2fe; }
+        .status-for_review::before, .status-in_review::before, .status-under_review::before { background-color: #4338ca; }
+
+        /* Tax Mapping */
+        .status-for_taxmapping { background: #ffedd5; color: #c2410c; border-color: #fed7aa; }
+        .status-for_taxmapping::before { background-color: #c2410c; }
+
+        /* Capitol Approver */
+        .status-for_approval { background: #f3e8ff; color: #7e22ce; border-color: #e9d5ff; }
+        .status-for_approval::before { background-color: #7e22ce; }
+
+        /* Numbering & Release */
+        .status-for_numbering, .status-for_release { background: #fce7f3; color: #be185d; border-color: #fbcfe8; }
+        .status-for_numbering::before, .status-for_release::before { background-color: #be185d; }
+        
+        /* Completed */
+        .status-approved, .status-released { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
+        .status-approved::before, .status-released::before { background-color: #166534; }
+
+        .action-btn { border: none; background: transparent; cursor: pointer; color: #94a3b8; padding: 0.4rem; border-radius: 6px; transition: 0.2s; font-size: 1.1rem; text-decoration: none;}
+        .action-btn:hover { background: #f1f5f9; color: var(--primary); }
+
+        /* Pagination */
+        .pagination-container { display: flex; justify-content: center; gap: 0.25rem; margin-top: 1.5rem; }
+        .page-btn { border: 1px solid #e2e8f0; background: white; color: #64748b; padding: 0.4rem 0.75rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 500; transition: 0.2s; text-decoration: none;}
+        .page-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+        .page-btn:hover:not(.active) { background: #f8fafc; color: #0f172a; }
+
+        /* Activity List */
+        .activity-list { display: flex; flex-direction: column; gap: 1.25rem; }
+        .activity-item { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 0.75rem; border-bottom: 1px solid #f1f5f9; }
+        .activity-item:last-child { border-bottom: none; }
+        .activity-left { display: flex; gap: 1rem; align-items: flex-start; }
+        .activity-icon { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0; background: #f8fafc; border: 1px solid #e2e8f0; color: #64748b; }
+    </style>
+{% endblock %}
 
 {% block content %}
-<div class="card card--flat card-elevated">
-    <div class="card__header" style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
-        <div>
-            <strong style="font-size:1.05rem;">Your Submissions</strong>
-            <div class="muted" style="font-weight:800; margin-top:4px;">{{ user.lgu_municipality|default:"LGU" }}</div>
+    <div class="header">
+        <div class="greeting">
+            <h1>Hi, {{ request.user.first_name|default:"LGU Admin" }}!</h1>
+            <p>
+                <span style="color: #3b82f6; font-weight: 700;">{{ request.user.staff_id|default:"LGU-001" }}</span> 
+                <span style="margin: 0 8px; color: #cbd5e1;">|</span> 
+                {{ request.user.lgu_municipality|default:"Municipality" }} Admin
+            </p>
         </div>
-        <a class="btn btn-primary btn-sm" href="{% url 'submit_case' %}">+ Create New Transaction</a>
+        <div class="header-actions">
+            <a href="{% url 'submit_case' %}" class="btn-primary"><i class="ri-file-add-line"></i> New Transaction</a>
+        </div>
     </div>
-</div>
 
-{% if stat_cards %}
-    <div class="statgrid" aria-label="Summary">
-        {% for s in stat_cards %}
-            <div class="statcard">
-                <div class="staticon" aria-hidden="true"></div>
-                <div>
-                    <p class="statnum">{{ s.value }}</p>
-                    <p class="statlabel">{{ s.label }}</p>
+    <!-- 4-CARD KPI GRID -->
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="kpi-icon-box" style="color: #0ea5e9; background: #e0f2fe;"><i class="ri-folder-upload-line"></i></div>
+            <div class="kpi-data">
+                <h2>{{ total_cases_count|default:"0" }}</h2>
+                <span>Total Submissions</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon-box" style="color: #166534; background: #dcfce7;"><i class="ri-calendar-check-line"></i></div>
+            <div class="kpi-data">
+                <h2>{{ todays_cases_count|default:"0" }}</h2>
+                <span>Submitted Today</span>
+            </div>
+        </div>
+        
+        <!-- Dynamically pull Pending and Received counts from tabs -->
+        {% for key, label, count in tabs %}
+            {% if key == 'pending' %}
+            <div class="kpi-card">
+                <div class="kpi-icon-box" style="color: #b45309; background: #fef3c7;"><i class="ri-error-warning-line"></i></div>
+                <div class="kpi-data">
+                    <h2>{{ count }}</h2>
+                    <span>Action Required</span>
                 </div>
             </div>
+            {% elif key == 'received' %}
+            <div class="kpi-card">
+                <div class="kpi-icon-box" style="color: #6b21a8; background: #f3e8ff;"><i class="ri-building-4-line"></i></div>
+                <div class="kpi-data">
+                    <h2>{{ count }}</h2>
+                    <span>At Capitol Processing</span>
+                </div>
+            </div>
+            {% endif %}
         {% endfor %}
     </div>
-{% endif %}
 
-<div class="filters">
-    <form method="get" class="searchbar m-0">
-        <input type="hidden" name="tab" value="{{ tab }}" />
-        <div class="grow">
-            <label for="id_q">Search</label>
-            <input id="id_q" name="q" value="{{ filter_q }}" placeholder="Search by Transaction No., Owner Name, LGU Origin, or Transaction Type" />
-        </div>
-        <div>
-            <button class="btn btn-primary" type="submit">Apply</button>
-        </div>
-    </form>
-</div>
+    <!-- MAIN SPLIT VIEW: Table & Activity -->
+    <div style="display: flex; gap: 1.5rem; align-items: stretch; margin-bottom: 2rem;">
+        
+        <!-- LEFT PANEL: Submissions Table -->
+        <div class="panel" style="flex: 1; margin-bottom: 0;">
+            <div class="panel-header">
+                <h3 class="panel-title">Recent Submissions</h3>
+                <a href="{% url 'my_submissions' %}" class="view-all-link">Manage Workspace &rarr;</a>
+            </div>
 
-<div class="card card--flat card-elevated">
-    <div class="card__header">
-        <strong>Your Submissions (Status Breakdown)</strong>
-    </div>
-    <div class="card__body">
-        {% if status_counts %}
-            <div class="row" style="gap:14px; flex-wrap:wrap;">
-                {% for row in status_counts %}
-                    <div class="msg" style="margin:0;">
-                        <div class="muted" style="font-weight:800;">{{ row.status }}</div>
-                        <div style="font-size:1.2rem; font-weight:800;">{{ row.count }}</div>
+            <div class="tabs">
+                {% for key, label, count in tabs %}
+                    <a href="?tab={{ key }}" class="tab {% if tab == key %}active{% endif %}">
+                        {{ label }} <span class="tab-badge">{{ count }}</span>
+                    </a>
+                {% endfor %}
+                                            {% if case.status == 'not_received' or case.status == 'client_correction' or case.status == 'pending' %}
+
+            <div style="overflow-x: auto; flex: 1;">
+                {% if page_obj and page_obj.object_list %}
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Case No.</th>
+                                <th>Client / Request</th>
+                                <th>Status</th>
+                                <th>Date Submitted</th>
+                                <th style="text-align: right;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for case in page_obj.object_list %}
+                                <tr>
+                                    <td>
+                                        <a href="{% url 'case_detail' case.tracking_id %}" class="tracking-link">
+                                            {{ case.tracking_id }}
+                                        </a>
+                                    </td>
+                                    <td>
+                                        <div class="owner-info">
+                                            <strong>{{ case.client_display_name }}</strong>
+                                            <span>{{ case.get_case_type_display }}</span>
+                                        </div>
+                                    </td>
+                                    <td><span class="status-pill status-{{ case.status }}">{{ case.get_status_display }}</span></td>
+                                    <td style="color: #64748b; font-size: 0.8rem;">{{ case.created_at|date:"M d, Y" }}</td>
+                                    <td style="text-align: right;">
+                                        <div style="display: flex; gap: 0.25rem; justify-content: flex-end;">
+                                            <a href="{% url 'case_detail' case.tracking_id %}" class="action-btn" title="View"><i class="ri-eye-line"></i></a>
+                                            {% if case.status == 'draft' and not case.lgu_submitted_at %}
+                                                <a href="{% url 'case_wizard' case.tracking_id 1 %}" class="action-btn" title="Edit" style="color: var(--primary);"><i class="ri-pencil-line"></i></a>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <div style="padding: 4rem 1rem; text-align: center; color: #94a3b8;">
+                        <i class="ri-folder-open-line" style="font-size: 3rem; display: block; margin-bottom: 1rem; color: #cbd5e1;"></i>
+                        <p style="margin: 0; font-weight: 500; font-size: 1.05rem; color: #475569;">No submissions found.</p>
+                        <p style="font-size: 0.85rem; margin-top: 4px;">Transactions matching this status will appear here.</p>
                     </div>
-                {% endfor %}
+                {% endif %}
             </div>
-        {% else %}
-            <p class="muted" style="margin:0;">No submissions yet.</p>
-        {% endif %}
-    </div>
-</div>
-
-<div class="card card--flat card-elevated">
-    <div class="card__header">
-        <strong>Municipality Submissions</strong>
-        <span class="muted">Showing 10 per page</span>
-    </div>
-
-    <div class="card__body card__body--flush">
-        <div class="card__body" style="padding:14px 16px;">
-            <div class="subtabs" aria-label="LGU dashboard tabs">
-                {% for key,label,count in tabs %}
-                    <a href="?tab={{ key }}{% if filter_q %}&q={{ filter_q|urlencode }}{% endif %}"><span class="{% if tab == key %}active{% endif %}">{{ label }} ({{ count }})</span></a>
-                {% endfor %}
-            </div>
-        </div>
-
-        {% if page_obj and page_obj.object_list %}
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th style="width:22%">Tracking No.</th>
-                        <th style="width:10%">LGU Code</th>
-                        <th>Owner</th>
-                        <th style="width:18%">Submitted by</th>
-                        <th style="width:18%">Status</th>
-                        <th style="width:18%">Created</th>
-                        <th style="width:16%">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for case in page_obj.object_list %}
-                        <tr>
-                            <td><strong><a href="{% url 'case_detail' case.tracking_id %}">{{ case.tracking_id }}</a></strong></td>
-                            <td class="muted">{{ case.lgu_area_code|default:"—" }}</td>
-                            <td>{{ case.client_display_name }}</td>
-                            <td class="muted">{{ case.submitted_by.full_name|default:case.submitted_by.email|default:"—" }}</td>
-                            <td class="muted">{{ case.get_status_display }}</td>
-                            <td class="muted">{{ case.created_at|date:"M d, Y H:i" }}</td>
-                            <td>
-                                <a class="btn btn-secondary btn-sm" href="{% url 'case_detail' case.tracking_id %}">View</a>
-                                {% if case.status == 'not_received' or case.status == 'returned' or case.status == 'client_correction' %}
-                                    <a class="btn btn-secondary btn-sm" href="{% url 'case_wizard' case.tracking_id 1 %}">Edit</a>
-                                {% endif %}
-                            </td>
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
 
             {% if page_obj.has_other_pages %}
-                <div class="pagination">
+                <div class="pagination-container">
                     {% if page_obj.has_previous %}
-                        <a class="pagepill" href="?tab={{ tab }}{% if filter_q %}&q={{ filter_q|urlencode }}{% endif %}&page={{ page_obj.previous_page_number }}">Prev</a>
+                        <a href="?tab={{ tab }}&page={{ page_obj.previous_page_number }}" class="page-btn"><i class="ri-arrow-left-s-line"></i></a>
                     {% endif %}
+                    
                     {% for n in page_obj.paginator.page_range %}
                         {% if n == page_obj.number %}
-                            <span class="pagepill active">{{ n }}</span>
-                        {% elif n <= 10 %}
-                            <a class="pagepill" href="?tab={{ tab }}{% if filter_q %}&q={{ filter_q|urlencode }}{% endif %}&page={{ n }}">{{ n }}</a>
+                            <span class="page-btn active">{{ n }}</span>
+                        {% elif n <= 5 %}
+                            <a href="?tab={{ tab }}&page={{ n }}" class="page-btn">{{ n }}</a>
                         {% endif %}
                     {% endfor %}
+                    
                     {% if page_obj.has_next %}
-                        <a class="pagepill" href="?tab={{ tab }}{% if filter_q %}&q={{ filter_q|urlencode }}{% endif %}&page={{ page_obj.next_page_number }}">Next</a>
+                        <a href="?tab={{ tab }}&page={{ page_obj.next_page_number }}" class="page-btn"><i class="ri-arrow-right-s-line"></i></a>
                     {% endif %}
                 </div>
             {% endif %}
-        {% else %}
-            <div class="card__body">
-                <p class="muted" style="margin:0;">No submissions found for this tab.</p>
+        </div>
+
+        <!-- RIGHT PANEL: Activity Logs -->
+        <div class="panel" style="width: 350px; margin-bottom: 0;">
+            <div class="panel-header" style="margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid #f1f5f9;">
+                <h3 class="panel-title" style="font-size: 1rem;">Recent Activity</h3>
+                <a href="{% url 'audit_logs' %}" class="view-all-link" style="font-size: 0.75rem;">Full History &rarr;</a>
             </div>
-        {% endif %}
+
+            <div class="activity-list" style="flex: 1;">
+                {% for log in recent_logs %}
+                    <div class="activity-item">
+                        <div class="activity-left">
+                            <div class="activity-icon">
+                                <i class="{% if 'login' in log.action %}ri-login-box-line
+                                          {% elif 'logout' in log.action %}ri-logout-box-r-line
+                                          {% elif 'submit' in log.action or 'create' in log.action %}ri-file-upload-line text-green-600
+                                          {% elif 'return' in log.action %}ri-arrow-go-back-line text-red-600
+                                          {% else %}ri-history-line{% endif %}"></i>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.85rem; font-weight: 600; color: #334155;">{{ log.get_action_display|default:log.action }}</div>
+                                <div style="font-size: 0.75rem; color: #64748b; margin-top: 2px;">{{ log.target_object|slice:"6:"|default:"System Event" }}</div>
+                            </div>
+                        </div>
+                        <div style="font-size: 0.7rem; color: #94a3b8; font-weight: 500;">{{ log.created_at|timesince }} ago</div>
+                    </div>
+                {% empty %}
+                    <div style="text-align: center; color: #94a3b8; padding: 2rem 0;">
+                        <i class="ri-history-line" style="font-size: 2rem; display: block; margin-bottom: 0.5rem; color: #cbd5e1;"></i>
+                        <span style="font-size: 0.85rem;">No recent activity logs.</span>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+        
     </div>
-</div>
 {% endblock %}

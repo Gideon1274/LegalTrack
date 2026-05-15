@@ -1,40 +1,445 @@
 {% extends "base.html" %}
+{% load static %}
+
 {% block title %}Login{% endblock %}
-{% block container_class %}container--narrow{% endblock %}
+{% block container_class_anon %}login-page-container{% endblock %}
 
 {% block content %}
-<div class="card" style="text-align:center;">
-    <div class="avatar" style="width:58px; height:58px; margin:0 auto 12px auto;"></div>
-    <h1 class="page-title">Login</h1>
-    <p class="page-subtitle">Sign in to your staff account.</p>
+<style>
+    /* Full screen layout overrides */
+    body {
+        background: #fff;
+    }
+    .container.login-page-container {
+        max-width: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+    
+    .login-wrapper {
+        display: flex;
+        min-height: 100vh;
+        width: 100%;
+        background: #fff;
+    }
+    
+    /* Left Section: Form */
+    .login-left {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: 40px 10%;
+        min-width: 450px;
+    }
+    
+    .logo-container {
+        margin-bottom: 48px;
+    }
+    
+    .logo-container img {
+        height: 44px;
+        width: auto;
+    }
+    
+    .welcome-header {
+        margin-bottom: 40px;
+    }
+    
+    .welcome-header h1 {
+        font-size: 2.25rem;
+        font-weight: 800;
+        margin: 0 0 8px 0;
+        color: #111827;
+    }
+    
+    .welcome-header p {
+        color: #6b7280;
+        font-size: 1rem;
+        margin: 0;
+    }
+    
+    /* Form elements */
+    .form-group {
+        margin-bottom: 24px;
+    }
+    
+    .form-label {
+        display: block;
+        font-weight: 600;
+        font-size: 0.9rem;
+        margin-bottom: 8px;
+        color: #374151;
+    }
+    
+    .form-input {
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 14px 16px;
+        width: 100%;
+        font-size: 1rem;
+        transition: all 0.2s;
+    }
+    
+    .form-input:focus {
+        background: #fff;
+        border-color: #1f3a8a;
+        outline: none;
+        box-shadow: 0 0 0 4px rgba(31, 58, 138, 0.1);
+    }
+    
+    /* Password field with toggle */
+    .pwd-container {
+        position: relative;
+    }
+    
+    .pwd-toggle {
+        position: absolute;
+        right: 16px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: transparent;
+        border: none;
+        color: #9ca3af;
+        cursor: pointer;
+        padding: 4px;
+        display: flex;
+        align-items: center;
+    }
+    
+    .pwd-toggle:hover {
+        color: #4b5563;
+    }
 
-    {% if form.errors %}
-        <div class="msg error">Invalid credentials. Please try again.</div>
-    {% endif %}
+    /* Options row: Remember & Forgot */
+    .options-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 32px;
+    }
+    
+    /* Custom Toggle Switch */
+    .toggle-container {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: #4b5563;
+    }
+    
+    .toggle-switch {
+        position: relative;
+        display: inline-block;
+        width: 44px;
+        height: 24px;
+    }
+    
+    .toggle-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+    
+    .slider {
+        position: absolute;
+        cursor: pointer;
+        inset: 0;
+        background-color: #e5e7eb;
+        transition: .4s;
+        border-radius: 24px;
+    }
+    
+    .slider:before {
+        position: absolute;
+        content: "";
+        height: 18px;
+        width: 18px;
+        left: 3px;
+        bottom: 3px;
+        background-color: white;
+        transition: .4s;
+        border-radius: 50%;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    input:checked + .slider {
+        background-color: #1f3a8a;
+    }
+    
+    input:checked + .slider:before {
+        transform: translateX(20px);
+    }
+    
+    .forgot-link {
+        color: #6b7280;
+        font-size: 0.9rem;
+        font-weight: 600;
+        text-decoration: none;
+    }
+    
+    .forgot-link:hover {
+        text-decoration: underline;
+        color: #1f3a8a;
+    }
+    
+    /* Buttons */
+    .btn-signin {
+        background: #4f46e5; /* Match the purple-ish blue in the image */
+        color: #fff;
+        padding: 14px;
+        border-radius: 12px;
+        font-weight: 700;
+        width: 100%;
+        border: none;
+        cursor: pointer;
+        font-size: 1rem;
+        margin-bottom: 20px;
+        transition: transform 0.1s, background 0.2s;
+    }
+    
+    .btn-signin:hover {
+        background: #4338ca;
+    }
+    
+    .btn-signin:active {
+        transform: scale(0.99);
+    }
+    
+    .btn-google {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 12px;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        font-weight: 600;
+        gap: 12px;
+        color: #374151;
+        cursor: pointer;
+        width: 100%;
+        background: #fff;
+        margin-bottom: 32px;
+        transition: background 0.2s;
+    }
+    
+    .btn-google:hover {
+        background: #f9fafb;
+    }
+    
+    .footer-text {
+        text-align: center;
+        color: #6b7280;
+        font-size: 0.95rem;
+    }
+    
+    .footer-link {
+        color: #4f46e5;
+        font-weight: 700;
+        text-decoration: none;
+    }
+    
+    .footer-link:hover {
+        text-decoration: underline;
+    }
+    
+    /* Right Section: Carousel */
+    .login-right {
+        flex: 1.2;
+        padding: 24px;
+        display: flex;
+        background: #f8fafc;
+    }
+    
+    .carousel-card {
+        flex: 1;
+        position: relative;
+        border-radius: 32px;
+        overflow: hidden;
+        background: #000;
+    }
+    
+    .carousel-item {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        transition: opacity 1.2s ease-in-out;
+        z-index: 1;
+    }
+    
+    .carousel-item.active {
+        opacity: 1;
+        z-index: 2;
+    }
+    
+    .carousel-item img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        opacity: 0.8;
+    }
+    
+    .carousel-content {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        padding: 64px;
+        z-index: 10;
+        color: #fff;
+        background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 100%);
+    }
+    
+    .carousel-content h2 {
+        font-size: 3rem;
+        font-weight: 800;
+        line-height: 1.1;
+        margin: 0 0 24px 0;
+        letter-spacing: -0.02em;
+    }
+    
+    .carousel-content p {
+        font-size: 1.15rem;
+        line-height: 1.6;
+        opacity: 0.9;
+        max-width: 500px;
+        margin: 0;
+    }
+    
+    /* Carousel Indicators */
+    .carousel-indicators {
+        position: absolute;
+        bottom: 48px;
+        left: 64px;
+        display: flex;
+        gap: 10px;
+        z-index: 20;
+    }
+    
+    .indicator {
+        width: 8px;
+        height: 8px;
+        border-radius: 4px;
+        background: rgba(255,255,255,0.3);
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    .indicator.active {
+        width: 32px;
+        background: #fff;
+    }
 
-    <form method="post" style="text-align:left;">
-        {% csrf_token %}
-        {{ form.non_field_errors }}
+    @media (max-width: 1100px) {
+        .login-right {
+            display: none;
+        }
+        .login-left {
+            padding: 40px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+    }
+</style>
 
-        <label for="id_username">Staff ID</label>
-        {{ form.username }}
+<div class="login-wrapper" x-data="{ 
+    activeSlide: 0, 
+    slides: [
+        { 
+            title: 'Cebu Provincial Capitol.', 
+            subtitle: 'The seat of government for the Province of Cebu, representing our commitment to excellence and public service.',
+            image: 'https://i.pinimg.com/1200x/d7/59/7f/d7597fe3104d6ec859faa6ec23a63296.jpg' 
+        },
+        { 
+            title: 'Unified Cebu Tracking.', 
+            subtitle: 'Connecting the Provincial Capitol and LGUs through a transparent, efficient, and robust tracking system.',
+            image: 'https://i.pinimg.com/736x/25/16/53/2516539a218a892c55fb731ee6edd6b4.jpg'
+        },
+        { 
+            title: 'Heritage & Governance.', 
+            subtitle: 'Preserving our history while modernizing administrative processes to better serve the people of Cebu.',
+            image: 'https://i.pinimg.com/736x/f2/ec/47/f2ec4719565104c50a109318b4bee515.jpg'
+        }
+    ],
+    init() {
+        setInterval(() => {
+            this.activeSlide = (this.activeSlide + 1) % this.slides.length;
+        }, 6000);
+    }
+}">
+    <!-- Left Section: Form -->
+    <div class="login-left">
+        <div class="logo-container">
+            <a href="/">
+               <img src="{% static 'core/PASTrack-logo.png' %}" alt="PAStrack">
+            </a>
+        </div>
+        
+        <div class="welcome-header">
+            <h1>Welcome Back!</h1>
+            <p>Please enter your credentials to access your account.</p>
+        </div>
 
-        <div style="display:flex; align-items:end; justify-content:space-between; gap:10px; margin-top:10px;">
-            <div style="flex:1;">
-                <label for="id_password">Password</label>
-                {{ form.password }}
+        {% if form.errors %}
+            <div class="msg error" style="margin-bottom: 24px;">
+                Invalid Staff ID or password. Please try again.
+            </div>
+        {% endif %}
+
+        <form method="post" x-data="{ showPwd: false }">
+            {% csrf_token %}
+            
+            <div class="form-group">
+                <label class="form-label" for="id_username">Staff ID</label>
+                <input type="text" name="username" id="id_username" class="form-input" placeholder="Enter your staff ID" required autocomplete="username">
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label" for="id_password">Password</label>
+                <div class="pwd-container">
+                    <input :type="showPwd ? 'text' : 'password'" name="password" id="id_password" class="form-input" placeholder="Enter password" required autocomplete="current-password" data-pwd-toggle-bound="1">
+                    <button type="button" class="pwd-toggle" @click="showPwd = !showPwd" aria-label="Toggle password visibility">
+                        <svg x-show="!showPwd" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                        <svg x-show="showPwd" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18"/></svg>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="options-row" style="justify-content: flex-end;">
+                <a href="{% url 'forgot_password' %}" class="forgot-link">Forgot password?</a>
+            </div>
+            
+            <button type="submit" class="btn-signin">Sign in</button>
+            
+            {% if next %}
+                <input type="hidden" name="next" value="{{ next }}">
+            {% endif %}
+        </form>
+    </div>
+
+    <!-- Right Section: Carousel -->
+    <div class="login-right">
+        <div class="carousel-card shadow-2xl">
+            <template x-for="(slide, index) in slides" :key="index">
+                <div class="carousel-item" :class="{ 'active': activeSlide === index }">
+                    <img :src="slide.image" :alt="slide.title">
+                    <div class="carousel-content">
+                        <h2 x-text="slide.title"></h2>
+                        <p x-text="slide.subtitle"></p>
+                    </div>
+                </div>
+            </template>
+            
+            <div class="carousel-indicators">
+                <template x-for="(slide, index) in slides" :key="index">
+                    <div class="indicator" :class="{ 'active': activeSlide === index }" @click="activeSlide = index"></div>
+                </template>
             </div>
         </div>
-
-        <button class="btn btn-primary" type="submit" style="width:100%; margin-top:14px;">Login</button>
-
-        <div style="margin-top:12px; text-align:right;">
-            <a class="link-muted" href="{% url 'forgot_password' %}">Forgot password?</a>
-        </div>
-
-        {% if next %}
-            <input type="hidden" name="next" value="{{ next }}">
-        {% endif %}
-    </form>
+    </div>
 </div>
 {% endblock %}
+

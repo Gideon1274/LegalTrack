@@ -1,15 +1,367 @@
-{% extends "base.html" %}
-{% block sidebar_class %}sidebar--wide{% endblock %}
-{% block title %}Super Admin Dashboard{% endblock %}
+{% extends 'base_new.html' %}
+{% load static %}
+
+{% block extra_css %}
+    <style>
+        /* ===== HEADER ===== */
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
+        .greeting h1 { font-size: 1.5rem; font-weight: 700; color: var(--text-main); margin-bottom: 0.25rem; }
+        .greeting span { font-size: 0.875rem; color: var(--text-muted); }
+        
+        .btn-primary {
+            background-color: var(--primary); color: white; border: none;
+            padding: 0.6rem 1.25rem; border-radius: var(--radius-md);
+            font-size: 0.875rem; font-weight: 500; cursor: pointer; transition: 0.2s;
+            display: flex; align-items: center; gap: 0.5rem; box-shadow: var(--shadow-sm); text-decoration: none;
+        }
+        .btn-primary:hover { background-color: var(--primary-hover); box-shadow: var(--shadow-md); transform: translateY(-1px); color: white; }
+
+        /* ===== KPI CARDS ===== */
+        .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; margin-bottom: 2rem; }
+        .kpi-card {
+            background: var(--bg-surface); border: 1px solid var(--border);
+            border-radius: var(--radius-lg); padding: 1.25rem;
+            display: flex; align-items: flex-start; gap: 1.25rem;
+            box-shadow: var(--shadow-sm); cursor: pointer; transition: var(--transition);
+        }
+        .kpi-card:hover { border-color: var(--primary); box-shadow: var(--shadow-md); transform: translateY(-2px); }
+        
+        .kpi-icon-box {
+            width: 48px; height: 48px; border-radius: var(--radius-md);
+            background-color: var(--primary-light); display: flex; align-items: center; justify-content: center;
+            color: var(--primary); font-size: 1.5rem; flex-shrink: 0;
+        }
+        .kpi-data h2 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.15rem; color: var(--text-main); }
+        .kpi-data span { display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem; }
+        
+        .kpi-trend { font-size: 0.75rem; font-weight: 500; display: flex; align-items: center; gap: 0.25rem; }
+        .trend-up { color: var(--success-text); }
+        .trend-down { color: var(--danger-text); }
+        .trend-neutral { color: var(--text-light); }
+
+        /* ===== ACCOUNT MANAGEMENT PANEL ===== */
+        .panel {
+            background: var(--bg-surface); border: 1px solid var(--border);
+            border-radius: var(--radius-lg); box-shadow: var(--shadow-sm);
+            margin-bottom: 2rem; padding: 1.5rem;
+        }
+        
+        .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .panel-title { font-size: 1.125rem; font-weight: 600; }
+        .view-all-link { font-size: 0.875rem; color: var(--text-muted); text-decoration: none; font-weight: 500; transition: 0.2s; }
+        .view-all-link:hover { color: var(--primary); }
+
+        /* Tabs */
+        .tabs { display: flex; gap: 1rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+        .tab {
+            font-size: 0.875rem; font-weight: 500; color: var(--text-muted);
+            padding: 0.5rem 1rem; border-radius: var(--radius-md);
+            cursor: pointer; display: flex; align-items: center; gap: 0.5rem; transition: 0.2s;
+        }
+        .tab:hover { color: var(--text-main); background: var(--inactive-bg); }
+        .tab.active { background-color: var(--primary-light); color: var(--primary); }
+        .tab-badge {
+            background: var(--border); color: var(--text-muted);
+            font-size: 0.7rem; padding: 0.1rem 0.4rem; border-radius: 10px; font-weight: 600; transition: 0.2s;
+        }
+        .tab.active .tab-badge { background: white; color: var(--primary); }
+        
+        /* Advanced Toolbar */
+        .table-toolbar { display: flex; gap: 1rem; margin-bottom: 1.5rem; align-items: center; flex-wrap: wrap; }
+        .search-bar { flex: 1; position: relative; min-width: 250px; }
+        .search-bar input {
+            width: 100%; padding: 0.6rem 1rem 0.6rem 2.5rem;
+            border: 1px solid var(--border); border-radius: var(--radius-md);
+            font-size: 0.875rem; color: var(--text-main); transition: 0.2s; outline: none;
+        }
+        .search-bar input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
+        .search-bar i { position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-light); }
+        
+        .filter-select {
+            padding: 0.6rem 2rem 0.6rem 1rem; border: 1px solid var(--border); border-radius: var(--radius-md);
+            font-size: 0.875rem; color: var(--text-main); background-color: white; cursor: pointer; outline: none;
+            appearance: none; background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2364748b%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+            background-repeat: no-repeat; background-position: right 0.7rem top 50%; background-size: 0.65rem auto;
+            transition: 0.2s;
+        }
+        .filter-select:hover { border-color: var(--border-hover); }
+
+        .btn-outline {
+            display: flex; align-items: center; gap: 0.5rem;
+            padding: 0.6rem 1rem; border: 1px solid var(--border); border-radius: var(--radius-md);
+            background: white; color: var(--text-main); font-size: 0.875rem; font-weight: 500;
+            cursor: pointer; transition: 0.2s;
+        }
+        .btn-outline:hover { background: var(--inactive-bg); border-color: var(--border-hover); }
+        .btn-outline:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        /* Table */
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th { font-size: 0.75rem; font-weight: 600; color: var(--text-main); padding: 1rem 0.5rem; border-bottom: 1px solid var(--border); text-transform: uppercase; letter-spacing: 0.05em; }
+        td { padding: 1rem 0.5rem; border-bottom: 1px solid var(--border); font-size: 0.875rem; vertical-align: middle; transition: 0.2s; }
+        tbody tr:hover td { background-color: #fafbfc; }
+
+        .user-cell { display: flex; align-items: center; gap: 0.75rem; }
+        .user-initials {
+            width: 36px; height: 36px; border-radius: 50%;
+            background: var(--primary-light); color: var(--primary);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.75rem; font-weight: 600; flex-shrink: 0;
+        }
+        .user-info strong { display: block; font-size: 0.875rem; font-weight: 600; color: var(--text-main); margin-bottom: 0.1rem; }
+        .user-info span { font-size: 0.75rem; color: var(--text-muted); }
+
+        /* Role Badges */
+        .role-badge { display: inline-flex; padding: 0.2rem 0.6rem; border-radius: 6px; font-size: 0.75rem; font-weight: 600; }
+        .role-receiver { background: #e0f2fe; color: #0369a1; }
+        .role-examiner { background: #fef08a; color: #854d0e; }
+        .role-assessor { background: #dcfce7; color: #166534; }
+        .role-approver { background: #f3e8ff; color: #6b21a8; }
+        .role-numberer { background: #fee2e2; color: #991b1b; }
+
+        /* Status Pills */
+        .status-pill {
+            display: inline-flex; align-items: center; gap: 0.3rem;
+            padding: 0.25rem 0.75rem; border-radius: 999px;
+            font-size: 0.75rem; font-weight: 600; text-transform: capitalize;
+        }
+        .status-pill::before { content: ''; display: block; width: 6px; height: 6px; border-radius: 50%; }
+        .status-active { background: var(--success-bg); color: var(--success-text); }
+        .status-active::before { background-color: var(--success-text); }
+        .status-inactive { background: var(--inactive-bg); color: var(--text-muted); }
+        .status-inactive::before { background-color: var(--text-muted); }
+        .status-pending { background: #fef3c7; color: #b45309; }
+        .status-pending::before { background-color: #b45309; }
+
+        .action-btn { border: none; background: transparent; cursor: pointer; color: var(--text-light); padding: 0.4rem; border-radius: var(--radius-md); transition: 0.2s; font-size: 1.1rem; text-decoration: none;}
+        .action-btn:hover { background: var(--inactive-bg); color: var(--primary); }
+
+        /* Pagination */
+        .pagination-container { display: flex; justify-content: space-between; align-items: center; margin-top: 1.5rem; font-size: 0.875rem; color: var(--text-muted); }
+        .pagination-controls { display: flex; gap: 0.25rem; align-items: center; }
+        .page-btn { border: 1px solid transparent; background: transparent; color: var(--text-muted); padding: 0.4rem 0.75rem; border-radius: var(--radius-md); cursor: pointer; font-size: 0.875rem; font-weight: 500; transition: 0.2s; }
+        .page-btn.active { background: var(--primary); color: white; box-shadow: var(--shadow-sm); }
+        .page-btn:hover:not(.active):not([disabled]) { background: var(--border); color: var(--text-main); }
+        .page-btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+        /* ===== BOTTOM PANELS ===== */
+        .bottom-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+        
+        .chart-container { display: flex; align-items: center; justify-content: center; margin-top: 1rem; padding: 1rem; }
+        .chart-wrapper { position: relative; width: 160px; height: 160px; margin-right: 2.5rem; }
+        .chart-center-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
+        .chart-center-text h3 { font-size: 1.5rem; font-weight: 700; margin: 0; color: var(--text-main); }
+        .chart-center-text span { font-size: 0.7rem; color: var(--text-muted); font-weight: 500; }
+        
+        .chart-legend ul { list-style: none; margin: 0; padding: 0;}
+        .chart-legend li { display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; font-weight: 500; color: var(--text-main); margin-bottom: 0.75rem; }
+        .legend-dot { width: 12px; height: 12px; border-radius: 4px; }
+
+        /* Activity List */
+        .activity-list { display: flex; flex-direction: column; gap: 1.25rem; margin-top: 1rem; }
+        .activity-item { display: flex; justify-content: space-between; align-items: flex-start; padding: 0.5rem 0; border-bottom: 1px solid #f8fafc; }
+        .activity-item:last-child { border-bottom: none; }
+        .activity-left { display: flex; gap: 1rem; align-items: flex-start; }
+        .activity-icon { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0; }
+        
+        .icon-green { background: var(--success-bg); color: var(--success-text); }
+        .icon-blue { background: var(--primary-light); color: var(--primary); }
+        .icon-red { background: #fee2e2; color: #dc2626; }
+        
+        .activity-text strong { display: block; font-size: 0.875rem; font-weight: 600; color: var(--text-main); margin-bottom: 0.15rem; }
+        .activity-text span { font-size: 0.75rem; color: var(--text-muted); line-height: 1.4; display: block; }
+        .activity-time { font-size: 0.75rem; color: var(--text-muted); white-space: nowrap; margin-top: 0.2rem; font-weight: 500; }
+
+        .fade-in { animation: fadeIn 0.3s ease-in; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+{% endblock %}
 
 {% block content %}
-<div class="card card--flat card-elevated">
-    <div class="card__header" style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
-        <strong style="font-size:1.05rem;">Super Administrator Dashboard</strong>
-        <a class="btn btn-primary btn-sm" href="{% url 'user_management' %}">Open User Management</a>
+    <div class="header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2rem;">
+        <div>
+            <h1 style="font-size: 1.75rem; font-weight: 700; color: #0f172a; margin: 0;">Hi, {{ request.user.first_name|default:"Super Admin" }}!</h1>
+            <p style="color: #64748b; margin-top: 0.25rem; font-family: 'Inter', sans-serif; font-weight: 500;">
+                <span style="color: #3b82f6; font-weight: 700;">{{ request.user.staff_id|default:"ADM-001" }}</span> 
+                <span style="margin: 0 8px; color: #cbd5e1;">|</span> 
+                System Administrator
+            </p>
+        </div>
+        <a href="{% url 'create_staff_account' %}" class="btn-primary" style="background-color: #2563eb; color: white; padding: 0.6rem 1.25rem; border-radius: 6px; text-decoration: none; font-weight: 500; display: flex; align-items: center; gap: 0.5rem;">
+            <i class="ri-user-add-line"></i> Create New Account
+        </a>
     </div>
-    <div class="card__body">
-        <p style="margin:0;"><strong>Total Staff Accounts:</strong> {{ total_users }}</p>
+
+    <!-- DYNAMIC KPI ROW -->
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="kpi-icon-box"><i class="ri-group-line"></i></div>
+            <div class="kpi-data">
+                <h2>{{ total_users_count }}</h2>
+                <span>Total Users</span>
+                <div class="kpi-trend trend-neutral"><i class="ri-subtract-line"></i> Active Staff</div>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon-box" style="color: #6b21a8; background: #f3e8ff;"><i class="ri-government-line"></i></div>
+            <div class="kpi-data">
+                <h2>{{ total_lgus_count }}</h2>
+                <span>LGU's Registered</span>
+                <div class="kpi-trend trend-neutral"><i class="ri-subtract-line"></i> Connected Offices</div>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon-box" style="color: #166534; background: #dcfce7;"><i class="ri-folder-open-line"></i></div>
+            <div class="kpi-data">
+                <h2>{{ active_cases_count }}</h2>
+                <span>Active Cases</span>
+                <div class="kpi-trend trend-up"><i class="ri-arrow-up-line"></i> Live Tracking</div>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon-box" style="color: #b45309; background: #fef3c7;"><i class="ri-user-star-line"></i></div>
+            <div class="kpi-data">
+                <h2>{{ new_users_count }}</h2>
+                <span>New Users (Past 7 Days)</span>
+                <div class="kpi-trend trend-up"><i class="ri-add-line"></i> Recent additions</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- DYNAMIC ACCOUNT MANAGEMENT PANEL (Wired to user_list_api) -->
+    <div class="panel">
+        <div class="panel-header">
+            <h3 class="panel-title">Account Management</h3>
+            <a href="{% url 'user_management' %}" class="view-all-link" style="color: var(--primary);">Manage All Users <i class="ri-arrow-right-line" style="vertical-align: middle;"></i></a>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" data-tab="total">Total Users <span class="tab-badge">{{ total_users_count }}</span></div>
+            <div class="tab" data-tab="pending">Pending Activation <span class="tab-badge">{{ pending_users_count }}</span></div>
+            <div class="tab" data-tab="deactivated">Deactivated <span class="tab-badge">{{ deactivated_users_count }}</span></div>
+        </div>
+
+        <!-- Advanced Toolbar -->
+        <div class="table-toolbar">
+            <div class="search-bar">
+                <i class="ri-search-line"></i>
+                <input type="text" id="searchInput" placeholder="Search by Name, Email, or Origin...">
+            </div>
+            
+            <select class="filter-select" id="roleFilter">
+                <option value="">All Roles</option>
+                {% for key, label in role_choices %}
+                    <option value="{{ key }}">{{ label }}</option>
+                {% endfor %}
+            </select>
+
+            <select class="filter-select" id="lguFilter">
+                <option value="">All LGUs / Offices</option>
+                {% for key, label in lgu_choices %}
+                    <option value="{{ key }}">{{ label }}</option>
+                {% endfor %}
+            </select>
+
+            <button class="btn-outline" id="exportBtn"><i class="ri-file-download-line"></i> Export CSV</button>
+        </div>
+
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>User</th>
+                        <th>Role</th>
+                        <th>LGU/Office</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <tr><td colspan="5" style="text-align: center; padding: 2rem;"><i class="ri-loader-4-line ri-spin" style="font-size: 1.5rem; color: var(--primary);"></i></td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="pagination-container">
+            <span id="paginationText">Loading data...</span>
+            <div class="pagination-controls" id="paginationControls"></div>
+        </div>
+    </div>
+
+    <!-- BOTTOM PANELS -->
+<!-- BOTTOM PANELS -->
+<div class="bottom-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; align-items: stretch;">
+    
+    <!-- Chart Panel: Users by Role -->
+    <div class="panel" style="background: white; border-radius: 12px; border: 1px solid #e2e8f0; padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: flex; flex-direction: column;">
+        <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+            <h3 style="font-weight: 700; color: #1e293b; font-size: 1.1rem; margin: 0;">Users by Role</h3>
+            <a href="{% url 'staff_reports' %}" style="color: #2563eb; font-size: 0.85rem; text-decoration: none; font-weight: 500;">View Report</a>
+        </div>
+        
+        <div class="chart-container" style="display: flex; align-items: center; justify-content: space-around; flex: 1; padding: 0 1rem;">
+            <!-- Chart Wrapper -->
+            <div class="chart-wrapper" style="position: relative; width: 180px; height: 180px; flex-shrink: 0;">
+                <canvas id="roleChart"></canvas>
+                <div class="chart-center-text" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center;">
+                    <h3 style="font-size: 1.75rem; font-weight: 800; margin: 0; color: #0f172a;">{{ total_users_count }}</h3>
+                    <span style="font-size: 0.75rem; color: #64748b; font-weight: 600; text-transform: uppercase;">Total Users</span>
+                </div>
+            </div>
+            
+            <!-- Custom Legend -->
+            <div class="chart-legend" style="margin-left: 2rem;">
+                <ul style="list-style: none; padding: 0; margin: 0; display: grid; gap: 0.75rem;">
+                    <li style="display: flex; align-items: center; gap: 0.75rem; font-size: 0.9rem; font-weight: 500; color: #334155;">
+                        <div style="width: 12px; height: 12px; border-radius: 3px; background: #0ea5e9; border: 1px solid rgba(0,0,0,0.05);"></div> LGU Admin
+                    </li>
+                    <li style="display: flex; align-items: center; gap: 0.75rem; font-size: 0.9rem; font-weight: 500; color: #334155;">
+                        <div style="width: 12px; height: 12px; border-radius: 3px; background: #a855f7; border: 1px solid rgba(0,0,0,0.05);"></div> Capitol Receiver
+                    </li>
+                    <li style="display: flex; align-items: center; gap: 0.75rem; font-size: 0.9rem; font-weight: 500; color: #334155;">
+                        <div style="width: 12px; height: 12px; border-radius: 3px; background: #eab308; border: 1px solid rgba(0,0,0,0.05);"></div> Capitol Examiner
+                    </li>
+                    <li style="display: flex; align-items: center; gap: 0.75rem; font-size: 0.9rem; font-weight: 500; color: #334155;">
+                        <div style="width: 12px; height: 12px; border-radius: 3px; background: #22c55e; border: 1px solid rgba(0,0,0,0.05);"></div> Capitol Approver
+                    </li>
+                    <li style="display: flex; align-items: center; gap: 0.75rem; font-size: 0.9rem; font-weight: 500; color: #334155;">
+                        <div style="width: 12px; height: 12px; border-radius: 3px; background: #ef4444; border: 1px solid rgba(0,0,0,0.05);"></div> Capitol Numberer
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Activity Panel -->
+    <div class="panel" style="background: white; border-radius: 12px; border: 1px solid #e2e8f0; padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: flex; flex-direction: column;">
+        <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+            <h3 style="font-weight: 700; color: #1e293b; font-size: 1.1rem; margin: 0;">Recent Account Activity</h3>
+            <a href="{% url 'audit_logs' %}" style="color: #2563eb; font-size: 0.85rem; text-decoration: none; font-weight: 500;">View Full History &rarr;</a>
+        </div>
+
+        <div class="activity-list" style="display: flex; flex-direction: column; gap: 1.25rem;">
+            {% for log in recent_logs %}
+                <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 0.75rem; border-bottom: 1px solid #f1f5f9;">
+                    <div style="display: flex; gap: 1rem; align-items: center;">
+                        <div style="width: 36px; height: 36px; border-radius: 50%; background: #f8fafc; border: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: center;">
+                            <i class="ri-user-settings-line" style="color: #64748b; font-size: 1.1rem;"></i>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.85rem; font-weight: 600; color: #334155;">{{ log.get_action_display }}</div>
+                            <div style="font-size: 0.75rem; color: #64748b; margin-top: 1px;">
+                                by {{ log.actor.get_full_name|default:log.actor.email }}
+                            </div>
+                        </div>
+                    </div>
+                    <div style="font-size: 0.7rem; color: #94a3b8; font-weight: 500;">{{ log.created_at|timesince }} ago</div>
+                </div>
+            {% empty %}
+                <div style="text-align: center; padding: 2rem; color: #94a3b8;">No recent activity.</div>
+            {% endfor %}
+        </div>
     </div>
 </div>
 
@@ -26,4 +378,245 @@
         {% endfor %}
     </div>
 {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // --- State Variables ---
+    let currentTab = 'total';
+    let currentPage = 1;
+    let searchQuery = '';
+    let roleQuery = '';
+    let lguQuery = '';
+
+    // --- UI Elements ---
+    const searchInput = document.getElementById('searchInput');
+    const roleFilter = document.getElementById('roleFilter');
+    const lguFilter = document.getElementById('lguFilter');
+    const exportBtn = document.getElementById('exportBtn');
+    const tbody = document.getElementById('tableBody');
+    const tabs = document.querySelectorAll('.tab');
+
+    // --- Dynamic API Fetching Logic ---
+    async function loadTableData() {
+        // Build the URL matching your user_list_api in views.py
+        const url = `{% url 'user_list_api' %}?tab=${currentTab}&q=${encodeURIComponent(searchQuery)}&role=${encodeURIComponent(roleQuery)}&lgu=${encodeURIComponent(lguQuery)}&page=${currentPage}`;
+        
+        try {
+            const response = await fetch(url);
+            const data = await response.json();
+            
+            if (data.error) {
+                console.error("API Error:", data.error);
+                return;
+            }
+            
+            renderTableHTML(data.users);
+            renderPaginationHTML(data);
+        } catch (err) {
+            console.error("Fetch failed:", err);
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--danger-text);">Error loading data.</td></tr>`;
+        }
+    }
+
+    function renderTableHTML(users) {
+        tbody.classList.remove('fade-in');
+        void tbody.offsetWidth; 
+        tbody.classList.add('fade-in');
+
+        if (users.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 2rem; color: var(--text-muted);">No users found matching your criteria.</td></tr>`;
+            return;
+        }
+
+        let html = '';
+        const csrfToken = '{{ csrf_token }}';
+
+        users.forEach(user => {
+            // Generating exact Django paths dynamically
+            let editUrl = `/users/${user.id}/edit/`;
+            let toggleUrl = `/users/${user.id}/toggle-active/`;
+            let resendUrl = `/users/${user.id}/resend-activation/`;
+
+            let actionIcons = `<a href="${editUrl}" class="action-btn" title="Edit User"><i class="ri-pencil-line"></i></a>`;
+            
+            if (user.is_pending) {
+                actionIcons += `
+                    <form method="post" action="${resendUrl}" style="display:inline; margin:0;">
+                        <input type="hidden" name="csrfmiddlewaretoken" value="${csrfToken}">
+                        <button type="submit" class="action-btn" title="Resend Activation Link" style="color: var(--primary);"><i class="ri-mail-send-line"></i></button>
+                    </form>
+                `;
+            } else if (user.is_inactive) {
+                actionIcons += `
+                    <form method="post" action="${toggleUrl}" style="display:inline; margin:0;">
+                        <input type="hidden" name="csrfmiddlewaretoken" value="${csrfToken}">
+                        <button type="submit" class="action-btn" title="Reactivate Account" style="color: var(--success-text);"><i class="ri-refresh-line"></i></button>
+                    </form>
+                `;
+            } else {
+                actionIcons += `
+                    <form method="post" action="${toggleUrl}" style="display:inline; margin:0;">
+                        <input type="hidden" name="csrfmiddlewaretoken" value="${csrfToken}">
+                        <button type="submit" class="action-btn" title="Deactivate Account" style="color: var(--danger-text);"><i class="ri-user-unfollow-line"></i></button>
+                    </form>
+                `;
+            }
+
+            let bgStyle = user.is_pending ? 'background: #fef3c7; color: #b45309;' : (user.is_inactive ? 'background: var(--inactive-bg); color: var(--text-muted);' : '');
+
+            html += `
+                <tr>
+                    <td>
+                        <div class="user-cell">
+                            <div class="user-initials" style="${bgStyle}">${user.initials}</div>
+                            <div class="user-info">
+                                <strong>${user.name}</strong>
+                                <span>${user.email}</span>
+                            </div>
+                        </div>
+                    </td>
+                    <td><span class="role-badge ${user.role_class}">${user.role_str}</span></td>
+                    <td>${user.lgu}</td>
+                    <td><span class="status-pill ${user.status_class}">${user.status_str}</span></td>
+                    <td><div style="display: flex; gap: 0.25rem;">${actionIcons}</div></td>
+                </tr>
+            `;
+        });
+        tbody.innerHTML = html;
+    }
+
+    function renderPaginationHTML(data) {
+        const controls = document.getElementById('paginationControls');
+        const info = document.getElementById('paginationText');
+        
+        if (data.total_count === 0) {
+            info.innerHTML = `Showing 0 users`;
+            controls.innerHTML = '';
+            return;
+        }
+
+        // Calculation assumes paginator uses 5 items per page (based on your API view)
+        const itemsPerPage = 5; 
+        const start = ((data.current_page - 1) * itemsPerPage) + 1;
+        const end = Math.min(data.current_page * itemsPerPage, data.total_count);
+        info.innerHTML = `Showing ${start} to ${end} of ${data.total_count} users`;
+
+        let btnHtml = `<button class="page-btn" ${!data.has_previous ? 'disabled' : ''} onclick="changePage(${data.current_page - 1})"><i class="ri-arrow-left-s-line" style="vertical-align: middle;"></i> Prev</button>`;
+        
+        for (let i = 1; i <= data.num_pages; i++) {
+            btnHtml += `<button class="page-btn ${i === data.current_page ? 'active' : ''}" onclick="changePage(${i})">${i}</button>`;
+        }
+        
+        btnHtml += `<button class="page-btn" ${!data.has_next ? 'disabled' : ''} onclick="changePage(${data.current_page + 1})">Next <i class="ri-arrow-right-s-line" style="vertical-align: middle;"></i></button>`;
+        
+        controls.innerHTML = btnHtml;
+    }
+
+    // --- Interactions ---
+    function changePage(page) { 
+        currentPage = page; 
+        loadTableData(); 
+    }
+
+    tabs.forEach(tab => {
+        tab.addEventListener('click', (e) => {
+            tabs.forEach(t => t.classList.remove('active'));
+            e.currentTarget.classList.add('active');
+            currentTab = e.currentTarget.getAttribute('data-tab');
+            currentPage = 1; 
+            loadTableData();
+        });
+    });
+
+    let typingTimer;
+    searchInput.addEventListener('input', (e) => { 
+        clearTimeout(typingTimer);
+        searchQuery = e.target.value;
+        typingTimer = setTimeout(() => { currentPage = 1; loadTableData(); }, 300); // 300ms debounce
+    });
+
+    roleFilter.addEventListener('change', (e) => { roleQuery = e.target.value; currentPage = 1; loadTableData(); });
+    lguFilter.addEventListener('change', (e) => { lguQuery = e.target.value; currentPage = 1; loadTableData(); });
+
+    // --- Dynamic CSV Export ---
+    exportBtn.addEventListener('click', async () => {
+        exportBtn.innerHTML = '<i class="ri-loader-4-line ri-spin"></i> Exporting...';
+        exportBtn.disabled = true;
+
+        let csvContent = "data:text/csv;charset=utf-8,Name,Email,Role,LGU,Status\n";
+        let page = 1;
+        let totalPages = 1;
+        
+        try {
+            // Loop through API pages to grab all data matching the current filter
+            do {
+                const url = `{% url 'user_list_api' %}?tab=${currentTab}&q=${encodeURIComponent(searchQuery)}&role=${encodeURIComponent(roleQuery)}&lgu=${encodeURIComponent(lguQuery)}&page=${page}`;
+                const res = await fetch(url);
+                const data = await res.json();
+                
+                data.users.forEach(row => {
+                    csvContent += `"${row.name}","${row.email}","${row.role_str}","${row.lgu}","${row.status_str}"\n`;
+                });
+                
+                totalPages = data.num_pages;
+                page++;
+            } while(page <= totalPages);
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `PAStrack_Users_${currentTab}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } catch (e) {
+            alert("Error exporting data.");
+        }
+
+        exportBtn.innerHTML = '<i class="ri-file-download-line"></i> Export CSV';
+        exportBtn.disabled = false;
+    });
+
+    // --- Chart.js Rendering ---
+document.addEventListener("DOMContentLoaded", function() {
+    // Initialize role chart
+    const ctx = document.getElementById('roleChart');
+    if (ctx) {
+        const roleData = JSON.parse('{{ role_distribution_array|default:"[0,0,0,0,0]"|safe }}');
+
+        new Chart(ctx.getContext('2d'), {
+            type: 'doughnut',
+            data: {
+                labels: ['LGU Admin', 'Receiver', 'Examiner', 'Approver', 'Numberer'],
+                datasets: [{
+                    data: roleData,
+                    backgroundColor: ['#0ea5e9', '#a855f7', '#eab308', '#22c55e', '#ef4444'],
+                    borderWidth: 0,
+                    cutout: '78%'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { enabled: true }
+                },
+                animation: { animateScale: true }
+            }
+        });
+    }
+
+    // Initial table load
+    if (typeof loadTableData === 'function') {
+        loadTableData();
+    }
+
+    // Auto-refresh every 10 seconds
+    setInterval(() => {
+        loadTableData();
+    }, 10000);
+});
+</script>
 {% endblock %}

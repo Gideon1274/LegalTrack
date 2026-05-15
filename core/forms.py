@@ -92,6 +92,15 @@ class CaseDetailsForm(forms.ModelForm):
             "property_title_type": forms.Select(),
         }
 
+    def __init__(self, *args, user: CustomUser | None = None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if user and getattr(user, "role", None) == "lgu_admin":
+            mun = (getattr(user, "lgu_municipality", "") or "").strip()
+            if mun:
+                self.fields["area"].choices = [(mun, mun)]
+                self.initial.setdefault("area", mun)
+                self.fields["area"].disabled = True
+
     def clean(self):
         cleaned = super().clean() or {}
         # Enforce required fields for the new request form.
@@ -294,11 +303,17 @@ class ProfileUpdateForm(forms.ModelForm):
 
     class Meta:
         model = CustomUser
-        fields: ClassVar[list[str]] = ["username", "position"]
+        fields: ClassVar[list[str]] = ["photo", "username", "position"]
 
     def __init__(self, *args, user: CustomUser, **kwargs):
         super().__init__(*args, **kwargs)
         self._user = user
+        for name, field in self.fields.items():
+            attrs = dict(getattr(field.widget, "attrs", {}) or {})
+            if name == "photo":
+                attrs.setdefault("accept", "image/*")
+            attrs.setdefault("class", "form-control")
+            field.widget.attrs = attrs
 
     def clean_email_verify(self):
         cleaned = self.cleaned_data or {}
@@ -316,6 +331,82 @@ class ProfileUpdateForm(forms.ModelForm):
         if qs.exists():
             raise ValidationError("This Staff ID is already in use.")
         return username
+
+    def clean_photo(self):
+        f = self.cleaned_data.get("photo")
+        if not f:
+            return f
+        max_size = 2 * 1024 * 1024
+        if getattr(f, "size", 0) > max_size:
+            raise ValidationError("Photo must be 2MB or smaller.")
+        return f
+
+
+class SettingsProfileForm(forms.ModelForm):
+    class Meta:
+        model = CustomUser
+        fields: ClassVar[list[str]] = ["photo", "first_name", "last_name", "position"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name, field in self.fields.items():
+            attrs = dict(getattr(field.widget, "attrs", {}) or {})
+            if name == "photo":
+                attrs.setdefault("accept", "image/*")
+            attrs.setdefault("class", "form-control")
+            field.widget.attrs = attrs
+
+    def clean_photo(self):
+        f = self.cleaned_data.get("photo")
+        if not f:
+            return f
+        max_size = 2 * 1024 * 1024
+        if getattr(f, "size", 0) > max_size:
+            raise ValidationError("Photo must be 2MB or smaller.")
+        return f
+
+
+class SettingsNotificationsForm(forms.ModelForm):
+    class Meta:
+        model = CustomUser
+        fields: ClassVar[list[str]] = [
+            "notify_new_account_activations",
+            "notify_weekly_activity_report",
+            "notify_critical_system_alerts",
+        ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            attrs = dict(getattr(field.widget, "attrs", {}) or {})
+            attrs.setdefault("class", "form-control")
+            field.widget.attrs = attrs
+
+
+class SettingsPreferencesForm(forms.ModelForm):
+    class Meta:
+        model = CustomUser
+        fields: ClassVar[list[str]] = [
+            "timezone_preference",
+            "date_format_preference",
+            "theme_preference",
+        ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["timezone_preference"].widget = forms.Select(choices=[
+            ("Asia/Manila", "(GMT+08:00) Asia/Manila (Philippines)"),
+            ("UTC", "UTC / GMT"),
+        ])
+        self.fields["date_format_preference"].widget = forms.Select(choices=[
+            ("YYYY-MM-DD", "YYYY-MM-DD (2026-12-31)"),
+            ("MM/DD/YYYY", "MM/DD/YYYY (12/31/2026)"),
+            ("DD/MM/YYYY", "DD/MM/YYYY (31/12/2026)"),
+        ])
+        for field in self.fields.values():
+            attrs = dict(getattr(field.widget, "attrs", {}) or {})
+            attrs.setdefault("class", "form-control")
+            field.widget.attrs = attrs
 
 
 class StaffSearchForm(forms.Form):
@@ -399,13 +490,23 @@ class StaffAccountUpdateForm(forms.ModelForm):
         model = CustomUser
         fields: ClassVar[list[str]] = ["full_name", "designation", "position"]
 
+    # Inside your CaseDetailsForm in forms.py
     def __init__(self, *args, **kwargs):
+        user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
-        user: CustomUser = self.instance
-        self.initial["lgu_municipality"] = (getattr(user, "lgu_municipality", "") or "").strip()
-        if user.role != "lgu_admin":
-            # Remove the field for non-LGU roles
-            del self.fields["lgu_municipality"]
+        
+        if user:
+            if user.role == 'lgu_admin':
+                # LGU Admins have their origin locked to their own municipality
+                if user.lgu_municipality:
+                    self.fields['area'].initial = user.lgu_municipality
+                    self.fields['area'].widget = forms.HiddenInput()
+            
+            elif user.role == 'capitol_receiving':
+                # Receivers MUST choose an origin from the dropdown
+                self.fields['area'].required = True
+                self.fields['area'].label = "LGU Origin"
+                self.fields['area'].help_text = "Select the municipality where this property is located."
 
     def clean_full_name(self):
         cleaned = self.cleaned_data or {}

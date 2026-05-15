@@ -1,5 +1,7 @@
-{% extends "base.html" %}
+{% extends "base_wizard.html" %}
+{% load static %}
 {% load core_extras %}
+
 {% block title %}
     {% if case and case.tracking_id %}Request {{ case.tracking_id }}
     {% elif case %}Draft
@@ -7,338 +9,492 @@
     {% endif %}
 {% endblock %}
 
+{% block extra_css %}
+<style>
+    /* ===== WIZARD LAYOUT (No Scroll) ===== */
+    .wizard-page {
+        display: flex; justify-content: center; align-items: center;
+        height: 100vh; width: 100vw; overflow: hidden; background-color: #f8fafc;
+    }
+    .wizard-inner {
+        display: flex; align-items: flex-start; gap: 2.5rem;
+        width: 100%; max-width: 1350px; padding: 0 2rem;
+    }
+
+    /* --- LEFT COLUMN: STEPPER --- */
+    .wizard-left { width: 300px; display: flex; flex-direction: column; flex-shrink: 0; }
+    .back-link {
+        color: #94a3b8; text-decoration: none; font-size: 0.85rem; font-weight: 500;
+        margin-bottom: 1rem; display: inline-block; transition: 0.2s; line-height: 1.5rem;
+    }
+    .back-link:hover { color: #1e3a8a; }
+    
+    .wizard-left-card { background-color: #f4f7fb; border-radius: 16px; padding: 2.5rem 2rem; }
+    .brand-logo {
+        display: flex; align-items: center; gap: 0.5rem; font-size: 1.5rem;
+        font-weight: 800; color: #0f172a; margin-bottom: 2.5rem;
+    }
+    .stepper { display: flex; flex-direction: column; position: relative; }
+    .stepper::before {
+        content: ''; position: absolute; top: 20px; bottom: 40px; left: 15px; 
+        width: 2px; background-color: #cbd5e1; z-index: 0;
+    }
+    .step-item { display: flex; gap: 1rem; position: relative; z-index: 1; padding-bottom: 2.5rem; }
+    .step-item:last-child { padding-bottom: 0; }
+    .step-box {
+        width: 32px; height: 32px; border-radius: 8px; display: flex; justify-content: center; align-items: center;
+        font-size: 0.85rem; font-weight: 700; background-color: white; border: 2px solid #cbd5e1; color: #94a3b8; transition: 0.3s; flex-shrink: 0;
+    }
+    .step-text { padding-top: 0.25rem; }
+    .step-text h4 { margin: 0 0 0.2rem 0; font-size: 0.95rem; font-weight: 700; color: #0f172a; }
+    .step-text p { margin: 0; font-size: 0.75rem; color: #64748b; line-height: 1.4; }
+    .step-item.active .step-box { background-color: #1e3a8a; border-color: #1e3a8a; color: white; }
+    .step-item.active .step-text h4 { color: #1e3a8a; }
+    .step-item.completed .step-box { background-color: white; border-color: #1e3a8a; color: #1e3a8a; }
+    .step-item.pending .step-text h4 { color: #64748b; }
+
+    /* --- RIGHT COLUMN: MAIN CONTENT --- */
+    .wizard-right {
+        flex: 1; display: flex; flex-direction: column; margin-top: 2.5rem; 
+        height: calc(100vh - 5rem); overflow-y: auto; scrollbar-width: none;
+        align-items: flex-start;
+    }
+    .wizard-right::-webkit-scrollbar { display: none; }
+    
+    .wizard-right-card {
+        background-color: #ffffff; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.03), 0 1px 3px rgba(0,0,0,0.02);
+        border: 1px solid #f1f5f9; padding: 2.5rem 3rem; width: 100%; margin-bottom: 2rem;
+    }
+    
+    /* Dynamic widths based on step */
+    .step-1-card { max-width: 850px; }
+    .step-2-card { max-width: 950px; }
+    .step-3-card { max-width: 1000px; padding: 3rem 4rem; } /* Wider for previewer */
+
+    .card-title { font-size: 1.5rem; font-weight: 700; color: #0f172a; margin-top: 0; margin-bottom: 1.5rem; }
+
+    /* Shared Forms & Buttons */
+    .form-actions { display: flex; justify-content: flex-end; align-items: center; gap: 1rem; margin-top: 2rem; }
+    .btn { padding: 0.65rem 1.5rem; border-radius: 8px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: 0.2s; border: none; text-decoration: none; }
+    .btn-primary { background-color: #1e3a8a; color: white; }
+    .btn-primary:hover { background-color: #1e40af; }
+    .btn-text { background: transparent; color: #64748b; padding: 0.65rem 1rem; text-decoration: none !important; }
+    .btn-text:hover { color: #0f172a; }
+    .error-msg { font-size: 0.75rem; color: #dc2626; margin-top: 0.2rem; display: block; }
+    .alert-error { background: #fee2e2; color: #991b1b; padding: 0.75rem; border-radius: 8px; margin-bottom: 1.5rem; font-size: 0.85rem; }
+
+    /* ===== STEP 1 CSS ===== */
+    .form-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 1.25rem 1rem; }
+    .col-4 { grid-column: span 4; } .col-2 { grid-column: span 2; } .col-6 { grid-column: span 6; } .col-12 { grid-column: span 12; }
+    .form-group label { display: block; font-size: 0.8rem; font-weight: 600; color: #1e293b; margin-bottom: 0.35rem; }
+    .form-group input[type="text"], .form-group input[type="email"], .form-group input[type="number"], .form-group select {
+        width: 100%; padding: 0.6rem 1rem; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.875rem; color: #0f172a; outline: none; transition: 0.2s; background-color: #ffffff;
+    }
+    .form-group input:focus, .form-group select:focus { border-color: #1e3a8a; box-shadow: 0 0 0 3px #eff6ff; }
+    .form-group select { appearance: none; background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2394a3b8%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E"); background-repeat: no-repeat; background-position: right 1rem top 50%; background-size: 0.65rem auto; }
+    .input-prefix-wrapper { position: relative; display: flex; align-items: center; }
+    .prefix-text { position: absolute; left: 1rem; color: #64748b; font-size: 0.875rem; pointer-events: none; }
+    .input-prefix-wrapper input { padding-left: 3rem !important; }
+
+    /* ===== STEP 2 CSS ===== */
+    .doc-list { display: flex; flex-direction: column; }
+    .doc-row { border-bottom: 1px solid #f1f5f9; padding: 1.25rem 0; transition: all 0.3s ease; }
+    .doc-row:last-child { border-bottom: none; }
+    .view-pending, .view-dropzone, .view-completed { display: none; }
+    .state-pending .view-pending { display: flex; justify-content: space-between; align-items: center; }
+    .state-dropzone .view-dropzone { display: block; animation: slideDown 0.3s ease; }
+    .state-completed .view-completed { display: flex; justify-content: space-between; align-items: center; }
+    .doc-label { font-size: 0.9rem; color: #0f172a; font-weight: 500; flex: 1; }
+    .text-success { color: #22c55e !important; }
+    .btn-upload-trigger { background-color: #1e3a8a; color: white; border: none; border-radius: 6px; padding: 0.5rem 1.25rem; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: 0.2s; }
+    .btn-upload-trigger:hover { background-color: #1e40af; }
+    .dropzone-area { border: 2px dashed #cbd5e1; border-radius: 12px; padding: 2rem; display: flex; align-items: center; cursor: pointer; transition: 0.2s; background-color: white; margin-top: 0.75rem; }
+    .dropzone-area:hover { border-color: #1e3a8a; background-color: #f8fafc; }
+    .dz-icon { color: #1e3a8a; font-size: 1.75rem; margin-right: 1rem; }
+    .dz-text { flex: 1; display: flex; flex-direction: column; }
+    .dz-text strong { color: #0f172a; font-size: 0.9rem; margin-bottom: 0.2rem; }
+    .dz-text span { color: #94a3b8; font-size: 0.75rem; }
+    .dz-btn { border: 1px solid #cbd5e1; color: #1e3a8a; background: white; border-radius: 6px; padding: 0.4rem 1rem; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; pointer-events: none; }
+    .dropzone-area:hover .dz-btn { border-color: #1e3a8a; }
+    .doc-filename { font-size: 0.85rem; color: #0f172a; font-weight: 500; flex: 2; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 1rem; }
+    .doc-meta { font-size: 0.8rem; color: #0f172a; font-weight: 500; text-align: right; margin-right: 1.5rem; flex: 1; }
+    .doc-actions { display: flex; gap: 0.5rem; }
+    .icon-btn { width: 32px; height: 32px; border-radius: 6px; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s; }
+    .edit-btn { background-color: #eff6ff; color: #3b82f6; }
+    .edit-btn:hover { background-color: #dbeafe; }
+    .delete-btn { background-color: #fee2e2; color: #ef4444; }
+    .delete-btn:hover { background-color: #fecaca; }
+    .btn-add-custom { background: transparent; border: none; color: #94a3b8; font-size: 0.9rem; font-weight: 500; display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer; margin-top: 1rem; padding: 0.5rem 0; }
+    .btn-add-custom:hover { color: #0f172a; }
+    .custom-doc-input { width: 100%; max-width: 300px; padding: 0.5rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; margin-top: 0.5rem; outline: none; }
+    .custom-doc-input:focus { border-color: #1e3a8a; }
+    @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* ===== STEP 3 CSS (NEW REVIEW DESIGN) ===== */
+    .summary-header { text-align: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 1.5rem; margin-bottom: 1.5rem; }
+    .summary-id { color: #1e3a8a; font-size: 1.5rem; font-weight: 700; margin: 0 0 0.25rem 0; letter-spacing: 0.02em; }
+    .summary-type { color: #0f172a; font-weight: 600; font-size: 1rem; }
+    
+    .summary-list { display: flex; flex-direction: column; margin-bottom: 3rem; }
+    .summary-row { display: flex; padding: 1rem 0; border-bottom: 1px solid #f1f5f9; }
+    .summary-label { width: 35%; color: #64748b; font-size: 0.875rem; font-weight: 500; }
+    .summary-value { flex: 1; color: #0f172a; font-size: 0.875rem; }
+
+    /* Split Document Viewer */
+    .preview-container { display: flex; gap: 2rem; align-items: stretch; height: 500px; }
+    
+    .preview-sidebar { width: 280px; display: flex; flex-direction: column; overflow-y: auto; border-right: 1px solid #e2e8f0; padding-right: 1rem; }
+    .preview-tab { 
+        display: flex; justify-content: space-between; align-items: center; padding: 1rem 0.5rem; 
+        border-bottom: 1px solid #f1f5f9; cursor: pointer; transition: 0.2s; 
+    }
+    .preview-tab:hover { background-color: #f8fafc; }
+    .tab-name { font-size: 0.85rem; color: #0f172a; font-weight: 500; }
+    .tab-action { font-size: 0.75rem; color: #94a3b8; }
+    
+    /* Active Tab State */
+    .preview-tab.active .tab-name { color: #3b82f6; } /* Highlight Blue */
+    .preview-tab.active .tab-action { display: none; } /* Hide the word 'Preview' when active */
+
+    .preview-viewer { 
+        flex: 1; background-color: #737373; border-radius: 8px; 
+        display: flex; justify-content: center; align-items: center; 
+        overflow: hidden; position: relative; border: 1px solid #475569;
+    }
+    .preview-iframe { width: 100%; height: 100%; border: none; background: white; }
+    .preview-empty { color: #cbd5e1; font-size: 0.9rem; text-align: center; }
+
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="card">
-    <h2 class="page-title">New Transaction Form</h2>
-    <p class="page-subtitle">Complete the steps to submit your transaction to the Capitol.</p>
-
-    {% if case and case.tracking_id %}
-        <p><strong>Tracking Number:</strong> {{ case.tracking_id }}</p>
-    {% else %}
-        <p class="muted">A tracking number will be generated only after you submit the request.</p>
-    {% endif %}
-
-    <div class="subtabs" aria-label="Steps">
-        <span class="{% if step == 1 %}active{% endif %}">1. Details</span>
-        <span class="{% if step == 2 %}active{% endif %}">2. Checklist & Uploads</span>
-        <span class="{% if step == 3 %}active{% endif %}">3. Review & Submit</span>
-    </div>
-</div>
-
-{% if step == 1 %}
-    <form class="card" method="post" enctype="multipart/form-data">
-        {% csrf_token %}
-
-        {% if form.non_field_errors %}
-            <div class="msg error">{{ form.non_field_errors }}</div>
-        {% endif %}
-
-        <div class="form-grid">
-            <div>
-                <label for="{{ form.client_first_name.id_for_label }}">Owner First Name</label>
-                {{ form.client_first_name }}
-                {{ form.client_first_name.errors }}
-            </div>
-            <div>
-                <label for="{{ form.client_last_name.id_for_label }}">Owner Last Name</label>
-                {{ form.client_last_name }}
-                {{ form.client_last_name.errors }}
-            </div>
-            <div>
-                <label for="{{ form.client_middle_name.id_for_label }}">Owner Middle Name</label>
-                {{ form.client_middle_name }}
-                {{ form.client_middle_name.errors }}
-            </div>
-            <div>
-                <label for="{{ form.client_suffix.id_for_label }}">Owner Suffix</label>
-                {{ form.client_suffix }}
-                {{ form.client_suffix.errors }}
-            </div>
-            <div>
-                <label for="{{ form.client_number.id_for_label }}">Owner Number</label>
-                <div class="input-prefix">
-                    <span class="input-prefix__fixed">+63</span>
-                    {{ form.client_number }}
+<div class="wizard-page">
+    <div class="wizard-inner">
+        
+        <!-- ===== LEFT SIDEBAR: STEPPER ===== -->
+        <div class="wizard-left">
+            <a href="{% url 'dashboard' %}" class="back-link">Back to Dashboard</a>
+            <div class="wizard-left-card">
+                <div class="brand-logo" style="display: flex; align-items: center; gap: 2px; padding: 0 ;">
+                    <img src="{% static 'core/logo.png' %}" alt="Logo" style="width: 54px; height: 54px; object-fit: contain;">
+                    PAStrack
                 </div>
-                <div class="muted mt-4 fs-92">Enter the remaining 10 digits (example: 9XXXXXXXXX).</div>
-                {{ form.client_number.errors }}
-            </div>
-            <div>
-                <label for="{{ form.client_email.id_for_label }}">Owner Email</label>
-                {{ form.client_email }}
-                {{ form.client_email.errors }}
-            </div>
-            <div>
-                <label for="{{ form.area.id_for_label }}">Municipality</label>
-                {{ form.area }}
-                {{ form.area.errors }}
-            </div>
-            <div class="span-2">
-                <label for="{{ form.case_type.id_for_label }}">Type of Transaction</label>
-                {{ form.case_type }}
-                {{ form.case_type.errors }}
-            </div>
-            <div class="span-2">
-                <label for="{{ form.needs_taxmapping.id_for_label }}">Taxmapped?</label>
-                <div style="display:flex; align-items:center; gap:10px;">
-                    {{ form.needs_taxmapping }}
-                    <span class="muted fs-92">Yes if this transaction needs tax mapping.</span>
+
+                <div class="stepper">
+                    <div class="step-item {% if step == 1 %}active{% elif step > 1 %}completed{% else %}pending{% endif %}">
+                        <div class="step-box">{% if step > 1 %}<i class="ri-check-line"></i>{% else %}1{% endif %}</div>
+                        <div class="step-text">
+                            <h4>Client Information</h4>
+                            <p>Complete client metadata and required fields.</p>
+                        </div>
+                    </div>
+
+                    <div class="step-item {% if step == 2 %}active{% elif step > 2 %}completed{% else %}pending{% endif %}">
+                        <div class="step-box">{% if step > 2 %}<i class="ri-check-line"></i>{% else %}2{% endif %}</div>
+                        <div class="step-text">
+                            <h4>Checklist and Attachments</h4>
+                            <p>Upload supporting documents.</p>
+                        </div>
+                    </div>
+
+                    <div class="step-item {% if step == 3 %}active{% else %}pending{% endif %}">
+                        <div class="step-box">3</div>
+                        <div class="step-text">
+                            <h4>Review</h4>
+                            <p>Review details before submission.</p>
+                        </div>
+                    </div>
                 </div>
-                {{ form.needs_taxmapping.errors }}
-            </div>
-            <div class="span-2" data-title-type-wrap style="display:none;">
-                <label for="{{ form.property_title_type.id_for_label }}">Property Title Type</label>
-                {{ form.property_title_type }}
-                {{ form.property_title_type.errors }}
-                <div class="muted mt-4 fs-92">Shown only for Land First Time and Transfer of Ownership transactions.</div>
             </div>
         </div>
 
-        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:14px;">
-            <a class="btn btn-secondary" href="{% url 'dashboard' %}">Cancel</a>
-            <button class="btn btn-secondary" type="submit" name="save_draft" value="1">Save Draft</button>
-            <button class="btn btn-primary" type="submit" name="save_continue" value="1">Save & Continue</button>
-        </div>
-    </form>
-{% elif step == 2 %}
-    <form class="card" method="post" enctype="multipart/form-data">
-        {% csrf_token %}
-        {{ formset.management_form }}
+        <!-- ===== RIGHT COLUMN: MAIN CONTENT ===== -->
+        <div class="wizard-right">
+            
+            <!-- ==============================
+                 STEP 1: CLIENT INFORMATION
+                 ============================== -->
+            {% if step == 1 %}
+            <div class="wizard-right-card step-1-card">
+                <h2 class="card-title">Client Information</h2>
+                
+                {% if form.non_field_errors %}
+                    <div class="alert-error">{{ form.non_field_errors }}</div>
+                {% endif %}
 
-        {% if formset.non_form_errors %}
-            <div class="msg error">{{ formset.non_form_errors }}</div>
-        {% endif %}
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <div class="form-grid">
+                        <div class="form-group col-4">
+                            <label for="{{ form.client_first_name.id_for_label }}">First Name<span class="text-danger">*</span></label>
+                            {{ form.client_first_name }}
+                            {% if form.client_first_name.errors %}<span class="error-msg">{{ form.client_first_name.errors.0 }}</span>{% endif %}
+                        </div>
+                        <div class="form-group col-2">
+                            <label for="{{ form.client_middle_name.id_for_label }}">Middle Initial</label>
+                            {{ form.client_middle_name }}
+                            {% if form.client_middle_name.errors %}<span class="error-msg">{{ form.client_middle_name.errors.0 }}</span>{% endif %}
+                        </div>
+                        <div class="form-group col-4">
+                            <label for="{{ form.client_last_name.id_for_label }}">Last Name<span class="text-danger">*</span></label>
+                            {{ form.client_last_name }}
+                            {% if form.client_last_name.errors %}<span class="error-msg">{{ form.client_last_name.errors.0 }}</span>{% endif %}
+                        </div>
+                        <div class="form-group col-2">
+                            <label for="{{ form.client_suffix.id_for_label }}">Suffix</label>
+                            {{ form.client_suffix }}
+                            {% if form.client_suffix.errors %}<span class="error-msg">{{ form.client_suffix.errors.0 }}</span>{% endif %}
+                        </div>
 
-        <div class="card card--flat">
-            <div class="card__header">
-                <strong>Document Checklist</strong>
-                <span class="muted">Transaction type: <strong>{{ case.get_case_type_display|default:"—" }}</strong></span>
+                        <div class="form-group col-6">
+                            <label for="{{ form.client_number.id_for_label }}">Phone Number</label>
+                            <div class="input-prefix-wrapper">
+                                <span class="prefix-text">+63</span>
+                                {{ form.client_number }}
+                            </div>
+                            {% if form.client_number.errors %}<span class="error-msg">{{ form.client_number.errors.0 }}</span>{% endif %}
+                        </div>
+                        <div class="form-group col-6">
+                            <label for="{{ form.client_email.id_for_label }}">Email</label>
+                            {{ form.client_email }}
+                            {% if form.client_email.errors %}<span class="error-msg">{{ form.client_email.errors.0 }}</span>{% endif %}
+                        </div>
+
+                        <div class="form-group col-12">
+                            <label for="{{ form.area.id_for_label }}">LGU Origin<span class="text-danger">*</span></label>
+                            {{ form.area }}
+                            {% if form.area.errors %}<span class="error-msg">{{ form.area.errors.0 }}</span>{% endif %}
+                        </div>
+
+                        <div class="form-group col-12">
+                            <label for="{{ form.case_type.id_for_label }}">Type of Case<span class="text-danger">*</span></label>
+                            {{ form.case_type }}
+                            {% if form.case_type.errors %}<span class="error-msg">{{ form.case_type.errors.0 }}</span>{% endif %}
+                        </div>
+
+                        <div class="form-group col-12" data-title-type-wrap style="display:none;">
+                            <label for="{{ form.property_title_type.id_for_label }}">Property Title Type</label>
+                            {{ form.property_title_type }}
+                            {% if form.property_title_type.errors %}<span class="error-msg">{{ form.property_title_type.errors.0 }}</span>{% endif %}
+                        </div>
+
+                        <div class="form-group col-12" style="margin-top: 0.25rem; display: flex; align-items: center; gap: 0.5rem;">
+                            {{ form.needs_taxmapping }}
+                            <label for="{{ form.needs_taxmapping.id_for_label }}" style="margin:0; cursor: pointer;">Transaction requires tax mapping?</label>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <a href="{% url 'dashboard' %}" class="btn-text">Cancel</a>
+                        <button type="submit" name="save_continue" value="1" class="btn btn-primary">Continue</button>
+                    </div>
+                </form>
             </div>
-            <div class="card__body card__body--flush">
-                <table class="table">
-                    <thead>
-                        <tr>
-                            <th style="width:34%">Document Type</th>
-                            <th>Upload File</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+
+            <!-- ==============================
+                 STEP 2: CHECKLIST & ATTACHMENTS
+                 ============================== -->
+            {% elif step == 2 %}
+            <div class="wizard-right-card step-2-card">
+                <h2 class="card-title" style="margin-bottom: 0.2rem;">Checklist and Attachments</h2>
+                <p style="color: #64748b; font-size: 0.9rem; margin-top: 0; margin-bottom: 2.5rem;">
+                    Upload the required documents for your <span style="color: #1e3a8a; font-weight: 600;">{{ case.get_case_type_display|default:"transaction" }}</span> request. 
+                    <a href="{% url 'draft_wizard' case.draft_id 1 %}" style="color: #94a3b8; text-decoration: none; margin-left: 0.2rem;">Change</a>
+                </p>
+                
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    {{ formset.management_form }}
+
+                    {% if formset.non_form_errors %}
+                        <div class="alert-error">{{ formset.non_form_errors }}</div>
+                    {% endif %}
+
+                    <div class="doc-list">
                         {% for row in rows %}
-                            <tr>
-                                <td>
+                            <div class="doc-row {% if row.doc and row.doc.file %}state-completed{% else %}state-pending{% endif %}" id="row-{{ forloop.counter0 }}">
+                                
+                                <div style="display: none;">
                                     {{ row.form.doc_type }}
-                                    <div class="mt-4 custom-doc" data-custom-doc style="display:none;">
-                                        {{ row.form.custom_doc_type }}
-                                    </div>
-                                    {% if row.form.doc_type.errors %}<div class="muted">{{ row.form.doc_type.errors }}</div>{% endif %}
-                                    {% if row.form.custom_doc_type.errors %}<div class="muted">{{ row.form.custom_doc_type.errors }}</div>{% endif %}
-                                </td>
-                                <td>
                                     {{ row.form.file }}
-                                    {% if row.form.file.errors %}<div class="muted">{{ row.form.file.errors }}</div>{% endif %}
+                                </div>
 
-                                    {% if row.doc and row.doc.file %}
-                                        <div class="muted mt-4 fs-92">
-                                            Uploaded: <strong>{{ row.filename|default:row.doc.file.name|cut:"cases/" }}</strong>
-                                            <a class="link-muted" href="{% url 'download_case_document' row.doc.id %}" target="_blank" rel="noopener">(View)</a>
+                                <!-- STATE A: PENDING -->
+                                <div class="view-pending">
+                                    <div class="doc-label">{% if row.form.doc_type.value == '__custom__' %}<span style="color: #94a3b8; font-style: italic;">Custom Document</span>{% else %}{{ row.form.doc_type.value }}{% endif %}</div>
+                                    <button type="button" class="btn-upload-trigger" onclick="openDropzone('row-{{ forloop.counter0 }}')"><i class="ri-add-line"></i> Upload</button>
+                                </div>
+
+                                <!-- STATE B: DROPZONE -->
+                                <div class="view-dropzone">
+                                    <div class="doc-label">{% if row.form.doc_type.value == '__custom__' %}{{ row.form.custom_doc_type }}{% else %}{{ row.form.doc_type.value }}{% endif %}</div>
+                                    <label class="dropzone-area" for="{{ row.form.file.id_for_label }}">
+                                        <div class="dz-icon"><i class="ri-cloud-upload-line"></i></div>
+                                        <div class="dz-text">
+                                            <strong>Select a file or drag and drop here</strong>
+                                            <span>JPG, PNG, MP4 or PDF, file size no more than 25MB</span>
                                         </div>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            {% if row.form.non_field_errors %}
-                                <tr><td colspan="2"><div class="msg error">{{ row.form.non_field_errors }}</div></td></tr>
+                                        <div class="dz-btn">SELECT FILE</div>
+                                    </label>
+                                </div>
+
+                                <!-- STATE C: COMPLETED -->
+                                <div class="view-completed">
+                                    <div class="doc-label text-success">{% if row.form.doc_type.value == '__custom__' %}<span id="custom-name-{{ forloop.counter0 }}">{{ row.form.custom_doc_type.value|default:"Custom Document" }}</span>{% else %}{{ row.form.doc_type.value }}{% endif %}</div>
+                                    <div class="doc-filename" id="filename-{{ forloop.counter0 }}" title="{% if row.doc and row.doc.file %}{{ row.filename|default:row.doc.file.name|cut:'cases/' }}{% endif %}">
+                                        {% if row.doc and row.doc.file %}{{ row.filename|default:row.doc.file.name|cut:"cases/" }}{% endif %}
+                                    </div>
+                                    <div class="doc-meta" id="filemeta-{{ forloop.counter0 }}">
+                                        {% if row.doc and row.doc.file %}{{ row.doc.uploaded_at|date:"Y-m-d g:i A" }}{% else %}Ready to save{% endif %}
+                                    </div>
+                                    <div class="doc-actions">
+                                        <button type="button" class="icon-btn edit-btn" onclick="document.getElementById('{{ row.form.file.id_for_label }}').click();"><i class="ri-pencil-fill"></i></button>
+                                        <button type="button" class="icon-btn delete-btn" onclick="clearFile('row-{{ forloop.counter0 }}', '{{ row.form.file.id_for_label }}')"><i class="ri-delete-bin-fill"></i></button>
+                                    </div>
+                                </div>
+                                {% if row.form.file.errors %}<span class="error-msg" style="margin-top: 0.5rem;">{{ row.form.file.errors.0 }}</span>{% endif %}
+                            </div>
+                        {% endfor %}
+                    </div>
+
+                    <button type="submit" name="add_row" value="1" class="btn-add-custom"><i class="ri-add-line"></i> Add</button>
+
+                    <div class="form-actions" style="margin-top: 3rem;">
+                        <a href="{% url 'draft_wizard' case.draft_id 1 %}" class="btn-text" style="padding-left:0;">Back</a>
+                        <button type="submit" class="btn btn-primary">Continue</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- ==============================
+                 STEP 3: REVIEW (NEW SPLIT DESIGN)
+                 ============================== -->
+            {% else %}
+            <div class="wizard-right-card step-3-card">
+                <h2 class="card-title">Review Submission</h2>
+                
+                <!-- ID Header -->
+                <div class="summary-header">
+                    <h3 class="summary-id" style="font-style: normal; margin-bottom: 0;">
+                        {% if case.tracking_id %}
+                            {{ case.tracking_id }}
+                        {% else %}
+                            <!-- Stylized Placeholder for Drafts -->
+                            <span style="color: #1e3a8a; font-weight: 700;">PAS-{% now "Y" %}-</span><span style="color: #94a3b8; font-weight: 500;">XXXXXXX</span>
+                        {% endif %}
+                    </h3>
+                    <div class="summary-type" style="margin-top: 0.5rem;">{{ case.get_case_type_display|default:"Transaction Type" }}</div>
+                </div>
+
+                <!-- Client Info List -->
+                <div class="summary-list">
+                    <div class="summary-row">
+                        <span class="summary-label">Full Name</span>
+                        <span class="summary-value">{{ case.client_display_name }}</span>
+                    </div>
+                    <div class="summary-row">
+                        <span class="summary-label">Phone Number</span>
+                        <span class="summary-value">{{ case.client_number|default:"—" }}</span>
+                    </div>
+                    <div class="summary-row">
+                        <span class="summary-label">Email</span>
+                        <span class="summary-value">{{ case.client_email|default:"—" }}</span>
+                    </div>
+                    <div class="summary-row">
+                        <span class="summary-label">LGU Origin</span>
+                        <span class="summary-value">{{ case.area|default:"—" }}</span>
+                    </div>
+                    {% if case.needs_taxmapping %}
+                    <div class="summary-row" style="border-bottom: none;">
+                        <span class="summary-label">Tax Mapping</span>
+                        <span class="summary-value" style="color: #ea580c; font-weight: 600;">Required</span>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <h4 style="font-size: 1rem; color: #0f172a; margin: 0 0 1rem 0;">Checklist and Attachments</h4>
+                
+                <!-- Interactive Split Document Viewer -->
+                <div class="preview-container">
+                    
+                    <!-- Left Tab List -->
+                    <div class="preview-sidebar" id="doc-tabs">
+                        {% for doc in documents %}
+                            <div class="preview-tab {% if forloop.first %}active{% endif %}" 
+                                data-url="{% url 'download_case_document' doc.id %}"
+                                onclick="changePreview(this, this.getAttribute('data-url'))">
+                                <div class="tab-name">{{ doc.doc_type }}</div>
+                                <div class="tab-action">Preview</div>
+                            </div>
+                        {% empty %}
+                            <p style="color: #64748b; font-size: 0.85rem;">No documents attached.</p>
+                        {% endfor %}
+                        
+                        <!-- List missing required documents for context -->
+                        {% for item in checklist %}
+                            {% if not item.uploaded %}
+                                <div class="preview-tab" style="cursor: not-allowed; opacity: 0.6;">
+                                    <div class="tab-name">{{ item.doc_type }}</div>
+                                    <div class="tab-action" style="color: #ef4444;">Missing</div>
+                                </div>
                             {% endif %}
                         {% endfor %}
-                    </tbody>
-                </table>
+                    </div>
 
-                <div style="padding:10px; border-top:1px solid var(--border);">
-                    <button class="btn btn-secondary btn-sm" type="submit" name="add_row" value="1">+ Add Row</button>
+                    <!-- Right Viewer Frame -->
+                    <div class="preview-viewer">
+                        {% if documents %}
+                            <!-- Loads the URL of the first document initially -->
+                            <iframe id="doc-preview-frame" class="preview-iframe" src="{% url 'download_case_document' documents.0.id %}#toolbar=0" title="Document Preview"></iframe>
+                            <div id="doc-empty-state" class="preview-empty" style="display: none;">Select a document to preview</div>
+                        {% else %}
+                            <div class="preview-empty"><i class="ri-file-forbid-line" style="font-size: 2rem; display:block; margin-bottom: 0.5rem;"></i> No file available for preview</div>
+                        {% endif %}
+                    </div>
+
                 </div>
-            </div>
-        </div>
 
-        <div style="display:flex; gap:10px; justify-content:space-between; margin-top:14px;">
-            <a class="btn btn-secondary" href="{% url 'draft_wizard' case.draft_id 1 %}">Back</a>
-            {% if not case.tracking_id %}
-                <button class="btn btn-secondary" type="submit" name="save_draft" value="1">Save Draft</button>
+                <form method="post" style="margin-top: 3rem;">
+                    {% csrf_token %}
+                    <div class="form-actions" style="justify-content: space-between;">
+                        <a href="{% url 'draft_wizard' case.draft_id 2 %}" class="btn-text" style="padding-left:0;">Back</a>
+                        <button type="submit" class="btn btn-primary" style="background-color: #1e3a8a;">Submit</button>
+                    </div>
+                </form>
+            </div>
             {% endif %}
-            <button class="btn btn-primary" type="submit">Save & Continue</button>
-        </div>
-    </form>
 
-    {% if documents %}
-        <div class="card">
-            <h3 style="margin:0 0 10px 0;">Uploaded Documents</h3>
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th>Document Type</th>
-                        <th>File</th>
-                        <th style="width:14%">View File</th>
-                        <th style="width:22%">Uploaded</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for doc in documents %}
-                        <tr>
-                            <td>{{ doc.doc_type }}</td>
-                            <td class="muted">{{ doc.file.name|cut:"cases/" }}</td>
-                            <td><a class="btn btn-secondary btn-sm" href="{% url 'download_case_document' doc.id %}" target="_blank" rel="noopener">View</a></td>
-                            <td class="muted">{{ doc.uploaded_at|date:"M d, Y H:i" }}</td>
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    {% endif %}
-
-{% else %}
-    <div class="card">
-        <h3 style="margin:0 0 12px 0;">Review</h3>
-        <div class="form-grid">
-            <div>
-                <label>Owner</label>
-                <div><strong>{{ case.client_display_name }}</strong></div>
-            </div>
-            <div>
-                <label>Contact</label>
-                <div>{{ case.client_display_contact|default:"—" }}</div>
-            </div>
-            <div>
-                <label>Type of Transaction</label>
-                <div>{{ case.get_case_type_display|default:"—" }}</div>
-            </div>
-            <div>
-                <label>Taxmapped?</label>
-                <div>{{ case.needs_taxmapping|yesno:"Yes,No" }}</div>
-            </div>
-            {% if case.case_type == "land_first_time" or case.case_type == "transfer_ownership_tax_decl" %}
-                <div>
-                    <label>Property Title Type</label>
-                    <div>{{ case.get_property_title_type_display|default:"—" }}</div>
-                </div>
-            {% endif %}
-            <div class="span-2">
-                <label>Checklist</label>
-                {% if checklist %}
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Document</th>
-                                <th style="width:18%">Uploaded</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for item in checklist %}
-                                <tr>
-                                    <td>{{ item.doc_type }}</td>
-                                    <td>{{ item.uploaded|yesno:"Yes,No" }}</td>
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                {% else %}
-                    <p class="muted" style="margin:0;">No checklist items yet.</p>
-                {% endif %}
-            </div>
         </div>
     </div>
-
-    {% if documents %}
-        <div class="card">
-            <h3 style="margin:0 0 10px 0;">Uploaded Documents</h3>
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th>Document Type</th>
-                        <th>File</th>
-                        <th style="width:14%">View File</th>
-                        <th style="width:22%">Uploaded</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for doc in documents %}
-                        <tr>
-                            <td>{{ doc.doc_type }}</td>
-                            <td class="muted">{{ doc.file.name|cut:"cases/" }}</td>
-                            <td><a class="btn btn-secondary btn-sm" href="{% url 'download_case_document' doc.id %}" target="_blank" rel="noopener">View</a></td>
-                            <td class="muted">{{ doc.uploaded_at|date:"M d, Y H:i" }}</td>
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    {% endif %}
-
-    <form class="card" method="post">
-        {% csrf_token %}
-        <div style="display:flex; gap:10px; justify-content:space-between;">
-            <a class="btn btn-secondary" href="{% url 'draft_wizard' case.draft_id 2 %}">Back</a>
-            {% if not case.tracking_id %}
-                <button class="btn btn-secondary" type="submit" name="save_draft" value="1">Save Draft</button>
-            {% endif %}
-            <button class="btn btn-primary" type="submit">Submit Request</button>
-        </div>
-    </form>
-{% endif %}
-
+</div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
+    // Define Step safely for JS
+    const currentStep = Number("{{ step|default:1 }}");
+
+    // ===== GENERAL FORM PROTECTION =====
     (function () {
         var dirty = false;
-
         function markDirty(e) {
             if (!e || !e.target) return;
             if (!e.target.closest || !e.target.closest('form')) return;
             dirty = true;
         }
-
         window.addEventListener('beforeunload', function (e) {
             if (!dirty) return;
-            e.preventDefault();
-            e.returnValue = '';
+            e.preventDefault(); e.returnValue = '';
         });
-
         document.addEventListener('input', markDirty, true);
         document.addEventListener('change', markDirty, true);
         document.addEventListener('submit', function (e) {
-            if (e && e.target && e.target.tagName === 'FORM') {
-                dirty = false;
-            }
+            if (e && e.target && e.target.tagName === 'FORM') dirty = false;
         }, true);
+    })();
 
-        function syncRow(row) {
-            if (!row) return;
-            var select = row.querySelector('select[name$="-doc_type"]');
-            var customWrap = row.querySelector('[data-custom-doc]');
-            if (!select || !customWrap) return;
-            var show = (select.value === '__custom__');
-            customWrap.style.display = show ? '' : 'none';
-            if (!show) {
-                var input = customWrap.querySelector('input');
-                if (input) input.value = '';
-            }
-        }
-
-        function syncAll() {
-            document.querySelectorAll('table.table tbody tr').forEach(function (row) {
-                syncRow(row);
-            });
-        }
-
-        document.addEventListener('change', function (e) {
-            var t = e.target;
-            if (t && t.tagName === 'SELECT' && (t.name || '').endsWith('-doc_type')) {
-                syncRow(t.closest('tr'));
-            }
-        });
-
-        document.addEventListener('DOMContentLoaded', syncAll);
-        syncAll();
-
+    // ===== STEP 1 LOGIC =====
+    if (currentStep === 1) {
         function syncTitleType() {
             var typeSelect = document.getElementById('{{ form.case_type.id_for_label }}');
             var wrap = document.querySelector('[data-title-type-wrap]');
@@ -346,20 +502,149 @@
             var val = (typeSelect.value || '').trim();
             var show = (val === 'land_first_time' || val === 'transfer_ownership_tax_decl');
             wrap.style.display = show ? '' : 'none';
-            if (!show) {
-                var sel = wrap.querySelector('select');
-                if (sel) sel.value = '';
-            }
+            if (!show) { var sel = wrap.querySelector('select'); if (sel) sel.value = ''; }
         }
-
+        
         document.addEventListener('change', function (e) {
-            var t = e.target;
-            if (t && t.id === '{{ form.case_type.id_for_label }}') {
-                syncTitleType();
+            if (e.target && e.target.id === '{{ form.case_type.id_for_label }}') syncTitleType();
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // 1. Run the existing title sync
+            syncTitleType();
+
+            // 2. AUTO-LOCK LGU ORIGIN FOR LGU ADMINS
+            const userRole = "{{ request.user.role }}";
+            const userLguName = "{{ request.user.lgu_municipality|default:''|escapejs }}";
+            const areaSelect = document.getElementById('{{ form.area.id_for_label }}');
+
+            if (userRole === "lgu_admin" && areaSelect) {
+                // Loop through options to find and select the admin's specific LGU
+                for (let i = 0; i < areaSelect.options.length; i++) {
+                    if (areaSelect.options[i].text.includes(userLguName) || areaSelect.options[i].value === userLguName) {
+                        areaSelect.selectedIndex = i;
+                        break;
+                    }
+                }
+                
+                // Visually "Lock" the dropdown
+                areaSelect.style.pointerEvents = "none";
+                areaSelect.style.backgroundColor = "#f1f5f9";
+                areaSelect.style.color = "#64748b";
+                areaSelect.tabIndex = -1;
+
+                // Add a helper message so the user knows why it's locked
+                // const lockNote = document.createElement('div');
+                // lockNote.innerHTML = '<i class="ri-lock-fill"></i> Automatically locked to your designation.';
+                // lockNote.style.fontSize = '0.75rem';
+                // lockNote.style.color = '#64748b';
+                // lockNote.style.marginTop = '0.4rem';
+                // lockNote.style.fontWeight = '600';
+                // areaSelect.parentNode.appendChild(lockNote);
             }
         });
-        document.addEventListener('DOMContentLoaded', syncTitleType);
-        syncTitleType();
-    })();
+    }
+
+    // ===== STEP 2 LOGIC =====
+    if (currentStep === 2) {
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('input[name$="-custom_doc_type"]').forEach(function(input) {
+                input.classList.add('custom-doc-input');
+                input.placeholder = "Enter document name...";
+            });
+        });
+
+        window.openDropzone = function(rowId) {
+            document.querySelectorAll('.doc-row.state-dropzone').forEach(function(row) {
+                row.classList.remove('state-dropzone');
+                row.classList.add('state-pending');
+            });
+            const targetRow = document.getElementById(rowId);
+            if (targetRow) {
+                targetRow.classList.remove('state-pending');
+                targetRow.classList.add('state-dropzone');
+            }
+        };
+
+        window.clearFile = function(rowId, inputId) {
+            const fileInput = document.getElementById(inputId);
+            const row = document.getElementById(rowId);
+            if (fileInput) fileInput.value = ''; 
+            if (row) {
+                row.classList.remove('state-completed');
+                row.classList.add('state-pending');
+            }
+        };
+
+        document.addEventListener('change', function(e) {
+            if (e.target && e.target.type === 'file') {
+                const fileInput = e.target;
+                const row = fileInput.closest('.doc-row');
+                if (row && fileInput.files.length > 0) {
+                    const fileName = fileInput.files[0].name;
+                    const rowIndex = row.id.split('-')[1];
+                    const nameDisplay = document.getElementById('filename-' + rowIndex);
+                    const metaDisplay = document.getElementById('filemeta-' + rowIndex);
+                    const customLabelDisplay = document.getElementById('custom-name-' + rowIndex);
+                    
+                    if (nameDisplay) nameDisplay.textContent = fileName;
+                    if (metaDisplay) {
+                        const now = new Date();
+                        let hours = now.getHours(); let ampm = hours >= 12 ? 'PM' : 'AM'; hours = hours % 12; hours = hours ? hours : 12; 
+                        let mins = now.getMinutes() < 10 ? '0' + now.getMinutes() : now.getMinutes();
+                        metaDisplay.textContent = now.getFullYear() + '-' + (now.getMonth()+1).toString().padStart(2, '0') + '-' + now.getDate().toString().padStart(2, '0') + ' ' + hours + ':' + mins + ' ' + ampm;
+                    }
+                    const customInput = row.querySelector('input[name$="-custom_doc_type"]');
+                    if (customInput && customInput.value.trim() !== '' && customLabelDisplay) { customLabelDisplay.textContent = customInput.value.trim(); }
+                    row.classList.remove('state-pending', 'state-dropzone');
+                    row.classList.add('state-completed');
+                }
+            }
+        });
+
+        document.addEventListener('dragover', function(e) {
+            if (e.target.closest('.dropzone-area')) {
+                e.preventDefault();
+                e.target.closest('.dropzone-area').style.borderColor = '#1e3a8a';
+                e.target.closest('.dropzone-area').style.backgroundColor = '#eff6ff';
+            }
+        });
+        document.addEventListener('dragleave', function(e) {
+            if (e.target.closest('.dropzone-area')) {
+                e.preventDefault();
+                e.target.closest('.dropzone-area').style.borderColor = '#cbd5e1';
+                e.target.closest('.dropzone-area').style.backgroundColor = 'white';
+            }
+        });
+        document.addEventListener('drop', function(e) {
+            if (e.target.closest('.dropzone-area')) {
+                e.target.closest('.dropzone-area').style.borderColor = '#cbd5e1';
+                e.target.closest('.dropzone-area').style.backgroundColor = 'white';
+            }
+        });
+    }
+
+    // ===== STEP 3: DOCUMENT PREVIEW LOGIC =====
+    if (currentStep === 3) {
+        window.changePreview = function(tabElement, fileUrl) {
+            document.querySelectorAll('.preview-tab').forEach(function(tab) {
+                tab.classList.remove('active');
+            });
+            
+            tabElement.classList.add('active');
+            
+            const iframe = document.getElementById('doc-preview-frame');
+            const emptyState = document.getElementById('doc-empty-state');
+            
+            if (iframe && fileUrl) {
+                iframe.src = fileUrl + "#toolbar=0";
+                iframe.style.display = "block";
+                if(emptyState) emptyState.style.display = "none";
+            } else if (emptyState) {
+                if(iframe) iframe.style.display = "none";
+                emptyState.style.display = "block";
+            }
+        };
+    }
 </script>
 {% endblock %}
