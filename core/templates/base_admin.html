@@ -160,6 +160,7 @@
             display: flex; align-items: center; color: var(--danger-text); text-decoration: none;
             padding: 0.75rem; border-radius: var(--radius-md); cursor: pointer; transition: 0.2s;
             font-size: 0.9rem; font-weight: 500;
+            background: transparent; border: none; width: 100%; text-align: left;
         }
         .logout-btn:hover { background: var(--danger-bg); }
 
@@ -262,9 +263,12 @@
                 </div>
             </div>
             
-            <a href="{% url 'logout' %}" class="logout-btn">
-                <i class="ri-logout-box-r-line"></i> <span class="hide-text">Sign Out</span>
-            </a>
+            <form method="post" action="{% url 'logout' %}" style="margin:0;">
+                {% csrf_token %}
+                <button type="submit" class="logout-btn">
+                    <i class="ri-logout-box-r-line"></i> <span class="hide-text">Sign Out</span>
+                </button>
+            </form>
         </div>
     </aside>
 

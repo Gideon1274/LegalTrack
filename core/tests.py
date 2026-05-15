@@ -398,3 +398,21 @@ class AuthenticationBackendsTests(TestCase):
 
         ok = self.client.login(username="admin@gmail.com", password="StrongPass123!")  # noqa: S106
         self.assertTrue(ok)
+
+
+class LogoutFlowTests(TestCase):
+    def test_logout_endpoint_logs_user_out(self):
+        u = CustomUser(email="user3@example.com", role="lgu_admin", full_name="User Three", lgu_municipality="Alcantara")
+        u.set_password("StrongPass123!")
+        u.save()
+        u.account_status = "active"
+        u.save(update_fields=["account_status", "is_active"])
+
+        self.client.force_login(u)
+        self.assertTrue(self.client.session.get("_auth_user_id"))
+
+        resp2 = self.client.post(reverse("logout"))
+        self.assertEqual(resp2.status_code, 302)
+        self.assertEqual(resp2.url, reverse("login"))
+
+        self.assertIsNone(self.client.session.get("_auth_user_id"))
