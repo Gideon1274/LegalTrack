@@ -77,6 +77,16 @@
                 <td>LGU Origin</td>
                 <td>{{ case.submitted_by.lgu_municipality|default:case.area|default:"—" }}</td>
             </tr>
+            <tr>
+                <td>Transaction Number</td>
+                <td>
+                    {% for n in case.numbers.all %}
+                        {{ n.number }}{% if not forloop.last %}, {% endif %}
+                    {% empty %}
+                        —
+                    {% endfor %}
+                </td>
+            </tr>
         </table>
 
         <div class="cd-section-header">

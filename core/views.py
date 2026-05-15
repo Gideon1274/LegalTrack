@@ -814,6 +814,15 @@ def _is_capitol_staff(user) -> bool:
     return bool(getattr(user, "role", "").startswith("capitol_"))
 
 
+def _normalized_role(user: CustomUser) -> str:
+    return (getattr(user, "role", "") or "").strip().lower()
+
+
+def _is_examiner(user: CustomUser) -> bool:
+    role = _normalized_role(user)
+    return role in {"capitol_examiner", "examiner"} or role.endswith("_examiner")
+
+
 def _user_can_view_case(user: CustomUser, case: Case) -> bool:
     role = getattr(user, "role", "") or ""
     if role == "super_admin" or _is_capitol_staff(user):
@@ -849,20 +858,59 @@ def _user_is_current_owner_for_internal_sections(user: CustomUser, case: Case) -
         return getattr(case, "status", "") == "for_release"
     return False
 
+
+def _case_current_holder_label(case: Case) -> str:
+    status = getattr(case, "status", "") or ""
+    if status in {"not_received", "received"}:
+        return "Receiver"
+    if status in {"to_examine", "in_review"}:
+        return "Examiner"
+    if status == "for_approval":
+        return "Approver"
+    if status == "for_taxmapping":
+        return "Tax Mapper"
+    if status == "for_numbering":
+        return "Numberer"
+    if status == "for_release":
+        return "Releaser"
+    return "System"
+
+
+def _case_current_holder_detail(case: Case) -> str:
+    status = getattr(case, "status", "") or ""
+    if status in {"to_examine", "in_review"}:
+        u = getattr(case, "assigned_to", None)
+        if u:
+            name = (u.get_full_name() or getattr(u, "full_name", "") or getattr(u, "email", "") or "").strip()
+            return name
+    if status == "for_taxmapping":
+        u = getattr(case, "taxmapper_assigned_to", None)
+        if u:
+            name = (u.get_full_name() or getattr(u, "full_name", "") or getattr(u, "email", "") or "").strip()
+            return name
+    return ""
+
 @xframe_options_sameorigin
 @login_required
 def download_case_document(request, doc_id: int):
     doc = get_object_or_404(CaseDocument.objects.select_related("case"), id=doc_id)
     if not _user_can_view_case(request.user, doc.case):
         raise Http404()
-    if not doc.file:
-        raise Http404()
+    if not doc.file or not (doc.file.name or "").strip():
+        return HttpResponse("File is missing for this document.", status=404)
+
+    if hasattr(doc.file, "storage") and hasattr(doc.file.storage, "exists"):
+        try:
+            if not doc.file.storage.exists(doc.file.name):
+                return HttpResponse("File not found on the server storage.", status=404)
+        except Exception:
+            pass
 
     filename = os.path.basename(doc.file.name or "document")
     try:
         fh = doc.file.open("rb")
     except (FileNotFoundError, OSError, ValueError):
-        raise Http404()
+        return HttpResponse("File could not be opened.", status=404)
 
     response = FileResponse(fh, as_attachment=False, filename=filename)
     guessed, _ = mimetypes.guess_type(filename)
@@ -1057,6 +1105,17 @@ def _format_case_history_details(action: str, details) -> str:
         if assigned_to:
             parts.append(f"Assigned to: {assigned_to}")
     elif action in {"case_receipt"}:
+        new_status = d.get("new_status")
+        if new_status:
+            status_label = dict(Case.STATUS_CHOICES).get(str(new_status), str(new_status))
+            parts.append(f"Status: {status_label}")
+    elif action == "case_numbered":
+        td_number = d.get("td_number")
+        if td_number:
+            parts.append(f"TD Number: {td_number}")
+        lgu = d.get("lgu")
+        if lgu:
+            parts.append(f"LGU: {lgu}")
         new_status = d.get("new_status")
         if new_status:
             status_label = dict(Case.STATUS_CHOICES).get(str(new_status), str(new_status))
@@ -1487,30 +1546,29 @@ def assign_td_number(request, tracking_id):
 
     case = get_object_or_404(Case, tracking_id=tracking_id, status="for_numbering")
 
-    if request.method == "POST":
-        lgu_origin = case.submitted_by.lgu_municipality
-        
-        try:
-            # 1. Generate the strictly sequential number safely
-            new_td_number = LGUTaxDeclarationSequence.get_next_number(lgu_origin)
-            
-            # 2. Assign and move to next phase
-            case.td_number = new_td_number
-            case.status = "for_release"
-            case.save()
+    if request.method != "POST":
+        return redirect("dashboard")
 
-            # 3. Create the Audit Log for the timeline feed
-            AuditLog.objects.create(
-                actor=request.user,
-                action="case_numbered",
-                target_object=f"Case: {case.tracking_id}",
-                details={"td_number": new_td_number, "lgu": lgu_origin}
-            )
+    lgu_origin = case.submitted_by.lgu_municipality
 
-            messages.success(request, f"Successfully assigned TD No. {new_td_number} to {case.tracking_id}.")
-        except Exception as e:
-            messages.error(request, f"Error generating number: {str(e)}")
-            
+    try:
+        new_td_number = LGUTaxDeclarationSequence.get_next_number(lgu_origin)
+
+        case.td_number = new_td_number
+        case.status = "for_release"
+        case.save(update_fields=["td_number", "status", "updated_at"])
+
+        AuditLog.objects.create(
+            actor=request.user,
+            action="case_numbered",
+            target_object=f"Case: {case.tracking_id}",
+            details={"td_number": new_td_number, "lgu": lgu_origin},
+        )
+
+        messages.success(request, f"Successfully assigned TD No. {new_td_number} to {case.tracking_id}.")
+    except Exception as e:
+        messages.error(request, f"Error generating number: {str(e)}")
+
     return redirect("dashboard")
 
 
@@ -2812,44 +2870,47 @@ def case_detail(request, tracking_id):
         case.assigned_to_id is None
     )
 
-    can_submit_for_approval = (
-        request.user.role == "capitol_examiner" and
-        case.status in {"to_examine", "in_review"} and
-        case.assigned_to_id == request.user.id
-    )
+    is_examiner = _is_examiner(request.user)
+    is_receiver = _normalized_role(request.user) in {"capitol_receiving", "receiver"} or _normalized_role(request.user).endswith("_receiving")
+    is_approver = _normalized_role(request.user) in {"capitol_approver", "approver"} or _normalized_role(request.user).endswith("_approver")
+    is_taxmapper = _normalized_role(request.user) in {"capitol_taxmapper", "taxmapper"} or _normalized_role(request.user).endswith("_taxmapper")
+    is_numberer = _normalized_role(request.user) in {"capitol_numberer", "numberer"} or _normalized_role(request.user).endswith("_numberer")
+    is_releaser = _normalized_role(request.user) in {"capitol_releaser", "releaser"} or _normalized_role(request.user).endswith("_releaser")
 
-    can_return_to_receiving = (
-        request.user.role == "capitol_examiner" and
-        case.status in {"to_examine", "in_review"} and
-        case.assigned_to_id == request.user.id
-    )
+    is_assigned_examiner = bool(case.assigned_to_id and case.assigned_to_id == request.user.id)
+    is_assigned_taxmapper = bool(case.taxmapper_assigned_to_id and case.taxmapper_assigned_to_id == request.user.id)
 
-    can_approve = (
-        request.user.role == "capitol_approver" and
-        case.status == "for_approval"
-    )
+    can_submit_for_approval = bool(case.status in {"to_examine", "in_review"} and is_assigned_examiner)
+    can_return_to_receiving = bool(case.status in {"to_examine", "in_review"} and is_assigned_examiner)
+
+    can_return_for_correction = bool(case.status == "for_approval" and is_approver)
+    can_approve = bool(case.status == "for_approval" and is_approver)
 
     can_assign_taxmapper = bool(
-        request.user.role == "capitol_approver"
+        is_approver
         and case.status == "for_approval"
         and bool(getattr(case, "needs_taxmapping", False))
     )
 
-    can_number = (
-        request.user.role == "capitol_numberer" and
-        case.status == "for_numbering"
-    )
+    can_complete_taxmapping = bool(is_taxmapper and case.status == "for_taxmapping" and is_assigned_taxmapper)
+    can_number = bool(is_numberer and case.status == "for_numbering")
+    can_release = bool(is_releaser and case.status == "for_release")
 
-    can_complete_taxmapping = bool(
-        request.user.role == "capitol_taxmapper"
-        and case.status == "for_taxmapping"
-        and getattr(case, "taxmapper_assigned_to_id", None) == getattr(request.user, "id", None)
-    )
+    examiner_docs_blocked = bool(case.documents.exists() and case.documents.filter(reviewed_ok=False).exists())
+    examiner_forward_reason = ""
+    if case.status not in {"to_examine", "in_review"}:
+        examiner_forward_reason = "This transaction is not in the Examiner stage."
+    elif not is_assigned_examiner:
+        assigned_to = getattr(case, "assigned_to", None)
+        assigned_name = ""
+        if assigned_to:
+            assigned_name = (assigned_to.get_full_name() or getattr(assigned_to, "full_name", "") or getattr(assigned_to, "email", "") or "").strip()
+        examiner_forward_reason = f"Assigned to {assigned_name}" if assigned_name else "This transaction is not assigned to you."
+    elif examiner_docs_blocked:
+        examiner_forward_reason = "Review all uploaded documents and mark them as checked before forwarding."
 
-    can_release = (
-        request.user.role == "capitol_releaser" and
-        case.status == "for_release"
-    )
+    can_return_to_receiving = bool(can_return_to_receiving)
+    can_approve = bool(can_approve and not can_assign_taxmapper)
 
     examiners = None
     if can_assign:
@@ -2889,7 +2950,7 @@ def case_detail(request, tracking_id):
         remarks_qs = CaseRemark.objects.filter(case=case).select_related("created_by")
         history_qs = (
             AuditLog.objects.filter(target_object=f"Case: {case.tracking_id}")
-            .filter(action__in=["case_create", "case_receipt", "case_assignment", "case_status_change", "case_approval", "case_rejection", "case_release", "case_remark"])
+            .filter(action__in=["case_create", "case_receipt", "case_assignment", "case_status_change", "case_approval", "case_rejection", "case_release", "case_numbered", "case_remark"])
             .select_related("actor")
             .order_by("-created_at")
         )
@@ -2915,13 +2976,22 @@ def case_detail(request, tracking_id):
     response_context = {
         "case": case,
         "documents": list(case.documents.all()),
+        "is_examiner": is_examiner,
+        "is_receiver": is_receiver,
+        "is_approver": is_approver,
+        "is_taxmapper": is_taxmapper,
+        "is_numberer": is_numberer,
+        "is_releaser": is_releaser,
         "can_edit": can_edit,
         "can_receive": can_receive,
         "can_return": can_return,
         "can_assign": can_assign,
         "can_submit_for_approval": can_submit_for_approval,
+        "examiner_docs_blocked": examiner_docs_blocked,
+        "examiner_forward_reason": examiner_forward_reason,
         "can_return_to_receiving": can_return_to_receiving,
         "can_approve": can_approve,
+        "can_return_for_correction": can_return_for_correction,
         "can_assign_taxmapper": can_assign_taxmapper,
         "taxmappers": taxmappers,
         "can_complete_taxmapping": can_complete_taxmapping,
@@ -2932,6 +3002,8 @@ def case_detail(request, tracking_id):
         "last_used_number": last_used_number,
         "suggested_next_number": suggested_next_number,
         "show_internal": show_internal,
+        "current_holder_label": _case_current_holder_label(case),
+        "current_holder_detail": _case_current_holder_detail(case),
         "remarks": remarks,
         "history": history,
         "can_remark": can_remark,
@@ -2948,8 +3020,8 @@ def case_detail(request, tracking_id):
 def forward_for_approval(request, tracking_id):
     case = get_object_or_404(Case, tracking_id=tracking_id)
     
-    # Auth Check: Only the assigned examiner can forward it
-    if request.user.role != "capitol_examiner" or case.assigned_to != request.user:
+    # Auth Check: Only the assigned holder can forward it
+    if getattr(request.user, "role", "") != "super_admin" and case.assigned_to_id != request.user.id:
         messages.error(request, "Unauthorized action.")
         return redirect("case_detail", tracking_id=case.tracking_id)
 
@@ -3414,8 +3486,8 @@ def assign_case(request, tracking_id):
 def submit_for_approval(request, tracking_id):
     case = get_object_or_404(Case, tracking_id=tracking_id)
 
-    if request.user.role != "capitol_examiner":
-        messages.error(request, "Only Examiners can submit cases for approval.")
+    if getattr(request.user, "role", "") != "super_admin" and case.assigned_to_id != request.user.id:
+        messages.error(request, "Only the assigned Examiner can submit this case for approval.")
         return redirect("case_detail", tracking_id=case.tracking_id)
 
     if case.status not in {"to_examine", "in_review"} or case.assigned_to_id != request.user.id:

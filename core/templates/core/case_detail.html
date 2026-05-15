@@ -171,6 +171,16 @@
                         <div class="info-item"><span class="info-label">Email Address</span><span class="info-value">{{ case.client_email|default:"—" }}</span></div>
                         <div class="info-item"><span class="info-label">LGU Origin</span><span class="info-value">{{ case.submitted_by.lgu_municipality|default:case.area }}</span></div>
                         <div class="info-item"><span class="info-label">Date Submitted</span><span class="info-value">{{ case.created_at|date:"M d, Y g:i A" }}</span></div>
+                        <div class="info-item">
+                            <span class="info-label">Transaction Number</span>
+                            <span class="info-value">
+                                {% for n in case.numbers.all %}
+                                    {{ n.number }}{% if not forloop.last %}, {% endif %}
+                                {% empty %}
+                                    —
+                                {% endfor %}
+                            </span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -178,26 +188,76 @@
             <div class="panel">
                 <div class="panel-header"><h2 class="panel-title">Documents Checklist</h2></div>
                 <div class="panel-body" style="padding-top: 0; padding-bottom: 0;">
-                    <table class="doc-table">
-                        {% for doc in documents %}
-                        <tr>
-                            <td class="doc-icon"><i class="ri-file-pdf-2-line"></i></td>
-                            <td>
-                                <div class="doc-name">{{ doc.doc_type }}</div>
-                                <div class="doc-meta">Uploaded {{ doc.uploaded_at|date:"M d, Y" }}</div>
-                            </td>
-                            <td style="text-align: right;">
-                                <a href="{% url 'download_case_document' doc.id %}" target="_blank" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">
-                                    Preview <i class="ri-external-link-line"></i>
-                                </a>
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="3" style="text-align: center; padding: 2rem; color: var(--text-muted);">No documents uploaded for this case.</td>
-                        </tr>
-                        {% endfor %}
-                    </table>
+                    {% if show_internal and is_examiner %}
+                        <form method="post" action="{% url 'review_case_documents' case.tracking_id %}">
+                            {% csrf_token %}
+                            <table class="doc-table">
+                                {% for doc in documents %}
+                                <tr>
+                                    <td class="doc-icon"><i class="ri-file-pdf-2-line"></i></td>
+                                    <td>
+                                        <div class="doc-name">{{ doc.doc_type }}</div>
+                                        <div class="doc-meta">Uploaded {{ doc.uploaded_at|date:"M d, Y" }}</div>
+                                        <div class="doc-meta" style="margin-top: 0.5rem;">
+                                            <label style="display:flex; align-items:center; gap:0.5rem;">
+                                                <input type="checkbox" name="reviewed_ok_{{ doc.id }}" value="1" {% if doc.reviewed_ok %}checked{% endif %}>
+                                                Reviewed OK
+                                            </label>
+                                        </div>
+                                        <div class="doc-meta" style="margin-top: 0.5rem;">
+                                            <input
+                                                type="text"
+                                                name="review_remark_{{ doc.id }}"
+                                                value="{{ doc.review_remark|default:'' }}"
+                                                placeholder="Remark (optional)"
+                                                style="width:100%; padding:0.5rem 0.75rem; border:1px solid var(--border); border-radius:8px;"
+                                            >
+                                        </div>
+                                        <input type="hidden" name="doc_id" value="{{ doc.id }}">
+                                    </td>
+                                    <td style="text-align: right;">
+                                        <a href="{% url 'download_case_document' doc.id %}" target="_blank" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">
+                                            Preview <i class="ri-external-link-line"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="3" style="text-align: center; padding: 2rem; color: var(--text-muted);">No documents uploaded for this case.</td>
+                                </tr>
+                                {% endfor %}
+                            </table>
+
+                            {% if documents %}
+                                <div style="padding: 1rem 0;">
+                                    <button class="btn btn-outline" type="submit" style="width:100%;">
+                                        <i class="ri-save-3-line"></i> Save Document Review
+                                    </button>
+                                </div>
+                            {% endif %}
+                        </form>
+                    {% else %}
+                        <table class="doc-table">
+                            {% for doc in documents %}
+                            <tr>
+                                <td class="doc-icon"><i class="ri-file-pdf-2-line"></i></td>
+                                <td>
+                                    <div class="doc-name">{{ doc.doc_type }}</div>
+                                    <div class="doc-meta">Uploaded {{ doc.uploaded_at|date:"M d, Y" }}</div>
+                                </td>
+                                <td style="text-align: right;">
+                                    <a href="{% url 'download_case_document' doc.id %}" target="_blank" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">
+                                        Preview <i class="ri-external-link-line"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="3" style="text-align: center; padding: 2rem; color: var(--text-muted);">No documents uploaded for this case.</td>
+                            </tr>
+                            {% endfor %}
+                        </table>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -206,38 +266,115 @@
         <div class="sidebar-column">
             <div class="sticky-sidebar">
                 
-                <!-- ACTION COMMAND CENTER -->
-<div class="workflow-card">
-    <h3>Workflow Actions</h3>
-    
-    {% if user.role == "capitol_receiving" %}
-        
-        {% if can_assign %}
-            <button class="btn-primary" style="width: 100%;" type="button" onclick="openAssignModal('{{ case.tracking_id }}', '{{ case.client_name|escapejs }}')">
-                <i class="ri-user-add-line"></i> Assign to Examiner
-            </button>
-        {% endif %}
+                <div class="panel">
+                    <div class="panel-header"><h2 class="panel-title">Workflow Actions</h2></div>
+                    <div class="panel-body">
+                        <div style="padding: 0.9rem; background: var(--inactive-bg); border-radius: 8px; color: var(--text-muted); text-align: center; margin-bottom: 1rem;">
+                            <p style="margin: 0; font-weight: 600; color: var(--text-main);">Currently with {{ current_holder_label }}</p>
+                            {% if current_holder_detail %}
+                                <p style="margin: 0.25rem 0 0 0; font-size: 0.85rem;">{{ current_holder_detail }}</p>
+                            {% endif %}
+                        </div>
 
-        {% if can_return %}
-            <div style="margin-top: 1rem;">
-                <button class="btn-outline-danger" style="width: 100%;" type="button" onclick="openReturnModal()">
-                    <i class="ri-arrow-go-back-line"></i> Return to Client for Correction
-                </button>
-            </div>
-        {% endif %}
+                        {% if is_receiver %}
+                            {% if can_assign %}
+                                <button class="btn btn-primary btn-block" type="button" onclick="openAssignModal('{{ case.tracking_id }}', '{{ case.client_name|escapejs }}')">
+                                    <i class="ri-user-add-line"></i> Assign to Examiner
+                                </button>
+                            {% endif %}
 
-        {% if not can_assign and not can_return %}
-            <div style="padding: 1rem; background: var(--inactive-bg); border-radius: 8px; color: var(--text-muted); text-align: center;">
-                <i class="ri-lock-2-line" style="font-size: 1.5rem; display: block; margin-bottom: 0.5rem;"></i>
-                <p style="margin: 0; font-weight: 500;">Currently with {{ current_holder_label }}</p>
-                {% if current_holder_detail %}
-                    <p style="margin: 0; font-size: 0.8rem;">Assigned to {{ current_holder_detail }}</p>
-                {% endif %}
-            </div>
-        {% endif %}
+                            {% if can_return %}
+                                <button class="btn btn-danger btn-block" type="button" onclick="openReturnModal()">
+                                    <i class="ri-arrow-go-back-line"></i> Return to Client for Correction
+                                </button>
+                            {% endif %}
+                        {% endif %}
 
-    {% endif %}
-</div>
+                        {% if is_examiner or request.user.id == case.assigned_to_id %}
+                            <form method="post" action="{% url 'submit_for_approval' case.tracking_id %}" class="btn-block">
+                                {% csrf_token %}
+                                <button
+                                    class="btn btn-primary"
+                                    type="submit"
+                                    {% if not can_submit_for_approval or examiner_docs_blocked %}disabled{% endif %}
+                                    style="{% if not can_submit_for_approval or examiner_docs_blocked %}opacity:0.6; cursor:not-allowed;{% endif %} width:100%;"
+                                >
+                                    <i class="ri-send-plane-2-line"></i> Forward to Approver
+                                </button>
+                            </form>
+
+                            {% if can_return_to_receiving %}
+                                <button class="btn btn-outline btn-block" type="button" onclick="openExaminerReturnModal()">
+                                    <i class="ri-arrow-go-back-line"></i> Return to Receiver
+                                </button>
+                            {% endif %}
+
+                            {% if examiner_forward_reason %}
+                                <div style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-muted); text-align: center;">
+                                    {{ examiner_forward_reason }}
+                                </div>
+                            {% endif %}
+                        {% endif %}
+
+                        {% if is_approver %}
+                            {% if can_assign_taxmapper %}
+                                <button class="btn btn-primary btn-block" type="button" onclick="openTaxmapperAssignModal()">
+                                    <i class="ri-user-add-line"></i> Assign to Tax Mapper
+                                </button>
+                            {% endif %}
+
+                            {% if can_approve %}
+                                <form method="post" action="{% url 'approve_case' case.tracking_id %}" class="btn-block">
+                                    {% csrf_token %}
+                                    <button class="btn btn-primary" type="submit" style="width:100%;">
+                                        <i class="ri-check-line"></i> Approve
+                                    </button>
+                                </form>
+                            {% endif %}
+
+                            {% if can_return_for_correction %}
+                                <button class="btn btn-outline btn-block" type="button" onclick="openApproverReturnModal()">
+                                    <i class="ri-arrow-go-back-line"></i> Return to Examiner
+                                </button>
+                            {% endif %}
+                        {% endif %}
+
+                        {% if is_taxmapper and can_complete_taxmapping %}
+                            <form method="post" action="{% url 'complete_taxmapping' case.tracking_id %}" class="btn-block">
+                                {% csrf_token %}
+                                <button class="btn btn-primary" type="submit" style="width:100%;">
+                                    <i class="ri-check-line"></i> Mark Taxmapped
+                                </button>
+                            </form>
+                        {% endif %}
+
+                        {% if is_numberer and can_number %}
+                            <form method="post" action="{% url 'mark_numbered' case.tracking_id %}" class="btn-block">
+                                {% csrf_token %}
+                                <input
+                                    type="text"
+                                    name="numbers"
+                                    placeholder="Enter number (e.g. 00001)"
+                                    class="form-control"
+                                    style="margin-bottom: 0.5rem;"
+                                    required
+                                >
+                                <button class="btn btn-primary" type="submit" style="width:100%;">
+                                    <i class="ri-hashtag"></i> Submit Number
+                                </button>
+                            </form>
+                        {% endif %}
+
+                        {% if is_releaser and can_release %}
+                            <form method="post" action="{% url 'release_case' case.tracking_id %}" class="btn-block">
+                                {% csrf_token %}
+                                <button class="btn btn-primary" type="submit" style="width:100%;">
+                                    <i class="ri-send-plane-line"></i> Release
+                                </button>
+                            </form>
+                        {% endif %}
+                    </div>
+                </div>
 
                 <!-- UNIFIED REMARKS & TIMELINE -->
                 <div class="panel">
@@ -283,6 +420,10 @@
                                         <p style="margin-top: 0.5rem; font-style: italic; color: var(--text-main); border-left: 2px solid var(--border); padding-left: 0.75rem;">
                                             "{{ log.details.remark }}"
                                         </p>
+                                    {% endif %}
+
+                                    {% if log.details_display and log.details_display != "—" and not log.details.remark %}
+                                        <pre style="margin: 0.5rem 0 0 0; white-space: pre-wrap; font-size: 0.8rem; color: var(--text-muted); border-left: 2px solid var(--border); padding-left: 0.75rem;">{{ log.details_display }}</pre>
                                     {% endif %}
                                 </div>
                             </li>
@@ -356,6 +497,81 @@
     }
     function closeReturnModal() {
         document.getElementById('returnModal').style.display = 'none';
+    }
+</script>
+
+<div id="examinerReturnModal" class="drawer-backdrop" style="display:none; justify-content:center; align-items:center; opacity:1; visibility:visible;">
+    <div class="panel" style="width: 400px; padding: 2rem;">
+        <h3 class="panel-title" style="margin-bottom: 1rem;">Return to Receiver</h3>
+        <form method="post" action="{% url 'return_to_receiving' case.tracking_id %}">
+            {% csrf_token %}
+            <textarea name="reason" class="remarks-input" placeholder="Explain what needs to be fixed..." required></textarea>
+            <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                <button type="button" class="btn btn-outline" style="flex:1" onclick="closeExaminerReturnModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary" style="flex:1;">Confirm</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function openExaminerReturnModal() {
+        document.getElementById('examinerReturnModal').style.display = 'flex';
+    }
+    function closeExaminerReturnModal() {
+        document.getElementById('examinerReturnModal').style.display = 'none';
+    }
+</script>
+
+<div id="approverReturnModal" class="drawer-backdrop" style="display:none; justify-content:center; align-items:center; opacity:1; visibility:visible;">
+    <div class="panel" style="width: 400px; padding: 2rem;">
+        <h3 class="panel-title" style="margin-bottom: 1rem;">Return to Examiner</h3>
+        <form method="post" action="{% url 'return_for_correction' case.tracking_id %}">
+            {% csrf_token %}
+            <textarea name="reason" class="remarks-input" placeholder="Explain what needs to be fixed..." required></textarea>
+            <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                <button type="button" class="btn btn-outline" style="flex:1" onclick="closeApproverReturnModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary" style="flex:1;">Confirm</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function openApproverReturnModal() {
+        document.getElementById('approverReturnModal').style.display = 'flex';
+    }
+    function closeApproverReturnModal() {
+        document.getElementById('approverReturnModal').style.display = 'none';
+    }
+</script>
+
+<div id="taxmapperAssignModal" class="drawer-backdrop" style="display:none; justify-content:center; align-items:center; opacity:1; visibility:visible;">
+    <div class="panel" style="width: 420px; padding: 2rem;">
+        <h3 class="panel-title" style="margin-bottom: 1rem;">Assign to Tax Mapper</h3>
+        <form method="post" action="{% url 'assign_taxmapper' case.tracking_id %}">
+            {% csrf_token %}
+            <label style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.35rem; display:block;">Select Tax Mapper</label>
+            <select name="taxmapper_id" required class="form-control">
+                <option value="" disabled selected>Select from active staff...</option>
+                {% for tm in taxmappers %}
+                    <option value="{{ tm.id }}">{{ tm.full_name|default:tm.email }}</option>
+                {% endfor %}
+            </select>
+            <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                <button type="button" class="btn btn-outline" style="flex:1" onclick="closeTaxmapperAssignModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary" style="flex:1;">Confirm</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function openTaxmapperAssignModal() {
+        document.getElementById('taxmapperAssignModal').style.display = 'flex';
+    }
+    function closeTaxmapperAssignModal() {
+        document.getElementById('taxmapperAssignModal').style.display = 'none';
     }
 </script>
 {% endblock %}

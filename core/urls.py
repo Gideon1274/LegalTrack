@@ -50,9 +50,11 @@ urlpatterns = [
 
     path("case/<str:tracking_id>/assign/", views.assign_case, name="assign_case"),
     path("case/<str:tracking_id>/submit-for-approval/", views.submit_for_approval, name="submit_for_approval"),
+    path("case/<str:tracking_id>/approve/", views.approve_case, name="approve_case"),
     path("case/<str:tracking_id>/assign-taxmapper/", views.assign_taxmapper, name="assign_taxmapper"),
     path("case/<str:tracking_id>/complete-taxmapping/", views.complete_taxmapping, name="complete_taxmapping"),
     path("case/<str:tracking_id>/return-to-receiving/", views.return_to_receiving, name="return_to_receiving"),
+    path("case/<str:tracking_id>/assign-td-number/", views.assign_td_number, name="assign_td_number"),
     path("case/<str:tracking_id>/mark-numbered/", views.mark_numbered, name="mark_numbered"),
     path("case/<str:tracking_id>/release/", views.release_case, name="release_case"),
     path("case/<str:tracking_id>/documents/review/", views.review_case_documents, name="review_case_documents"),
