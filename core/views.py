@@ -14,7 +14,7 @@ from django.contrib.auth.forms import PasswordChangeForm
 from django.conf import settings
 from django import forms
 from django.core.paginator import Paginator
-from django.db import models, transaction
+from django.db import models, transaction, connection
 from django.db.models import Q, Count
 from django.utils import timezone
 from django.utils.dateparse import parse_date
@@ -405,6 +405,16 @@ def landing(request):
     if request.user.is_authenticated:
         return redirect("dashboard")
     return render(request, "core/landing.html")
+
+
+def healthz(request):
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("select 1")
+            row = cursor.fetchone()
+        return HttpResponse("ok" if (row and row[0] == 1) else "db_error", content_type="text/plain")
+    except Exception as e:
+        return HttpResponse(f"error: {type(e).__name__}: {e}", status=500, content_type="text/plain")
 
 
 def _public_status_label(case: Case) -> str:
@@ -1085,10 +1095,96 @@ def dashboard(request):
         "role_display": user.get_role_display(),
     }
 
+<<<<<<< HEAD
     # ==========================================
     # COMMON CAPITOL STAFF LOGIC
     # ==========================================
     if user.role.startswith("capitol_"):
+=======
+    if user.role == "super_admin":
+        total_users = CustomUser.objects.exclude(id=user.id).count()
+        total_cases = Case.objects.exclude(status="draft").count()
+        pending_intake = Case.objects.filter(status="not_received").count()
+        for_approval = Case.objects.filter(status="for_approval").count()
+        released = Case.objects.filter(status="released").count()
+        context.update({
+            "section": "super_admin",
+            "total_users": total_users,
+            "stat_cards": [
+                {"value": total_users, "label": "Total Staff Accounts"},
+                {"value": total_cases, "label": "Total Transactions"},
+                {"value": pending_intake, "label": "Pending Intake"},
+                {"value": for_approval, "label": "For Approval"},
+                {"value": released, "label": "Released"},
+            ],
+        })
+        template = "core/dashboard_superadmin.html"
+
+    elif user.role == "lgu_admin":
+        tab = (request.GET.get("tab") or "").strip().lower() or "all"
+        q = (request.GET.get("q") or "").strip()
+
+        mun = (getattr(user, "lgu_municipality", "") or "").strip()
+        base_qs = Case.objects.filter(lgu_submitted_at__isnull=False).select_related("submitted_by").order_by("-created_at")
+        if mun:
+            base_qs = base_qs.filter(submitted_by__lgu_municipality=mun)
+        else:
+            base_qs = base_qs.filter(submitted_by=user)
+
+        base_qs = base_qs.exclude(status="client_correction", client_correction_deadline__lt=timezone.now())
+
+        tab_map = {
+            "all": None,
+            "pending": {"not_received", "client_correction"},
+            "received": {"received", "in_review", "for_taxmapping", "for_approval", "for_numbering", "for_release", "released"},
+        }
+        statuses = tab_map.get(tab)
+        qs = base_qs
+        if statuses:
+            qs = qs.filter(status__in=statuses)
+
+        if q:
+            qs = qs.filter(
+                Q(tracking_id__icontains=q) |
+                Q(client_name__icontains=q) |
+                Q(client_email__icontains=q) |
+                Q(submitted_by__lgu_municipality__icontains=q) |
+                Q(case_type__icontains=q)
+            )
+
+        # Counts for tab badges (computed on the municipality-wide base set)
+        all_count = base_qs.count()
+        pending_count = base_qs.filter(status__in=tab_map["pending"]).count()
+        received_count = base_qs.filter(status__in=tab_map["received"]).count()
+        released_count = base_qs.filter(status="released").count()
+        correction_count = base_qs.filter(status="client_correction").count()
+
+        paginator = Paginator(qs, 10)
+        page_obj = paginator.get_page(request.GET.get("page") or 1)
+
+        raw = list(base_qs.values("status").annotate(count=Count("id")).order_by("status"))
+        status_labels = dict(Case.STATUS_CHOICES)
+        status_counts = [{"status": status_labels.get(r["status"], r["status"]), "count": r["count"]} for r in raw]
+
+        context.update({
+            "section": "lgu_admin",
+            "tab": tab,
+            "tabs": [("all", "All", all_count), ("pending", "Pending", pending_count), ("received", "Received", received_count)],
+            "page_obj": page_obj,
+            "status_counts": status_counts,
+            "filter_q": q,
+            "stat_cards": [
+                {"value": all_count, "label": "Total Submissions"},
+                {"value": pending_count, "label": "Pending"},
+                {"value": received_count, "label": "In Process"},
+                {"value": released_count, "label": "Released"},
+                {"value": correction_count, "label": "For Correction"},
+            ],
+        })
+        template = "core/dashboard_lgu.html"
+
+    else:  # Capitol roles
+>>>>>>> upstream/master
         activity_raw = list(
             AuditLog.objects.filter(actor=user, action__startswith="case_")
             .values("action")
@@ -1200,6 +1296,7 @@ def dashboard(request):
         paginator = Paginator(qs, 10)
         page_obj = paginator.get_page(request.GET.get("page") or 1)
 
+<<<<<<< HEAD
         raw = list(base_qs.values("status").annotate(count=Count("id")).order_by("status"))
         status_labels = dict(Case.STATUS_CHOICES)
         status_counts = [{"status": status_labels.get(r["status"], r["status"]), "count": r["count"]} for r in raw]
@@ -1313,6 +1410,171 @@ def dashboard(request):
             active_qs = active_qs.filter(case_type=case_type_filter)
         if lgu_filter:
             active_qs = active_qs.filter(submitted_by__lgu_municipality=lgu_filter)
+=======
+            context.update({
+                "tab": tab,
+                "tabs": [("pending", "Pending", pending_count), ("received", "Received", received_count)],
+                "page_obj": page_obj,
+                "filter_q": q,
+                "filter_status": status_filter,
+                "filter_lgu": lgu_filter,
+                "filter_case_type": type_filter,
+                "lgu_choices": CustomUser.LGU_MUNICIPALITY_CHOICES,
+                "case_type_choices": Case.CASE_TYPE_CHOICES,
+                "receiver_stats": {
+                    "received_today": stats_received_today,
+                    "pending_intake": stats_pending_intake,
+                    "for_assignment": stats_for_assignment,
+                    "returned_to_owner": stats_returned_to_owner,
+                    "total_handled": stats_total_handled,
+                },
+                "stat_cards": [
+                    {"value": stats_received_today, "label": "Received Today"},
+                    {"value": stats_pending_intake, "label": "Pending Intake"},
+                    {"value": stats_for_assignment, "label": "For Assignment"},
+                    {"value": stats_returned_to_owner, "label": "Returned to Owner"},
+                    {"value": stats_total_handled, "label": "Total Transactions Handled"},
+                ],
+                "ready_for_assignment": ready_for_assignment,
+                "returned_to_me": returned_to_me,
+                "recent_activity": recent_activity,
+            })
+
+        elif user.role == "capitol_examiner":
+            q = (request.GET.get("q") or "").strip()
+            lgu_filter = (request.GET.get("lgu") or "").strip()
+            type_filter = (request.GET.get("case_type") or "").strip()
+            status_filter = (request.GET.get("status") or "").strip()
+
+            base_all = Case.objects.filter(assigned_to=user).exclude(status="draft")
+            qs = base_all.select_related("submitted_by").order_by("-assigned_at", "-updated_at")
+
+            if q:
+                qs = qs.filter(
+                    Q(tracking_id__icontains=q) |
+                    Q(client_name__icontains=q) |
+                    Q(client_email__icontains=q) |
+                    Q(submitted_by__lgu_municipality__icontains=q) |
+                    Q(case_type__icontains=q)
+                )
+            if lgu_filter:
+                qs = qs.filter(submitted_by__lgu_municipality=lgu_filter)
+            if type_filter:
+                qs = qs.filter(case_type=type_filter)
+            if status_filter:
+                qs = qs.filter(status=status_filter)
+
+            paginator = Paginator(qs, 10)
+            page_obj = paginator.get_page(request.GET.get("page") or 1)
+
+            today = timezone.localdate()
+            reviewed_today = AuditLog.objects.filter(actor=user, action="case_document_review", created_at__date=today).count()
+
+            context.update({
+                "page_obj": page_obj,
+                "filter_q": q,
+                "filter_status": status_filter,
+                "filter_lgu": lgu_filter,
+                "filter_case_type": type_filter,
+                "lgu_choices": CustomUser.LGU_MUNICIPALITY_CHOICES,
+                "case_type_choices": Case.CASE_TYPE_CHOICES,
+                "status_choices": Case.STATUS_CHOICES,
+                "stat_cards": [
+                    {"value": base_all.count(), "label": "Assigned to Me"},
+                    {"value": base_all.filter(status="in_review").count(), "label": "In Review"},
+                    {"value": base_all.filter(status="for_taxmapping").count(), "label": "For Taxmapping"},
+                    {"value": base_all.filter(status="for_approval").count(), "label": "For Approval"},
+                    {"value": reviewed_today, "label": "Docs Reviewed Today"},
+                ],
+            })
+
+        elif user.role == "capitol_approver":
+            q = (request.GET.get("q") or "").strip()
+            lgu_filter = (request.GET.get("lgu") or "").strip()
+            type_filter = (request.GET.get("case_type") or "").strip()
+
+            base_all = Case.objects.filter(status="for_approval")
+            qs = base_all.select_related("submitted_by").order_by("-updated_at")
+
+            if q:
+                qs = qs.filter(
+                    Q(tracking_id__icontains=q) |
+                    Q(client_name__icontains=q) |
+                    Q(client_email__icontains=q) |
+                    Q(submitted_by__lgu_municipality__icontains=q) |
+                    Q(case_type__icontains=q)
+                )
+            if lgu_filter:
+                qs = qs.filter(submitted_by__lgu_municipality=lgu_filter)
+            if type_filter:
+                qs = qs.filter(case_type=type_filter)
+
+            paginator = Paginator(qs, 10)
+            page_obj = paginator.get_page(request.GET.get("page") or 1)
+
+            today = timezone.localdate()
+            approved_today = AuditLog.objects.filter(actor=user, action="case_approval", created_at__date=today).count()
+            rejected_today = AuditLog.objects.filter(actor=user, action="case_rejection", created_at__date=today).count()
+
+            context.update({
+                "page_obj": page_obj,
+                "filter_q": q,
+                "filter_lgu": lgu_filter,
+                "filter_case_type": type_filter,
+                "lgu_choices": CustomUser.LGU_MUNICIPALITY_CHOICES,
+                "case_type_choices": Case.CASE_TYPE_CHOICES,
+                "stat_cards": [
+                    {"value": base_all.count(), "label": "For Approval"},
+                    {"value": approved_today, "label": "Approved Today"},
+                    {"value": rejected_today, "label": "Rejected Today"},
+                    {"value": Case.objects.filter(status="for_release").count(), "label": "For Release"},
+                    {"value": context.get("activity_total", 0), "label": "My Total Actions"},
+                ],
+            })
+
+        elif user.role == "capitol_taxmapper":
+            q = (request.GET.get("q") or "").strip()
+            lgu_filter = (request.GET.get("lgu") or "").strip()
+            type_filter = (request.GET.get("case_type") or "").strip()
+
+            base_all = Case.objects.filter(status="for_taxmapping", taxmapper_assigned_to=user)
+            qs = base_all.select_related("submitted_by").order_by("-updated_at")
+
+            if q:
+                qs = qs.filter(
+                    Q(tracking_id__icontains=q) |
+                    Q(client_name__icontains=q) |
+                    Q(client_email__icontains=q) |
+                    Q(submitted_by__lgu_municipality__icontains=q) |
+                    Q(case_type__icontains=q)
+                )
+            if lgu_filter:
+                qs = qs.filter(submitted_by__lgu_municipality=lgu_filter)
+            if type_filter:
+                qs = qs.filter(case_type=type_filter)
+
+            paginator = Paginator(qs, 10)
+            page_obj = paginator.get_page(request.GET.get("page") or 1)
+
+            today = timezone.localdate()
+            status_changed_today = AuditLog.objects.filter(actor=user, action="case_status_change", created_at__date=today).count()
+
+            context.update({
+                "page_obj": page_obj,
+                "filter_q": q,
+                "filter_lgu": lgu_filter,
+                "filter_case_type": type_filter,
+                "lgu_choices": CustomUser.LGU_MUNICIPALITY_CHOICES,
+                "case_type_choices": Case.CASE_TYPE_CHOICES,
+                "stat_cards": [
+                    {"value": base_all.count(), "label": "My Taxmapping Queue"},
+                    {"value": status_changed_today, "label": "Status Updates Today"},
+                    {"value": Case.objects.filter(status="for_approval").count(), "label": "For Approval"},
+                    {"value": Case.objects.filter(status="client_correction").count(), "label": "For Correction"},
+                    {"value": context.get("activity_total", 0), "label": "My Total Actions"},
+                ],
+            })
+>>>>>>> upstream/master
 
         paginator = Paginator(active_qs, 5)
         page_obj = paginator.get_page(request.GET.get("page") or 1)
@@ -1346,6 +1608,7 @@ def dashboard(request):
         stats_total_signed = AuditLog.objects.filter(actor=user, action="case_approval").count()
         stats_cases_denied = AuditLog.objects.filter(actor=user, action="case_status_change", details__new_status="in_review").count()
 
+<<<<<<< HEAD
         qs = Case.objects.filter(status="for_approval").select_related("assigned_to", "submitted_by").order_by("updated_at")
         paginator = Paginator(qs, 10)
         page_obj = paginator.get_page(request.GET.get("page") or 1)
@@ -1357,6 +1620,71 @@ def dashboard(request):
         if approved_tracking_ids:
             cases_dict = {c.tracking_id: c for c in Case.objects.filter(tracking_id__in=approved_tracking_ids)}
             approved_today_cases = [cases_dict[tid] for tid in approved_tracking_ids if tid in cases_dict]
+=======
+            context.update({
+                "queue_cases": queue_cases[:50],
+                "numberer_lgu_choices": CustomUser.LGU_MUNICIPALITY_CHOICES,
+                "filter_lgu": lgu,
+                "filter_date_from": date_from_raw,
+                "filter_date_to": date_to_raw,
+                "filter_number": number_q,
+                "last_used_number": last_used,
+                "suggested_next_number": suggested_next_str,
+                "stat_cards": [
+                    {"value": Case.objects.filter(status="for_numbering").count(), "label": "For Numbering"},
+                    {"value": last_used or "—", "label": "Last Used Number"},
+                    {"value": suggested_next_str, "label": "Suggested Next"},
+                    {"value": Case.objects.filter(status="for_release").count(), "label": "For Release"},
+                    {"value": context.get("activity_total", 0), "label": "My Total Actions"},
+                ],
+            })
+
+        elif user.role == "capitol_releaser":
+            q = (request.GET.get("q") or "").strip()
+            lgu_filter = (request.GET.get("lgu") or "").strip()
+            type_filter = (request.GET.get("case_type") or "").strip()
+
+            base_all = Case.objects.filter(status="for_release")
+            qs = base_all.select_related("submitted_by").order_by("-updated_at")
+
+            if q:
+                qs = qs.filter(
+                    Q(tracking_id__icontains=q) |
+                    Q(client_name__icontains=q) |
+                    Q(client_email__icontains=q) |
+                    Q(submitted_by__lgu_municipality__icontains=q) |
+                    Q(case_type__icontains=q)
+                )
+            if lgu_filter:
+                qs = qs.filter(submitted_by__lgu_municipality=lgu_filter)
+            if type_filter:
+                qs = qs.filter(case_type=type_filter)
+
+            paginator = Paginator(qs, 10)
+            page_obj = paginator.get_page(request.GET.get("page") or 1)
+
+            today = timezone.localdate()
+            released_today = AuditLog.objects.filter(actor=user, action="case_release", created_at__date=today).count()
+            released_total = AuditLog.objects.filter(actor=user, action="case_release").count()
+            since = timezone.now() - timedelta(days=7)
+            released_week = AuditLog.objects.filter(actor=user, action="case_release", created_at__gte=since).count()
+
+            context.update({
+                "page_obj": page_obj,
+                "filter_q": q,
+                "filter_lgu": lgu_filter,
+                "filter_case_type": type_filter,
+                "lgu_choices": CustomUser.LGU_MUNICIPALITY_CHOICES,
+                "case_type_choices": Case.CASE_TYPE_CHOICES,
+                "stat_cards": [
+                    {"value": base_all.count(), "label": "For Release"},
+                    {"value": released_today, "label": "Released Today"},
+                    {"value": released_week, "label": "Released (7 days)"},
+                    {"value": released_total, "label": "Total Released"},
+                    {"value": context.get("activity_total", 0), "label": "My Total Actions"},
+                ],
+            })
+>>>>>>> upstream/master
 
         staff_activity = AuditLog.objects.filter(
             action__in=["case_status_change", "case_receipt", "case_assignment"]

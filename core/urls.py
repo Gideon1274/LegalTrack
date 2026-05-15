@@ -4,10 +4,6 @@ from . import views
 
 urlpatterns = [
     path("", views.landing, name="landing"),
-    path("settings/", views.system_settings, name="settings"),
-
-    path("case/<str:tracking_id>/approve/", views.approve_case, name="approve_case"),
-
     # Module 4 (Public)
     path("track/", views.track_case, name="track_case"),
     path("track/<str:tracking_id>/", views.track_case_detail, name="track_case_detail"),

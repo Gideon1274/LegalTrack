@@ -147,6 +147,7 @@
         </div>
     </div>
 
+<<<<<<< HEAD
     <!-- 4-CARD KPI GRID -->
     <div class="kpi-grid">
         <div class="kpi-card">
@@ -184,6 +185,38 @@
             </div>
             {% endif %}
         {% endfor %}
+=======
+{% if stat_cards %}
+    <div class="statgrid" aria-label="Summary">
+        {% for s in stat_cards %}
+            <div class="statcard">
+                <div class="staticon" aria-hidden="true"></div>
+                <div>
+                    <p class="statnum">{{ s.value }}</p>
+                    <p class="statlabel">{{ s.label }}</p>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+{% endif %}
+
+<div class="filters">
+    <form method="get" class="searchbar m-0">
+        <input type="hidden" name="tab" value="{{ tab }}" />
+        <div class="grow">
+            <label for="id_q">Search</label>
+            <input id="id_q" name="q" value="{{ filter_q }}" placeholder="Search by Transaction No., Owner Name, LGU Origin, or Transaction Type" />
+        </div>
+        <div>
+            <button class="btn btn-primary" type="submit">Apply</button>
+        </div>
+    </form>
+</div>
+
+<div class="card card--flat card-elevated">
+    <div class="card__header">
+        <strong>Your Submissions (Status Breakdown)</strong>
+>>>>>>> upstream/master
     </div>
 
     <!-- MAIN SPLIT VIEW: Table & Activity -->
@@ -252,23 +285,93 @@
                     </div>
                 {% endif %}
             </div>
+<<<<<<< HEAD
+=======
+        {% else %}
+            <p class="muted" style="margin:0;">No submissions yet.</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card card--flat card-elevated">
+    <div class="card__header">
+        <strong>Municipality Submissions</strong>
+        <span class="muted">Showing 10 per page</span>
+    </div>
+
+    <div class="card__body card__body--flush">
+        <div class="card__body" style="padding:14px 16px;">
+            <div class="subtabs" aria-label="LGU dashboard tabs">
+                {% for key,label,count in tabs %}
+                    <a href="?tab={{ key }}{% if filter_q %}&q={{ filter_q|urlencode }}{% endif %}"><span class="{% if tab == key %}active{% endif %}">{{ label }} ({{ count }})</span></a>
+                {% endfor %}
+            </div>
+        </div>
+
+        {% if page_obj and page_obj.object_list %}
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th style="width:22%">Tracking No.</th>
+                        <th style="width:10%">LGU Code</th>
+                        <th>Owner</th>
+                        <th style="width:18%">Submitted by</th>
+                        <th style="width:18%">Status</th>
+                        <th style="width:18%">Created</th>
+                        <th style="width:16%">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for case in page_obj.object_list %}
+                        <tr>
+                            <td><strong><a href="{% url 'case_detail' case.tracking_id %}">{{ case.tracking_id }}</a></strong></td>
+                            <td class="muted">{{ case.lgu_area_code|default:"—" }}</td>
+                            <td>{{ case.client_display_name }}</td>
+                            <td class="muted">{{ case.submitted_by.full_name|default:case.submitted_by.email|default:"—" }}</td>
+                            <td class="muted">{{ case.get_status_display }}</td>
+                            <td class="muted">{{ case.created_at|date:"M d, Y H:i" }}</td>
+                            <td>
+                                <a class="btn btn-secondary btn-sm" href="{% url 'case_detail' case.tracking_id %}">View</a>
+                                {% if case.status == 'not_received' or case.status == 'returned' or case.status == 'client_correction' %}
+                                    <a class="btn btn-secondary btn-sm" href="{% url 'case_wizard' case.tracking_id 1 %}">Edit</a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+>>>>>>> upstream/master
 
             {% if page_obj.has_other_pages %}
                 <div class="pagination-container">
                     {% if page_obj.has_previous %}
+<<<<<<< HEAD
                         <a href="?tab={{ tab }}&page={{ page_obj.previous_page_number }}" class="page-btn"><i class="ri-arrow-left-s-line"></i></a>
+=======
+                        <a class="pagepill" href="?tab={{ tab }}{% if filter_q %}&q={{ filter_q|urlencode }}{% endif %}&page={{ page_obj.previous_page_number }}">Prev</a>
+>>>>>>> upstream/master
                     {% endif %}
                     
                     {% for n in page_obj.paginator.page_range %}
                         {% if n == page_obj.number %}
+<<<<<<< HEAD
                             <span class="page-btn active">{{ n }}</span>
                         {% elif n <= 5 %}
                             <a href="?tab={{ tab }}&page={{ n }}" class="page-btn">{{ n }}</a>
+=======
+                            <span class="pagepill active">{{ n }}</span>
+                        {% elif n <= 10 %}
+                            <a class="pagepill" href="?tab={{ tab }}{% if filter_q %}&q={{ filter_q|urlencode }}{% endif %}&page={{ n }}">{{ n }}</a>
+>>>>>>> upstream/master
                         {% endif %}
                     {% endfor %}
                     
                     {% if page_obj.has_next %}
+<<<<<<< HEAD
                         <a href="?tab={{ tab }}&page={{ page_obj.next_page_number }}" class="page-btn"><i class="ri-arrow-right-s-line"></i></a>
+=======
+                        <a class="pagepill" href="?tab={{ tab }}{% if filter_q %}&q={{ filter_q|urlencode }}{% endif %}&page={{ page_obj.next_page_number }}">Next</a>
+>>>>>>> upstream/master
                     {% endif %}
                 </div>
             {% endif %}

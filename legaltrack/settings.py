@@ -167,9 +167,14 @@ INSTALLED_APPS = [
     # 'password_reset',
 ]
 
+SESSION_ENGINE = (_env("DJANGO_SESSION_ENGINE") or "").strip() or (
+    "django.contrib.sessions.backends.signed_cookies" if not DEBUG else "django.contrib.sessions.backends.db"
+)
+
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     'whitenoise.middleware.WhiteNoiseMiddleware',
+    "core.middleware.ExceptionLoggingMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -229,6 +234,32 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "legaltrack.wsgi.application"
 
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": "INFO",
+    },
+    "loggers": {
+        "django.request": {
+            "handlers": ["console"],
+            "level": "ERROR",
+            "propagate": False,
+        },
+        "django.security": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+    },
+}
+
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
@@ -260,8 +291,12 @@ def _database_from_url(database_url: str) -> dict[str, object]:
 
     query = dict(parse_qsl(parsed.query, keep_blank_values=True))
     options = {}
-    if "sslmode" in query:
+    # Supabase-managed Postgres requires SSL. If sslmode isn't specified,
+    # default to "require" in non-debug environments to avoid runtime 500s.
+    if "sslmode" in query and query.get("sslmode") is not None:
         options["sslmode"] = query["sslmode"]
+    elif not DEBUG:
+        options["sslmode"] = "require"
 
     config: dict[str, object] = {
         "ENGINE": engine,
