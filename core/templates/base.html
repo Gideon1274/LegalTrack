@@ -390,7 +390,7 @@
             {% endif %}
 
             <main class="container {% block container_class %}{% endblock %}">
-                {% if messages %}
+                {% if user.is_authenticated and messages %}
                     {% for msg in messages %}
                         <div class="msg {{ msg.tags|default:'info' }}">{{ msg }}</div>
                     {% endfor %}

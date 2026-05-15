@@ -91,8 +91,8 @@
         .status-received { background: #e0f2fe; color: #0369a1; border-color: #bae6fd; }
         .status-received::before { background-color: #0369a1; }
 
-        .status-to_examine, .status-for_review, .status-in_review, .status-under_review { background: #e0e7ff; color: #4338ca; border-color: #c7d2fe; }
-        .status-to_examine::before, .status-for_review::before, .status-in_review::before, .status-under_review::before { background-color: #4338ca; }
+        .status-to_examine, .status-in_review { background: #e0e7ff; color: #4338ca; border-color: #c7d2fe; }
+        .status-to_examine::before, .status-in_review::before { background-color: #4338ca; }
 
         .status-for_taxmapping { background: #ffedd5; color: #c2410c; border-color: #fed7aa; }
         .status-for_taxmapping::before { background-color: #c2410c; }
@@ -195,7 +195,7 @@
                             </td>
                             <td style="text-align: right;">
                                 <a href="{% url 'case_detail' case.tracking_id %}" class="action-btn" title="View Details"><i class="ri-eye-line"></i></a>
-                                {% if case.status == 'not_received' or case.status == 'pending' or case.status == 'returned' or case.status == 'client_correction' %}
+                                {% if case.status == 'draft' and not case.lgu_submitted_at %}
                                     <a href="{% url 'case_wizard' case.tracking_id 1 %}" class="action-btn" title="Edit Data" style="color: var(--primary);"><i class="ri-pencil-line"></i></a>
                                 {% endif %}
                             </td>

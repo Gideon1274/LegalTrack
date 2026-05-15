@@ -30,7 +30,7 @@
         font-size: 0.9rem;
         outline: none;
         transition: var(--transition);
-        background: white;
+        background: var(--bg-surface);
         color: var(--text-main);
     }
     input:focus, select:focus, textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
@@ -51,18 +51,19 @@
     .btn-outline {
         display: inline-flex; align-items: center; gap: 0.5rem;
         padding: 0.65rem 1.1rem; border: 1px solid var(--border); border-radius: var(--radius-md);
-        background: white; color: var(--text-main); font-size: 0.875rem; font-weight: 600;
+        background: var(--bg-surface); color: var(--text-main); font-size: 0.875rem; font-weight: 600;
         cursor: pointer; transition: 0.2s; text-decoration: none;
     }
     .btn-outline:hover { background: var(--inactive-bg); border-color: var(--border-hover); }
 
-    .msg { border: 1px solid var(--border); background: white; border-radius: var(--radius-md); padding: 0.75rem 0.9rem; margin-bottom: 1rem; font-size: 0.875rem; }
+    .msg { border: 1px solid var(--border); background: var(--bg-surface); border-radius: var(--radius-md); padding: 0.75rem 0.9rem; margin-bottom: 1rem; font-size: 0.875rem; }
     .msg.success { border-color: #bbf7d0; background: #f0fdf4; color: #166534; }
     .msg.error { border-color: #fecaca; background: #fef2f2; color: #991b1b; }
 
     .avatar-row { display:flex; align-items:center; gap: 1rem; }
-    .avatar { width: 64px; height: 64px; border-radius: 999px; border: 1px solid var(--border); overflow: hidden; background: var(--inactive-bg); flex: 0 0 auto; }
+    .avatar { width: 64px; height: 64px; border-radius: 999px; border: 1px solid var(--border); overflow: hidden; background: var(--inactive-bg); flex: 0 0 auto; display:flex; align-items:center; justify-content:center; }
     .avatar img { width: 100%; height: 100%; object-fit: cover; display:block; }
+    .avatar-fallback { width: 100%; height: 100%; display:flex; align-items:center; justify-content:center; font-weight: 800; color: var(--primary); background: var(--primary-light); letter-spacing: 0.05em; }
     .avatar-meta { display:flex; flex-direction: column; gap: 0.35rem; min-width: 0; }
     .avatar-hint { font-size: 0.75rem; color: var(--text-muted); }
 </style>
@@ -113,7 +114,13 @@
                 <label>Photo</label>
                 <div class="avatar-row">
                     <div class="avatar">
-                        <img src="{% if user.photo %}{{ user.photo.url }}{% else %}https://ui-avatars.com/api/?name={{ user.first_name }}+{{ user.last_name }}&background=1e3a8a&color=fff{% endif %}" alt="Avatar">
+                            {% if user.photo %}
+                                <img src="{{ user.photo.url }}" alt="Avatar">
+                            {% else %}
+                                <div class="avatar-fallback">
+                                    {{ user.first_name|slice:":1"|upper|default:"U" }}{{ user.last_name|slice:":1"|upper|default:"" }}
+                                </div>
+                            {% endif %}
                     </div>
                     <div class="avatar-meta">
                         <button class="btn-outline" type="button" id="change-photo-btn"><i class="ri-upload-cloud-2-line"></i> Change Photo</button>

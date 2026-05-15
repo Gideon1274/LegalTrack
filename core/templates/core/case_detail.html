@@ -70,7 +70,7 @@
         padding: 0.3rem 0.8rem; border-radius: 99px; font-size: 0.75rem; font-weight: 700; text-transform: capitalize;
         border: 1px solid transparent; background: var(--inactive-bg); color: var(--text-muted);
     }
-    .status-in_review, .status-for_review { background: #e0f2fe; color: #0369a1; border-color: #bae6fd; }
+    .status-to_examine, .status-in_review { background: #e0f2fe; color: #0369a1; border-color: #bae6fd; }
     .status-for_approval { background: #f3e8ff; color: #6b21a8; border-color: #e9d5ff; }
     .status-client_correction { background: #fee2e2; color: #dc2626; border-color: #fecaca; }
 
@@ -212,27 +212,27 @@
     
     {% if user.role == "capitol_receiving" %}
         
-        {% if case.assigned_to and not case.returned_by %}
-            <div style="padding: 1rem; background: var(--inactive-bg); border-radius: 8px; color: var(--text-muted); text-align: center;">
-                <i class="ri-lock-2-line" style="font-size: 1.5rem; display: block; margin-bottom: 0.5rem;"></i>
-                <p style="margin: 0; font-weight: 500;">Currently with Examiner</p>
-                <p style="margin: 0; font-size: 0.8rem;">Assigned to {{ case.assigned_to.get_full_name }}</p>
-            </div>
-            
-        {% elif case.status == "received" and not case.assigned_to %}
-            <button class="btn-primary" style="width: 100%;" onclick="openAssignModal('{{ case.tracking_id }}', '{{ case.client_name|escapejs }}')">
+        {% if can_assign %}
+            <button class="btn-primary" style="width: 100%;" type="button" onclick="openAssignModal('{{ case.tracking_id }}', '{{ case.client_name|escapejs }}')">
                 <i class="ri-user-add-line"></i> Assign to Examiner
             </button>
         {% endif %}
 
-        {% if case.returned_by %}
-            <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
-                <p style="font-size: 0.8rem; color: #b45309; font-weight: 600; margin-bottom: 0.5rem;">
-                    <i class="ri-error-warning-line"></i> Returned by {{ case.returned_by.first_name }}
-                </p>
-                <button class="btn-outline-danger" style="width: 100%;" onclick="openReturnModal()">
-                    <i class="ri-arrow-go-back-line"></i> Return to LGU for Correction
+        {% if can_return %}
+            <div style="margin-top: 1rem;">
+                <button class="btn-outline-danger" style="width: 100%;" type="button" onclick="openReturnModal()">
+                    <i class="ri-arrow-go-back-line"></i> Return to Client for Correction
                 </button>
+            </div>
+        {% endif %}
+
+        {% if not can_assign and not can_return %}
+            <div style="padding: 1rem; background: var(--inactive-bg); border-radius: 8px; color: var(--text-muted); text-align: center;">
+                <i class="ri-lock-2-line" style="font-size: 1.5rem; display: block; margin-bottom: 0.5rem;"></i>
+                <p style="margin: 0; font-weight: 500;">Currently with {{ current_holder_label }}</p>
+                {% if current_holder_detail %}
+                    <p style="margin: 0; font-size: 0.8rem;">Assigned to {{ current_holder_detail }}</p>
+                {% endif %}
             </div>
         {% endif %}
 
@@ -298,11 +298,48 @@
     </div>
 </div>
 
-<!-- Return Modal -->
+<!-- Assign Modal (Receiver) -->
+<div id="assignModal" class="drawer-backdrop" style="display:none; justify-content:center; align-items:center; opacity:1; visibility:visible;">
+    <div class="panel" style="width: 420px; padding: 2rem;">
+        <h3 class="panel-title" style="margin-bottom: 1rem;">Assign to Examiner</h3>
+        <form id="assignForm" method="post" action="">
+            {% csrf_token %}
+            <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+                Target: <strong id="modalClientName" style="color: var(--text-main);"></strong>
+                <span style="margin-left: 0.5rem; color: var(--text-light);" id="modalTrackingId"></span>
+            </div>
+            <label style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.35rem; display:block;">Select Examiner</label>
+            <select name="assigned_to" required class="form-control">
+                <option value="" disabled selected>Select from active staff...</option>
+                {% for ex in examiners %}
+                    <option value="{{ ex.id }}">{{ ex.full_name|default:ex.email }}</option>
+                {% endfor %}
+            </select>
+            <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                <button type="button" class="btn btn-outline" style="flex:1" onclick="closeAssignModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary" style="flex:1;">Confirm</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function openAssignModal(tid, client) {
+        document.getElementById('modalTrackingId').innerText = tid;
+        document.getElementById('modalClientName').innerText = client || '—';
+        document.getElementById('assignForm').action = "{% url 'assign_case' 'TRACKING_ID' %}".replace("TRACKING_ID", tid);
+        document.getElementById('assignModal').style.display = 'flex';
+    }
+    function closeAssignModal() {
+        document.getElementById('assignModal').style.display = 'none';
+    }
+</script>
+
+<!-- Return Modal (Receiver -> Client Correction) -->
 <div id="returnModal" class="drawer-backdrop" style="display:none; justify-content:center; align-items:center; opacity:1; visibility:visible;">
     <div class="panel" style="width: 400px; padding: 2rem;">
         <h3 class="panel-title" style="margin-bottom: 1rem;">Reason for Correction</h3>
-        <form method="post" action="{% url 'return_for_correction' case.tracking_id %}">
+        <form method="post" action="{% url 'return_case' case.tracking_id %}">
             {% csrf_token %}
             <textarea name="reason" class="remarks-input" placeholder="Explain what needs to be fixed..." required></textarea>
             <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">

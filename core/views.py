@@ -413,9 +413,8 @@ def _public_status_label(case: Case) -> str:
     mapping = {
         "not_received": "Submitted",
         "received": "Received",
-        "to_examine": "Received",
-        "in_review": "In Review",
-        "for_review": "For Review",
+        "to_examine": "Under Examination",
+        "in_review": "Under Examination",
         "for_taxmapping": "In Review",
         "for_approval": "For Approval",
         "approved": "For Approval",
@@ -829,9 +828,9 @@ def _user_is_current_owner_for_internal_sections(user: CustomUser, case: Case) -
     if role == "super_admin":
         return True
     if role == "capitol_receiving":
-        return getattr(case, "status", "") in {"not_received", "received"} and getattr(case, "assigned_to_id", None) is None
+        return getattr(case, "status", "") in {"not_received", "received", "client_correction"} and getattr(case, "assigned_to_id", None) is None
     if role == "capitol_examiner":
-        return getattr(case, "status", "") in {"to_examine", "in_review", "for_review", "under_review"} and getattr(case, "assigned_to_id", None) == getattr(user, "id", None)
+        return getattr(case, "status", "") in {"to_examine", "in_review"} and getattr(case, "assigned_to_id", None) == getattr(user, "id", None)
     if role == "capitol_approver":
         return getattr(case, "status", "") == "for_approval"
     if role == "capitol_taxmapper":
@@ -839,7 +838,7 @@ def _user_is_current_owner_for_internal_sections(user: CustomUser, case: Case) -
     if role == "capitol_numberer":
         return getattr(case, "status", "") == "for_numbering"
     if role == "capitol_releaser":
-        return getattr(case, "status", "") == "for_release"
+        return getattr(case, "status", "") in {"for_release", "released"}
     return False
 
 @xframe_options_sameorigin
@@ -1295,13 +1294,13 @@ def dashboard(request):
         
         # KPIs
         stats_assigned_today = base_qs.filter(assigned_at__date=today).count()
-        stats_pending_intake = base_qs.filter(status__in=["to_examine", "for_review"]).count()
-        stats_under_review = base_qs.filter(status__in=["in_review", "under_review"]).count()
+        stats_pending_intake = base_qs.filter(status="to_examine").count()
+        stats_under_review = base_qs.filter(status="in_review").count()
         stats_returned = base_qs.filter(status="client_correction").count()
         stats_total_handled = AuditLog.objects.filter(actor=user, action="case_status_change", details__new_status="for_approval").count()
 
         # Main Table Queue
-        active_qs = base_qs.filter(status__in=["to_examine", "for_review", "in_review", "under_review", "client_correction"]).order_by("-assigned_at")
+        active_qs = base_qs.filter(status__in=["to_examine", "in_review", "client_correction"]).order_by("-assigned_at")
         
         if q:
             active_qs = active_qs.filter(
@@ -1318,7 +1317,7 @@ def dashboard(request):
         paginator = Paginator(active_qs, 5)
         page_obj = paginator.get_page(request.GET.get("page") or 1)
 
-        under_review_cases = base_qs.filter(status__in=["in_review", "under_review"]).order_by("assigned_at")[:4]
+        under_review_cases = base_qs.filter(status="in_review").order_by("assigned_at")[:4]
         recent_logs = AuditLog.objects.filter(actor=user).order_by("-created_at")[:4]
 
         context.update({
@@ -1998,32 +1997,40 @@ def _lgu_owns_case(user, case: Case) -> bool:
     return bool(user_mun and case_mun and user_mun == case_mun)
 
 def _lgu_can_edit_details(user, case: Case) -> bool:
-    if not _lgu_owns_case(user, case):
-        return False
-    if case.status in {"draft", "not_received", "returned"}:
-        return True
-    if case.status == "client_correction":
-        deadline = getattr(case, "client_correction_deadline", None)
-        if deadline and timezone.now() > deadline:
-            return False
-        return True
+    role = getattr(user, "role", None)
+    if role == "lgu_admin":
+        return (
+            getattr(case, "submitted_by_id", None) == getattr(user, "id", None)
+            and case.status == "draft"
+            and case.lgu_submitted_at is None
+        )
+    if role == "capitol_receiving":
+        if case.status == "draft":
+            return getattr(case, "submitted_by_id", None) == getattr(user, "id", None)
+        return case.status in {"not_received", "received", "client_correction"} and getattr(case, "assigned_to_id", None) is None
+    if role == "capitol_releaser":
+        return case.status in {"for_release", "released"}
     return False
 
 def _lgu_can_edit_documents(user, case: Case) -> bool:
-    if not _lgu_can_edit_details(user, case):
-        return False
-    if case.status == "returned":
-        return True
-    if case.status == "client_correction":
-        return True
-    if case.lgu_submitted_at is None:
-        return True
+    role = getattr(user, "role", None)
+    if role == "lgu_admin":
+        return _lgu_can_edit_details(user, case)
+    if role == "capitol_receiving":
+        if case.status == "draft":
+            return getattr(case, "submitted_by_id", None) == getattr(user, "id", None)
+        return case.status in {"not_received", "received", "client_correction"} and getattr(case, "assigned_to_id", None) is None
+    if role == "capitol_releaser":
+        return case.status in {"for_release", "released"}
     return False
 
 def _lgu_can_finalize(user, case: Case) -> bool:
-    return _lgu_can_edit_details(user, case) and (
-        case.lgu_submitted_at is None or case.status in {"returned", "client_correction"}
-    )
+    role = getattr(user, "role", None)
+    if role == "lgu_admin":
+        return _lgu_can_edit_details(user, case)
+    if role == "capitol_receiving":
+        return _lgu_can_edit_details(user, case) and case.status in {"draft", "client_correction"}
+    return False
 
 def _required_documents_missing(case: Case) -> list[str]:
     # Checklist items are informational only (nothing is required).
@@ -2195,7 +2202,7 @@ def submit_case(request):
                 messages.success(request, "Draft saved.")
                 return redirect("drafts")
 
-            messages.success(request, "Draft saved. Continue uploading documents.")
+
             return redirect("draft_wizard", draft_id=case.draft_id, step=2)
     else:
         form = CaseDetailsForm(user=request.user)
@@ -2221,8 +2228,8 @@ def edit_case(request, tracking_id):
 def case_wizard(request, tracking_id, step: int):
     case = get_object_or_404(Case, tracking_id=tracking_id)
 
-    if request.user.role not in {"lgu_admin", "capitol_receiving"}:
-        messages.error(request, "Only LGU Admins and Receiver can edit submissions.")
+    if request.user.role not in {"lgu_admin", "capitol_receiving", "capitol_releaser"}:
+        messages.error(request, "Not authorized to edit this submission.")
         return redirect("dashboard")
 
     if not _lgu_can_edit_details(request.user, case):
@@ -2276,7 +2283,7 @@ def case_wizard(request, tracking_id, step: int):
 
     if step == 2:
         if not _lgu_can_edit_documents(request.user, case):
-            messages.error(request, "Document uploads can only be changed after the case is returned by Capitol Receiving.")
+            messages.error(request, "You cannot edit documents for this case at its current stage.")
             return redirect("case_detail", tracking_id=case.tracking_id)
 
         requirements = ["Endorsement Letter", *_case_type_requirements(
@@ -2380,11 +2387,7 @@ def case_wizard(request, tracking_id, step: int):
                         new_checklist.insert(0, {"doc_type": "Endorsement Letter", "required": False, "uploaded": False})
 
                 case.checklist = new_checklist
-                if case.status in {"returned", "client_correction"}:
-                    case.status = "not_received"
-                    case.client_correction_deadline = None
-                case.lgu_submitted_at = None
-                case.save(update_fields=["checklist", "status", "client_correction_deadline", "updated_at", "lgu_submitted_at"])
+                case.save(update_fields=["checklist", "updated_at"])
 
                 AuditLog.objects.create(
                     actor=request.user,
@@ -2394,6 +2397,8 @@ def case_wizard(request, tracking_id, step: int):
                 )
 
                 messages.success(request, "Checklist and uploads saved.")
+                if request.user.role == "capitol_releaser":
+                    return redirect("case_detail", tracking_id=case.tracking_id)
                 return redirect("case_wizard", tracking_id=case.tracking_id, step=3)
         else:
             formset = FormSet(initial=initial, form_kwargs={"doc_type_choices": doc_type_choices})
@@ -2412,6 +2417,9 @@ def case_wizard(request, tracking_id, step: int):
         })
 
     # Wizard step 3
+    if request.user.role == "capitol_releaser":
+        return redirect("case_detail", tracking_id=case.tracking_id)
+
     if not _lgu_can_finalize(request.user, case):
         messages.error(request, "This case cannot be finalized right now.")
         return redirect("case_detail", tracking_id=case.tracking_id)
@@ -2430,10 +2438,39 @@ def case_wizard(request, tracking_id, step: int):
         })
 
     if request.method == "POST":
-        if case.status in {"returned", "client_correction"}:
-            case.status = "not_received"
-            case.client_correction_deadline = None
+        if request.user.role == "capitol_receiving":
+            if case.status == "client_correction":
+                case.status = "received"
+                case.client_correction_deadline = None
+                case.return_reason = ""
+                case.returned_by = None
+                case.returned_at = None
+                case.assigned_to = None
+                case.assigned_at = None
+                case.save(update_fields=[
+                    "status",
+                    "client_correction_deadline",
+                    "return_reason",
+                    "returned_by",
+                    "returned_at",
+                    "assigned_to",
+                    "assigned_at",
+                    "updated_at",
+                ])
 
+                AuditLog.objects.create(
+                    actor=request.user,
+                    action="case_update",
+                    target_object=f"Case: {case.tracking_id}",
+                    details={"step": 3, "finalized": True, "taken_back": True}
+                )
+                messages.success(request, f"Case {case.tracking_id} updated and taken back by Receiving.")
+                return redirect("case_detail", tracking_id=case.tracking_id)
+
+            messages.error(request, "This case cannot be finalized right now.")
+            return redirect("case_detail", tracking_id=case.tracking_id)
+
+        case.status = "not_received"
         case.lgu_submitted_at = timezone.now()
         
         # Priority: 1. case.area, 2. submitted_by.lgu_municipality
@@ -2543,7 +2580,7 @@ def draft_wizard(request, draft_id, step: int):
 
     if step == 2:
         if not _lgu_can_edit_documents(request.user, case):
-            messages.error(request, "Document uploads can only be changed after the case is returned by Capitol Receiving.")
+            messages.error(request, "You cannot edit documents for this draft at its current stage.")
             return redirect("draft_wizard", draft_id=case.draft_id, step=1)
 
         requirements = ["Endorsement Letter", *_case_type_requirements(
@@ -2703,7 +2740,10 @@ def draft_wizard(request, draft_id, step: int):
             messages.success(request, "Draft saved.")
             return redirect("drafts")
 
-        case.status = "not_received"
+        if request.user.role == "capitol_receiving":
+            case.status = "received"
+        else:
+            case.status = "not_received"
         case.lgu_submitted_at = timezone.now()
 
         # Priority: 1. case.area, 2. submitted_by.lgu_municipality
@@ -2775,7 +2815,7 @@ def case_detail(request, tracking_id):
             details={"old_status": "not_received", "new_status": "received", "note": "Receiver opened the case."},
         )
 
-    if not is_ajax and request.user.role == "capitol_examiner" and case.assigned_to == request.user and case.status in {"to_examine", "for_review"}:
+    if not is_ajax and request.user.role == "capitol_examiner" and case.assigned_to == request.user and case.status == "to_examine":
         old_status = case.status
         case.status = "in_review"
         case.save(update_fields=["status", "updated_at"])
@@ -2807,13 +2847,13 @@ def case_detail(request, tracking_id):
 
     can_submit_for_approval = (
         request.user.role == "capitol_examiner" and
-        case.status in {"to_examine", "in_review", "for_review", "under_review"} and
+        case.status in {"to_examine", "in_review"} and
         case.assigned_to_id == request.user.id
     )
 
     can_return_to_receiving = (
         request.user.role == "capitol_examiner" and
-        case.status in {"to_examine", "in_review", "for_review", "under_review"} and
+        case.status in {"to_examine", "in_review"} and
         case.assigned_to_id == request.user.id
     )
 
@@ -2844,6 +2884,35 @@ def case_detail(request, tracking_id):
         case.status == "for_release"
     )
 
+    def _current_holder_display(c: Case) -> tuple[str, str | None]:
+        status = (getattr(c, "status", "") or "").strip()
+
+        if status == "draft":
+            return ("LGU", None)
+        if status in {"not_received", "received"}:
+            return ("Receiver", None)
+        if status in {"to_examine", "in_review"}:
+            examiner = getattr(c, "assigned_to", None)
+            name = examiner.get_full_name() if examiner else None
+            return ("Examiner", name)
+        if status in {"for_approval", "approved"}:
+            return ("Approver", None)
+        if status == "for_taxmapping":
+            taxmapper = getattr(c, "taxmapper_assigned_to", None)
+            name = taxmapper.get_full_name() if taxmapper else None
+            return ("Taxmapper", name)
+        if status == "for_numbering":
+            return ("Numberer", None)
+        if status in {"for_release", "released"}:
+            return ("Releaser", None)
+        if status in {"client_correction", "returned"}:
+            return ("Client (LGU)", None)
+        if status == "withdrawn":
+            return ("Closed", None)
+        return ("Processing", None)
+
+    current_holder_label, current_holder_detail = _current_holder_display(case)
+
     examiners = None
     if can_assign:
         examiners = (
@@ -2857,9 +2926,9 @@ def case_detail(request, tracking_id):
         if role == "super_admin":
             return True
         if role == "capitol_receiving":
-            return case.status in {"not_received", "received"} and case.assigned_to_id is None
+            return case.status in {"not_received", "received", "client_correction"} and case.assigned_to_id is None
         if role == "capitol_examiner":
-            return case.status in {"to_examine", "in_review", "for_review", "under_review"} and case.assigned_to_id == user.id
+            return case.status in {"to_examine", "in_review"} and case.assigned_to_id == user.id
         if role == "capitol_approver":
             return case.status == "for_approval"
         if role == "capitol_taxmapper":
@@ -2867,11 +2936,11 @@ def case_detail(request, tracking_id):
         if role == "capitol_numberer":
             return case.status == "for_numbering"
         if role == "capitol_releaser":
-            return case.status == "for_release"
+            return case.status in {"for_release", "released"}
         return False
 
     is_capitol = bool(request.user.is_authenticated and (_is_capitol_staff(request.user) or request.user.role == "super_admin"))
-    show_internal = bool(is_capitol and case.status != "client_correction" and _user_is_current_owner_for_internal_sections(request.user, case))
+    show_internal = bool(is_capitol and _user_is_current_owner_for_internal_sections(request.user, case))
 
     remarks = []
     history = []
@@ -2921,6 +2990,8 @@ def case_detail(request, tracking_id):
         "can_number": can_number,
         "can_release": can_release,
         "examiners": examiners,
+        "current_holder_label": current_holder_label,
+        "current_holder_detail": current_holder_detail,
         "case_numbers": case_numbers,
         "last_used_number": last_used_number,
         "suggested_next_number": suggested_next_number,
@@ -2946,7 +3017,7 @@ def forward_for_approval(request, tracking_id):
         messages.error(request, "Unauthorized action.")
         return redirect("case_detail", tracking_id=case.tracking_id)
 
-    if case.status not in {"to_examine", "in_review", "for_review", "under_review"}:
+    if case.status not in {"to_examine", "in_review"}:
         messages.error(request, "This case is not eligible for approval submission.")
         return redirect("case_detail", tracking_id=case.tracking_id)
 
@@ -2985,7 +3056,7 @@ def add_case_remark(request, tracking_id):
         if case.status in {"not_received", "received"} and case.assigned_to_id is None and case.status != "client_correction":
             is_authorized = True
     elif role == "capitol_examiner":
-        if case.status == "in_review" and case.assigned_to_id == request.user.id and case.status != "client_correction":
+        if case.status in {"to_examine", "in_review"} and case.assigned_to_id == request.user.id and case.status != "client_correction":
             is_authorized = True
     elif role == "capitol_approver":
         if case.status == "for_approval" and case.status != "client_correction":
@@ -3066,7 +3137,7 @@ def submissions(request):
             tabs = [
                 ("all", f"All Case Intake ({qs.count()})"), 
                 ("received", f"Received ({qs.filter(status='received', assigned_to__isnull=True).count()})"), 
-                ("to_examine", f"To Examine ({qs.filter(status__in=['to_examine','in_review','for_review','under_review']).count()})")
+                ("to_examine", f"To Examine ({qs.filter(status__in=['to_examine','in_review']).count()})")
             ]
             if not tab: tab = "all"
 
@@ -3076,7 +3147,7 @@ def submissions(request):
             if tab == "received":
                 qs = qs.filter(status="received", assigned_to__isnull=True)
             elif tab == "to_examine":
-                qs = qs.filter(status__in=["to_examine", "in_review", "for_review", "under_review"])
+                qs = qs.filter(status__in=["to_examine", "in_review"])
             # If tab == "all", it keeps the base `qs` (everything)
             
         elif request.user.role == "capitol_examiner":
@@ -3084,10 +3155,10 @@ def submissions(request):
             if not tab: tab = "all_assigned"
             
             # Note: Included "to_examine" so freshly assigned cases show up for them
-            qs = qs.filter(assigned_to=request.user, status__in=["to_examine", "in_review", "for_review", "under_review", "client_correction"])
+            qs = qs.filter(assigned_to=request.user, status__in=["to_examine", "in_review", "client_correction"])
             
             if tab == "under_review":
-                qs = qs.filter(status__in=["in_review", "under_review"])
+                qs = qs.filter(status="in_review")
                 
         elif request.user.role == "capitol_approver":
             tabs = [("all_assigned", "All Assigned")]
@@ -3124,7 +3195,7 @@ def submissions(request):
         tab_map = {
             "pending": ["not_received", "client_correction"],
             "received": ["received"],
-            "to_examine": ["to_examine", "in_review", "for_review", "under_review"],
+            "to_examine": ["to_examine", "in_review"],
             "for_taxmapping": ["for_taxmapping"],
             "for_approval": ["for_approval"],
             "for_numbering": ["for_numbering"],
@@ -3411,7 +3482,7 @@ def submit_for_approval(request, tracking_id):
         messages.error(request, "Only Examiners can submit cases for approval.")
         return redirect("case_detail", tracking_id=case.tracking_id)
 
-    if case.status not in {"to_examine", "in_review", "for_review", "under_review"} or case.assigned_to_id != request.user.id:
+    if case.status not in {"to_examine", "in_review"} or case.assigned_to_id != request.user.id:
         messages.error(request, "This case is not eligible for approval submission.")
         return redirect("case_detail", tracking_id=case.tracking_id)
 
@@ -3610,7 +3681,7 @@ def return_to_receiving(request, tracking_id):
         messages.error(request, "Only Examiners can return cases to Receiving.")
         return redirect("case_detail", tracking_id=case.tracking_id)
 
-    if case.status not in {"to_examine", "in_review", "for_review", "under_review"} or case.assigned_to_id != request.user.id:
+    if case.status not in {"to_examine", "in_review"} or case.assigned_to_id != request.user.id:
         messages.error(request, "This case is not eligible for return to Receiving.")
         return redirect("case_detail", tracking_id=case.tracking_id)
 

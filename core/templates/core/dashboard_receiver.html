@@ -235,13 +235,11 @@
             <a href="{% url 'case_detail' case.tracking_id %}" class="action-link primary" style="background: var(--primary); color: white;">Receive
             </a>
         {% elif case.status == 'received' and not case.assigned_to %}
-            <a href="{% url 'case_detail' case.tracking_id %}?action=assign" class="action-link primary" style="background: #f3e8ff; color: #6b21a8;">
+            <a href="#" onclick="openAssignModal('{{ case.tracking_id }}', '{{ case.client_name|escapejs }}'); return false;" class="action-link primary" style="background: #f3e8ff; color: #6b21a8;">
                 <i class="ri-user-add-line"></i> Assign Case
             </a>
         {% else %}
-            <a href="#" onclick="openAssignModal('{{ case.tracking_id|default:c.tracking_id }}', '{{ case.client_name|default:c.client_name|escapejs }}'); return false;" class="action-link primary" style="background: #f3e8ff; color: #6b21a8;">
-                <i class="ri-user-add-line"></i> Assign
-            </a>
+            <a href="{% url 'case_detail' case.tracking_id %}" class="action-link secondary">Open</a>
         {% endif %}
     </div>
 </td>

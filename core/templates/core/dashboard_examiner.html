@@ -70,17 +70,17 @@
         }
         .filter-select:hover { border-color: #cbd5e1; }
 
-        .btn-reset { display: inline-flex; align-items: center; gap: 0.4rem; color: #64748b; font-size: 0.85rem; font-weight: 500; text-decoration: none; padding: 0.6rem 0.5rem; transition: 0.2s;}
-        .btn-reset:hover { color: #0f172a; }
+        .btn-reset { display: inline-flex; align-items: center; gap: 0.4rem; color: var(--text-muted); font-size: 0.85rem; font-weight: 500; text-decoration: none; padding: 0.6rem 0.5rem; transition: 0.2s;}
+        .btn-reset:hover { color: var(--text-main); }
 
         /* ===== TABLE STYLING ===== */
         table { width: 100%; border-collapse: collapse; text-align: left; }
-        th { font-size: 0.75rem; font-weight: 700; color: #64748b; padding: 1rem 0.5rem; border-bottom: 2px solid #f1f5f9; text-transform: uppercase; }
-        td { padding: 1rem 0.5rem; border-bottom: 1px solid #f1f5f9; font-size: 0.875rem; vertical-align: middle; transition: 0.2s; color: #1e293b; }
-        tbody tr:hover td { background-color: #f8fafc; }
+        th { font-size: 0.75rem; font-weight: 700; color: var(--text-muted); padding: 1rem 0.5rem; border-bottom: 2px solid var(--border); text-transform: uppercase; }
+        td { padding: 1rem 0.5rem; border-bottom: 1px solid var(--border); font-size: 0.875rem; vertical-align: middle; transition: 0.2s; color: var(--text-main); }
+        tbody tr:hover td { background-color: var(--inactive-bg); }
 
-        .owner-info strong { display: block; font-size: 0.875rem; font-weight: 600; color: #1e293b; margin-bottom: 0.1rem; }
-        .owner-info span { font-size: 0.75rem; color: #64748b; }
+        .owner-info strong { display: block; font-size: 0.875rem; font-weight: 600; color: var(--text-main); margin-bottom: 0.1rem; }
+        .owner-info span { font-size: 0.75rem; color: var(--text-muted); }
 
         /* ===== COMPREHENSIVE STATUS PILLS ===== */
         .status-pill {
@@ -91,13 +91,13 @@
         }
         .status-pill::before { content: ''; display: block; width: 6px; height: 6px; border-radius: 50%; }
         
-        /* Needs Action / For Review (Freshly Assigned) */
-        .status-for_review { background: #fef3c7; color: #b45309; border-color: #fde68a; }
-        .status-for_review::before { background-color: #b45309; }
+        /* Needs Action / To Examine (Freshly Assigned) */
+        .status-to_examine { background: #fef3c7; color: #b45309; border-color: #fde68a; }
+        .status-to_examine::before { background-color: #b45309; }
         
         /* Currently Under Review */
-        .status-in_review, .status-under_review { background: #e0e7ff; color: #4338ca; border-color: #c7d2fe; }
-        .status-in_review::before, .status-under_review::before { background-color: #4338ca; }
+        .status-in_review { background: #e0e7ff; color: #4338ca; border-color: #c7d2fe; }
+        .status-in_review::before { background-color: #4338ca; }
         
         /* Returned / Corrections */
         .status-client_correction, .status-returned { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
@@ -110,21 +110,21 @@
         }
         .action-link.primary { color: white; background: var(--primary); }
         .action-link.primary:hover { background: var(--primary-hover); }
-        .action-link.secondary { color: #475569; border: 1px solid #e2e8f0; background: white; }
-        .action-link.secondary:hover { background: #f1f5f9; color: #0f172a; border-color: #cbd5e1; }
+        .action-link.secondary { color: var(--text-muted); border: 1px solid var(--border); background: var(--bg-surface); }
+        .action-link.secondary:hover { background: var(--inactive-bg); color: var(--text-main); border-color: var(--border-hover); }
 
         /* ===== BOTTOM GRID & ACTIVITY ===== */
         .bottom-grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 1.5rem; }
 
         .activity-list { display: flex; flex-direction: column; gap: 1.25rem; }
-        .activity-item { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 0.75rem; border-bottom: 1px solid #f1f5f9; }
+        .activity-item { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border); }
         .activity-item:last-child { border-bottom: none; }
         .activity-left { display: flex; gap: 1rem; align-items: flex-start; }
-        .activity-icon { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0; background: #f8fafc; border: 1px solid #e2e8f0; color: #64748b; }
+        .activity-icon { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0; background: var(--inactive-bg); border: 1px solid var(--border); color: var(--text-muted); }
         
-        .activity-text strong { display: block; font-size: 0.85rem; font-weight: 600; color: #334155; margin-bottom: 0.15rem; }
-        .activity-text span { font-size: 0.75rem; color: #64748b; line-height: 1.4; display: block; }
-        .activity-time { font-size: 0.7rem; color: #94a3b8; white-space: nowrap; margin-top: 0.2rem; font-weight: 500; }
+        .activity-text strong { display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-main); margin-bottom: 0.15rem; }
+        .activity-text span { font-size: 0.75rem; color: var(--text-muted); line-height: 1.4; display: block; }
+        .activity-time { font-size: 0.7rem; color: var(--text-light); white-space: nowrap; margin-top: 0.2rem; font-weight: 500; }
 
         /* Empty State */
         .empty-state-container { text-align: center; padding: 4rem 1rem; color: #94a3b8; }
@@ -263,7 +263,7 @@
                                         <i class="ri-eye-line"></i> Quick View
                                     </a>
                                     <a href="{% url 'case_detail' case.tracking_id %}" class="action-link primary">
-                                        {% if case.status == 'for_review' %}Start Review{% else %}Continue{% endif %}
+                                        {% if case.status == 'to_examine' %}Start Review{% else %}Continue{% endif %}
                                     </a>
                                 </div>
                             </td>
