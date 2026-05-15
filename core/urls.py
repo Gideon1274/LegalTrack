@@ -33,6 +33,7 @@ urlpatterns = [
     path("accounts/verify-code/", views.verify_reset_code, name="verify_reset_code"),
     path("accounts/reset-password-final/", views.reset_password_final, name="reset_password_final"),
     path("profile/", views.profile, name="profile"),
+    path("settings/", views.system_settings, name="settings"),
     path("submit/", views.submit_case, name="submit_case"),
     path("drafts/", views.drafts, name="drafts"),
     path("draft/<uuid:draft_id>/step/<int:step>/", views.draft_wizard, name="draft_wizard"),

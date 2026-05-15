@@ -8,19 +8,12 @@ from core import auth_views
 urlpatterns = [
     path("", include("core.urls")),
     path("admin/", admin.site.urls),
-<<<<<<< HEAD
     
     # Custom Auth Routes
     path("login/", auth_views.LegalTrackLoginView.as_view(), name="login"),
     path("logout/", auth_views.logout_view, name="logout"),
     path("accounts/login/", RedirectView.as_view(pattern_name="login", permanent=False)),
     path("accounts/logout/", RedirectView.as_view(pattern_name="logout", permanent=False)),
-=======
-    path("login/", RedirectView.as_view(pattern_name="login", permanent=False)),
-    path("logout/", RedirectView.as_view(pattern_name="logout", permanent=False)),
-    path("accounts/login/", auth_views.LegalTrackLoginView.as_view(), name="login"),
-    path("accounts/logout/", auth_views.logout_view, name="logout"),
->>>>>>> upstream/master
     path("accounts/activate/<path:token>/", auth_views.activate_account, name="activate_account"),
     path("accounts/password_reset/", auth_views.ThrottledPasswordResetView.as_view(), name="password_reset"),
     path("accounts/reset/<uidb64>/<token>/", auth_views.LoggedPasswordResetConfirmView.as_view(), name="password_reset_confirm"),
