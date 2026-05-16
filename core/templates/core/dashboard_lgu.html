@@ -202,8 +202,7 @@
                         {{ label }} <span class="tab-badge">{{ count }}</span>
                     </a>
                 {% endfor %}
-                                            {% if case.status == 'not_received' or case.status == 'client_correction' or case.status == 'pending' %}
-
+            </div>
             <div style="overflow-x: auto; flex: 1;">
                 {% if page_obj and page_obj.object_list %}
                     <table>

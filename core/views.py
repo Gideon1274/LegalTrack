@@ -430,7 +430,7 @@ def _public_status_label(case: Case) -> str:
         "for_numbering": "For Numbering",
         "for_release": "For Release",
         "released": "Released",
-        "client_correction": "Returned for Correction",
+        "client_correction": "Returned",
         "returned": "Returned",
         "withdrawn": "Withdrawn",
     }
