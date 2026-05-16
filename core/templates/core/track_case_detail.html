@@ -928,7 +928,7 @@
     if (/releas/i.test(s))   return 6;
     if (/number/i.test(s))   return 5;
     if (/approv/i.test(s))   return 4;
-    if (/review/i.test(s))   return 3;
+    if (/review/i.test(s) || /examin/i.test(s))   return 3;
     if (/receiv/i.test(s))   return 2;
     return 1; // default: Submitted
   }
