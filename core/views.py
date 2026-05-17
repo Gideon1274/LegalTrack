@@ -2133,8 +2133,15 @@ def _maybe_convert_office_upload_to_pdf(uploaded_file):
         return uploaded_file, {"converted": False}
 
     soffice = shutil.which("soffice") or shutil.which("soffice.exe")
-    if not soffice:
-        raise ValueError("DOC/DOCX upload requires PDF conversion, but LibreOffice (soffice) is not installed on the server.")
+    if not soffice and os.name == "nt":
+        candidates = [
+            r"C:\Program Files\LibreOffice\program\soffice.exe",
+            r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
+        ]
+        for p in candidates:
+            if os.path.exists(p):
+                soffice = p
+                break
 
     with tempfile.TemporaryDirectory() as tmpdir:
         in_path = os.path.join(tmpdir, os.path.basename(name) or "upload.docx")
@@ -2142,18 +2149,55 @@ def _maybe_convert_office_upload_to_pdf(uploaded_file):
             for chunk in uploaded_file.chunks():
                 f.write(chunk)
 
-        cmd = [soffice, "--headless", "--convert-to", "pdf", "--outdir", tmpdir, in_path]
-        try:
-            subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60)
-        except Exception:
-            try:
-                uploaded_file.seek(0)
-            except Exception:
-                pass
-            raise ValueError("DOC/DOCX upload failed to convert to PDF. Please upload a PDF instead or try again.")
-
         base = os.path.splitext(os.path.basename(in_path))[0]
         out_path = os.path.join(tmpdir, f"{base}.pdf")
+
+        if soffice:
+            cmd = [soffice, "--headless", "--convert-to", "pdf", "--outdir", tmpdir, in_path]
+            try:
+                subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=120)
+            except Exception:
+                try:
+                    uploaded_file.seek(0)
+                except Exception:
+                    pass
+                raise ValueError("DOC/DOCX upload failed to convert to PDF. Please upload a PDF instead or try again.")
+        else:
+            if os.name != "nt":
+                raise ValueError("DOC/DOCX upload requires PDF conversion, but LibreOffice (soffice) is not installed on the server.")
+            try:
+                import pythoncom
+                import win32com.client
+            except Exception:
+                raise ValueError("DOC/DOCX upload requires PDF conversion. Install LibreOffice (recommended) or install MS Word + pywin32 on this machine.")
+
+            pythoncom.CoInitialize()
+            word = None
+            doc = None
+            try:
+                word = win32com.client.DispatchEx("Word.Application")
+                word.Visible = False
+                word.DisplayAlerts = 0
+                doc = word.Documents.Open(in_path, ReadOnly=True)
+                doc.ExportAsFixedFormat(out_path, 17)
+            except Exception:
+                raise ValueError("DOC/DOCX upload failed to convert to PDF. Ensure MS Word is installed (or install LibreOffice).")
+            finally:
+                try:
+                    if doc is not None:
+                        doc.Close(False)
+                except Exception:
+                    pass
+                try:
+                    if word is not None:
+                        word.Quit()
+                except Exception:
+                    pass
+                try:
+                    pythoncom.CoUninitialize()
+                except Exception:
+                    pass
+
         if not os.path.exists(out_path):
             try:
                 uploaded_file.seek(0)
