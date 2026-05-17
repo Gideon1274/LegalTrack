@@ -371,7 +371,7 @@
                     <select name="assigned_to" required class="assign-select" style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 6px;">
                         <option value="" disabled selected>Select an examiner...</option>
                         {% for ex in examiners %}
-                            <option value="{{ ex.id }}">{{ ex.full_name|default:ex.email }}</option>
+                            <option value="{{ ex.id }}">{{ ex.full_name|default:ex.email }} ({{ ex.active_load|default:0 }})</option>
                         {% endfor %}
                     </select>
                 </div>

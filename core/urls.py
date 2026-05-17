@@ -49,6 +49,7 @@ urlpatterns = [
     path('case/<str:tracking_id>/return-correction/', views.return_for_correction, name='return_for_correction'),
 
     path("case/<str:tracking_id>/assign/", views.assign_case, name="assign_case"),
+    path("case/<str:tracking_id>/reassign-examiner/", views.reassign_case_examiner, name="reassign_case_examiner"),
     path("case/<str:tracking_id>/submit-for-approval/", views.submit_for_approval, name="submit_for_approval"),
     path("case/<str:tracking_id>/approve/", views.approve_case, name="approve_case"),
     path("case/<str:tracking_id>/assign-taxmapper/", views.assign_taxmapper, name="assign_taxmapper"),

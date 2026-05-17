@@ -363,6 +363,7 @@ class AuditLog(TimestampedModel):
         ("case_assignment", "Transaction Assigned"),
         ("case_approval", "Transaction Approved"),
         ("case_rejection", "Transaction Rejected"),
+        ("case_numbered", "Transaction Number Assigned"),
         ("case_release", "Transaction Released"),
         ("support_feedback", "Support Feedback Submitted"),
     ]

@@ -79,13 +79,7 @@
             </tr>
             <tr>
                 <td>Transaction Number</td>
-                <td>
-                    {% for n in case.numbers.all %}
-                        {{ n.number }}{% if not forloop.last %}, {% endif %}
-                    {% empty %}
-                        —
-                    {% endfor %}
-                </td>
+                <td>{{ case.td_number|default:"—" }}</td>
             </tr>
         </table>
 

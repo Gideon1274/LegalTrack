@@ -7,20 +7,14 @@
         <i class="ri-hashtag" style="position: absolute; right: -5%; top: -15%; font-size: 8rem; opacity: 0.1; transform: rotate(15deg);"></i>
         
         <div style="font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: #bfdbfe; font-weight: 600;">
-            Live Sequence Tracker
+            Manual Numbering
         </div>
-        
-        {% if featured_sequence %}
-            <div style="font-size: 2.75rem; font-weight: 800; margin: 0.5rem 0; line-height: 1;">
-                {{ featured_sequence.prefix }}{{ featured_sequence.current_count|stringformat:"03d" }}
-            </div>
-            <div style="font-size: 0.95rem; color: #eff6ff;">
-                Next available TD number for <strong>{{ featured_sequence.lgu_name|title }}</strong>
-            </div>
-        {% else %}
-            <div style="font-size: 1.5rem; font-weight: 700; margin: 1rem 0;">No Sequences Active</div>
-            <div style="font-size: 0.9rem; color: #eff6ff;">Awaiting first number generation.</div>
-        {% endif %}
+        <div style="font-size: 1.5rem; font-weight: 700; margin: 0.75rem 0 0.25rem 0; line-height: 1.2;">
+            Transaction Number
+        </div>
+        <div style="font-size: 0.95rem; color: #eff6ff;">
+            Open the transaction and enter the Transaction Number manually.
+        </div>
     </div>
 
     <div style="background: white; padding: 1.5rem; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center;">
@@ -50,7 +44,7 @@
     <div class="panel" style="background: white; border-radius: 12px; border: 1px solid #e2e8f0; padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
         <div class="panel-header" style="margin-bottom: 1.5rem;">
             <h3 style="font-weight: 700; color: #1e293b; font-size: 1.1rem; margin: 0;">Pending Numbering Queue</h3>
-            <p class="text-muted" style="font-size: 0.85rem; margin-top: 4px;">Cases approved and waiting for official TD Numbers.</p>
+            <p class="text-muted" style="font-size: 0.85rem; margin-top: 4px;">Cases approved and waiting for Transaction Number.</p>
         </div>
 
         <div style="overflow-x: auto;">
@@ -83,12 +77,9 @@
                             </span>
                         </td>
                         <td style="padding: 1rem 0.5rem; text-align: right;">
-                            <form action="{% url 'assign_td_number' case.tracking_id %}" method="POST" style="margin: 0;">
-                                {% csrf_token %}
-                                <button type="submit" title="Generate Number & Forward" onclick="return confirm('Generate official sequential TD number for {{ case.submitted_by.lgu_municipality }}?');" style="border: none; background: #eff6ff; color: #2563eb; padding: 0.5rem; border-radius: 6px; cursor: pointer; transition: all 0.2s;">
-                                    <i class="ri-key-2-line" style="font-size: 1.2rem;"></i>
-                                </button>
-                            </form>
+                            <a href="{% url 'case_detail' case.tracking_id %}" title="Open Transaction" style="display:inline-flex; align-items:center; justify-content:center; background: #eff6ff; color: #2563eb; padding: 0.5rem; border-radius: 6px; text-decoration: none;">
+                                <i class="ri-external-link-line" style="font-size: 1.2rem;"></i>
+                            </a>
                         </td>
                     </tr>
                     {% empty %}
