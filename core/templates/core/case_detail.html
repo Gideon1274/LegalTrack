@@ -396,13 +396,9 @@
                             {% endif %}
 
                             {% if can_approve %}
-                                <form method="post" action="{% url 'approve_case' case.tracking_id %}" class="btn-block" onsubmit="return confirm('Approve this transaction?');">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="confirm_approve" value="1">
-                                    <button class="btn btn-primary" type="submit" style="width:100%;">
-                                        <i class="ri-check-line"></i> Approve
-                                    </button>
-                                </form>
+                                <button class="btn btn-primary btn-block" type="button" onclick="openApproveModal()">
+                                    <i class="ri-check-line"></i> Approve
+                                </button>
                             {% endif %}
 
                             {% if can_return_for_correction %}
@@ -663,6 +659,32 @@
     }
     function closeApproverReturnModal() {
         document.getElementById('approverReturnModal').style.display = 'none';
+    }
+</script>
+
+<div id="approveModal" class="drawer-backdrop" style="display:none; justify-content:center; align-items:center; opacity:1; visibility:visible;">
+    <div class="panel" style="width: 400px; padding: 2rem;">
+        <h3 class="panel-title" style="margin-bottom: 1rem;">Approve Transaction</h3>
+        <div style="font-size: 0.9rem; color: var(--text-muted);">
+            Confirm approval for <strong style="color: var(--text-main);">{{ case.tracking_id }}</strong>?
+        </div>
+        <form method="post" action="{% url 'approve_case' case.tracking_id %}" style="margin-top: 1rem;">
+            {% csrf_token %}
+            <input type="hidden" name="confirm_approve" value="1">
+            <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                <button type="button" class="btn btn-outline" style="flex:1" onclick="closeApproveModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary" style="flex:1;">Confirm</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function openApproveModal() {
+        document.getElementById('approveModal').style.display = 'flex';
+    }
+    function closeApproveModal() {
+        document.getElementById('approveModal').style.display = 'none';
     }
 </script>
 

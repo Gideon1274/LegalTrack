@@ -1149,6 +1149,32 @@ def _format_case_history_details(action: str, details) -> str:
         if new_status:
             status_label = dict(Case.STATUS_CHOICES).get(str(new_status), str(new_status))
             parts.append(f"Status: {status_label}")
+    elif action == "case_document_review":
+        one_doc = d.get("document")
+        many_docs = d.get("documents")
+        if isinstance(one_doc, str) and one_doc.strip():
+            parts.append(f"Document: {one_doc.strip()}")
+            if "checked" in d:
+                parts.append(f"Reviewed OK: {'Yes' if bool(d.get('checked')) else 'No'}")
+            remark = d.get("remark")
+            if isinstance(remark, str) and remark.strip():
+                parts.append(f"Remark: {remark.strip()}")
+        elif isinstance(many_docs, list):
+            lines = []
+            for item in many_docs:
+                if not isinstance(item, dict):
+                    continue
+                doc_name = (item.get("document") or "").strip()
+                if not doc_name:
+                    continue
+                checked = bool(item.get("checked"))
+                remark = (item.get("remark") or "").strip()
+                line = f"{doc_name}: {'Reviewed OK' if checked else 'Not OK'}"
+                if remark:
+                    line = f"{line} — {remark}"
+                lines.append(line)
+            if lines:
+                parts.extend(lines[:50])
     elif action in {"case_status_change", "case_approval", "case_rejection", "case_release"}:
         new_status = d.get("new_status")
         if new_status:
@@ -1508,11 +1534,26 @@ def dashboard(request):
     elif user.role == "capitol_numberer":
         today = timezone.localdate()
 
-        qs = Case.objects.filter(status="for_numbering").select_related("assigned_to", "submitted_by").order_by("updated_at")
-        paginator = Paginator(qs, 10)
-        page_obj = paginator.get_page(request.GET.get("page") or 1)
+        tab = (request.GET.get("tab") or "not_numbered").strip().lower()
 
-        stats_pending = qs.count()
+        qs_pending = Case.objects.filter(status="for_numbering").select_related("assigned_to", "submitted_by").order_by("updated_at")
+        qs_numbered = (
+            Case.objects.exclude(td_number__isnull=True)
+            .exclude(td_number="")
+            .select_related("assigned_to", "submitted_by")
+            .order_by("-updated_at")
+        )
+
+        if tab == "numbered":
+            paginator = Paginator(qs_numbered, 10)
+            page_obj = paginator.get_page(request.GET.get("page") or 1)
+        else:
+            tab = "not_numbered"
+            paginator = Paginator(qs_pending, 10)
+            page_obj = paginator.get_page(request.GET.get("page") or 1)
+
+        stats_pending = qs_pending.count()
+        stats_numbered_total = qs_numbered.count()
         stats_numbered_today = AuditLog.objects.filter(actor=user, action="case_numbered", created_at__date=today).count()
 
         sequences = list(LGUTaxDeclarationSequence.objects.all())
@@ -1530,6 +1571,8 @@ def dashboard(request):
             "stats_pending": stats_pending,
             "stats_numbered_today": stats_numbered_today,
             "featured_sequence": featured_sequence,
+            "tab": tab,
+            "stats_numbered_total": stats_numbered_total,
         })
         template = "core/dashboard_numberer.html"
 
