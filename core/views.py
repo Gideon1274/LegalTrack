@@ -2132,45 +2132,39 @@ def _maybe_convert_office_upload_to_pdf(uploaded_file):
     if not (lower.endswith(".doc") or lower.endswith(".docx")):
         return uploaded_file, {"converted": False}
 
-    soffice = shutil.which("soffice") or shutil.which("soffice.exe")
-    if not soffice:
-        raise ValueError("DOC/DOCX upload requires PDF conversion, but LibreOffice (soffice) is not installed on the server.")
-
-    with tempfile.TemporaryDirectory() as tmpdir:
-        in_path = os.path.join(tmpdir, os.path.basename(name) or "upload.docx")
-        with open(in_path, "wb") as f:
-            for chunk in uploaded_file.chunks():
-                f.write(chunk)
-
-        cmd = [soffice, "--headless", "--convert-to", "pdf", "--outdir", tmpdir, in_path]
-        try:
-            subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60)
-        except Exception:
-            try:
-                uploaded_file.seek(0)
-            except Exception:
-                pass
-            raise ValueError("DOC/DOCX upload failed to convert to PDF. Please upload a PDF instead or try again.")
-
-        base = os.path.splitext(os.path.basename(in_path))[0]
-        out_path = os.path.join(tmpdir, f"{base}.pdf")
-        if not os.path.exists(out_path):
-            try:
-                uploaded_file.seek(0)
-            except Exception:
-                pass
-            raise ValueError("DOC/DOCX upload failed to convert to PDF (output missing). Please upload a PDF instead.")
-
-        with open(out_path, "rb") as f:
-            pdf_bytes = f.read()
-
     try:
-        uploaded_file.seek(0)
+        from docx2pdf import convert
+        with tempfile.TemporaryDirectory() as tmpdir:
+            in_path = os.path.join(tmpdir, os.path.basename(name) or "upload.docx")
+            with open(in_path, "wb") as f:
+                for chunk in uploaded_file.chunks():
+                    f.write(chunk)
+            
+            base = os.path.splitext(os.path.basename(in_path))[0]
+            out_path = os.path.join(tmpdir, f"{base}.pdf")
+            convert(in_path, out_path)
+            
+            if os.path.exists(out_path):
+                with open(out_path, "rb") as f:
+                    pdf_bytes = f.read()
+                try:
+                    uploaded_file.seek(0)
+                except Exception:
+                    pass
+                pdf_name = f"{os.path.splitext(os.path.basename(name) or 'upload')[0]}.pdf"
+                return ContentFile(pdf_bytes, name=pdf_name), {"converted": True, "original_name": name, "pdf_name": pdf_name}
+            else:
+                try:
+                    uploaded_file.seek(0)
+                except Exception:
+                    pass
+                return uploaded_file, {"converted": False, "error": "Output file missing"}
     except Exception:
-        pass
-
-    pdf_name = f"{os.path.splitext(os.path.basename(name) or 'upload')[0]}.pdf"
-    return ContentFile(pdf_bytes, name=pdf_name), {"converted": True, "original_name": name, "pdf_name": pdf_name}
+        try:
+            uploaded_file.seek(0)
+        except Exception:
+            pass
+        return uploaded_file, {"converted": False, "error": "Conversion failed"}
 
 
 def _upsert_case_document(*, case: Case, doc_type: str, uploaded_file, actor: CustomUser | None):
@@ -2438,16 +2432,36 @@ def case_wizard(request, tracking_id, step: int):
         FormSet = forms.formset_factory(ChecklistItemForm, extra=0)
 
         initial = []
+        seen_doc_types = set()
+        
+        # First, add all existing CaseDocument objects
+        for doc in case.documents.all():
+            doc_type = (doc.doc_type or "").strip()
+            if doc_type and doc_type.lower() not in seen_doc_types:
+                initial.append({
+                    "doc_type": doc_type,
+                    "required": False,
+                })
+                seen_doc_types.add(doc_type.lower())
+        
+        # Then add items from case.checklist that aren't already added
         if case.checklist:
             for item in (case.checklist or []):
                 if isinstance(item, dict):
-                    initial.append({
-                        "doc_type": item.get("doc_type", ""),
-                        "required": False,
-                    })
+                    doc_type = (item.get("doc_type", "") or "").strip()
+                    if doc_type and doc_type.lower() not in seen_doc_types:
+                        initial.append({
+                            "doc_type": doc_type,
+                            "required": False,
+                        })
+                        seen_doc_types.add(doc_type.lower())
         else:
+            # If no checklist, add requirements not already added
             for req in requirements:
-                initial.append({"doc_type": req, "required": False})
+                req = (req or "").strip()
+                if req and req.lower() not in seen_doc_types:
+                    initial.append({"doc_type": req, "required": False})
+                    seen_doc_types.add(req.lower())
 
         if request.method == "POST":
             if "add_row" in request.POST:
@@ -2732,16 +2746,36 @@ def draft_wizard(request, draft_id, step: int):
         FormSet = forms.formset_factory(ChecklistItemForm, extra=0)
 
         initial = []
+        seen_doc_types = set()
+        
+        # First, add all existing CaseDocument objects
+        for doc in case.documents.all():
+            doc_type = (doc.doc_type or "").strip()
+            if doc_type and doc_type.lower() not in seen_doc_types:
+                initial.append({
+                    "doc_type": doc_type,
+                    "required": False,
+                })
+                seen_doc_types.add(doc_type.lower())
+        
+        # Then add items from case.checklist that aren't already added
         if case.checklist:
             for item in (case.checklist or []):
                 if isinstance(item, dict):
-                    initial.append({
-                        "doc_type": item.get("doc_type", ""),
-                        "required": False,
-                    })
+                    doc_type = (item.get("doc_type", "") or "").strip()
+                    if doc_type and doc_type.lower() not in seen_doc_types:
+                        initial.append({
+                            "doc_type": doc_type,
+                            "required": False,
+                        })
+                        seen_doc_types.add(doc_type.lower())
         else:
+            # If no checklist, add requirements not already added
             for req in requirements:
-                initial.append({"doc_type": req, "required": False})
+                req = (req or "").strip()
+                if req and req.lower() not in seen_doc_types:
+                    initial.append({"doc_type": req, "required": False})
+                    seen_doc_types.add(req.lower())
 
         if request.method == "POST":
             if "add_row" in request.POST:
@@ -2796,21 +2830,7 @@ def draft_wizard(request, draft_id, step: int):
 
                     uploaded_file = cd.get("file")
                     if uploaded_file:
-                        try:
-                            _upsert_case_document(case=case, doc_type=doc_type, uploaded_file=uploaded_file, actor=request.user)
-                        except ValueError as exc:
-                            messages.error(request, str(exc))
-                            docs = list(case.documents.all())
-                            return render(request, "core/submit_case.html", {
-                                "step": 2,
-                                "formset": formset,
-                                "case": case,
-                                "is_edit": True,
-                                "documents": docs,
-                                "documents_by_type": {d.doc_type: d for d in docs},
-                                "rows": _build_checklist_rows(formset, docs),
-                                "case_type_requirements": requirements,
-                            })
+                        _upsert_case_document(case=case, doc_type=doc_type, uploaded_file=uploaded_file, actor=request.user)
 
                     has_doc = CaseDocument.objects.filter(case=case, doc_type=doc_type).exists()
                     new_checklist.append({
