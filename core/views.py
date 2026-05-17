@@ -2280,8 +2280,9 @@ def submit_case(request):
                 new_case_type = (case.case_type or "").strip()
                 new_title_type = (case.property_title_type or "").strip()
                 if (new_case_type != old_case_type) or (new_title_type != old_title_type):
-                    _reset_case_uploads_and_checklist(case=case)
-                    _seed_case_checklist(case=case)
+                    if not CaseDocument.objects.filter(case=case).exists():
+                        _reset_case_uploads_and_checklist(case=case)
+                        _seed_case_checklist(case=case)
                 messages.info(request, "Continuing your existing draft.")
                 if wants_save_draft and not wants_continue:
                     return redirect("drafts")
@@ -2389,8 +2390,9 @@ def case_wizard(request, tracking_id, step: int):
                 new_title_type = (updated.property_title_type or "").strip()
                 if (new_case_type != old_case_type) or (new_title_type != old_title_type):
                     if updated.lgu_submitted_at is None or updated.status in {"returned", "client_correction", "draft"}:
-                        _reset_case_uploads_and_checklist(case=updated)
-                        _seed_case_checklist(case=updated)
+                        if not CaseDocument.objects.filter(case=updated).exists():
+                            _reset_case_uploads_and_checklist(case=updated)
+                            _seed_case_checklist(case=updated)
 
                 AuditLog.objects.create(
                     actor=request.user,
@@ -2678,8 +2680,9 @@ def draft_wizard(request, draft_id, step: int):
                 new_case_type = (case.case_type or "").strip()
                 new_title_type = (case.property_title_type or "").strip()
                 if (new_case_type != old_case_type) or (new_title_type != old_title_type):
-                    _reset_case_uploads_and_checklist(case=case)
-                    _seed_case_checklist(case=case)
+                    if not CaseDocument.objects.filter(case=case).exists():
+                        _reset_case_uploads_and_checklist(case=case)
+                        _seed_case_checklist(case=case)
 
                 AuditLog.objects.create(
                     actor=request.user,
