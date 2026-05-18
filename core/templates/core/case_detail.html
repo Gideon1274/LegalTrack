@@ -379,7 +379,7 @@
                         {% if is_receiver %}
                             {% if can_receive %}
                                 <button class="btn btn-primary btn-block" type="button" onclick="openReceiveModal()">
-                                    <i class="ri-inbox-receive-line"></i> Resume Case
+                                    <i class="ri-inbox-receive-line"></i> Receive transaction
                                 </button>
                             {% endif %}
 
@@ -387,12 +387,12 @@
                                 <button class="btn btn-primary btn-block" type="button" onclick="openAssignModal('{{ case.tracking_id }}', '{{ case.client_name|escapejs }}')">
                                     <i class="ri-user-add-line"></i> Assign to Examiner
                                 </button>
-                            {% endif %}
-
-                            {% if can_return %}
-                                <button class="btn btn-danger btn-block" type="button" onclick="openReturnModal()">
-                                    <i class="ri-arrow-go-back-line"></i> Return to Client for Correction
-                                </button>
+                                
+                                {% if can_return %}
+                                    <button class="btn btn-danger btn-block" type="button" onclick="openReturnModal()">
+                                        <i class="ri-arrow-go-back-line"></i> Return to Client for Correction
+                                    </button>
+                                {% endif %}
                             {% endif %}
                         {% endif %}
 
@@ -456,11 +456,15 @@
                                 {% csrf_token %}
                                 <input
                                     type="text"
+                                    inputmode="numeric"
+                                    pattern="[0-9]*"
+                                    maxlength="6"
                                     name="transaction_number"
-                                    placeholder="Enter Transaction Number"
+                                    placeholder="Enter 6-digit Transaction Number"
                                     class="form-control"
                                     style="margin-bottom: 0.5rem;"
                                     required
+                                    oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0, 6)"
                                 >
                                 <button class="btn btn-primary" type="submit" style="width:100%;">
                                     <i class="ri-hashtag"></i> Submit Transaction Number
@@ -473,12 +477,16 @@
                                 {% csrf_token %}
                                 <input
                                     type="text"
+                                    inputmode="numeric"
+                                    pattern="[0-9]*"
+                                    maxlength="6"
                                     name="transaction_number"
                                     value="{{ case.td_number|default:'' }}"
-                                    placeholder="Override Transaction Number"
+                                    placeholder="Override Transaction Number (6 digits)"
                                     class="form-control"
                                     style="margin-bottom: 0.5rem;"
                                     required
+                                    oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0, 6)"
                                 >
                                 <button class="btn btn-outline" type="submit" style="width:100%;">
                                     <i class="ri-edit-2-line"></i> Override Transaction Number

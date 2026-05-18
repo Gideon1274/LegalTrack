@@ -4179,6 +4179,10 @@ def mark_numbered(request, tracking_id):
         messages.error(request, "Transaction Number is required.")
         return redirect("case_detail", tracking_id=case.tracking_id)
 
+    if not transaction_number.isdigit() or len(transaction_number) != 6:
+        messages.error(request, "Transaction Number must be exactly 6 digits (numbers only).")
+        return redirect("case_detail", tracking_id=case.tracking_id)
+
     old_status = case.status
     old_transaction_number = (case.td_number or "").strip()
 
