@@ -115,9 +115,9 @@
             </div>
         </div>
         <nav class="public-nav">
-            <a href="{% url 'landing' %}" class="nav-link">Home</a>
+            {% comment %} <a href="{% url 'landing' %}" class="nav-link">Home</a>
             <a href="{% url 'support' %}" class="nav-link" style="color: var(--accent-red);">Need Help?</a>
-            <a href="{% url 'login' %}" class="btn-staff-login">Staff Login</a>
+            <a href="{% url 'login' %}" class="btn-staff-login">Staff Login</a> {% endcomment %}
         </nav>
     </header>
 
@@ -661,7 +661,7 @@
         </div>
 
         <!-- Need Help -->
-        <div class="pt-card" style="margin-top:20px;">
+        {% comment %} <div class="pt-card" style="margin-top:20px;">
           <div class="pt-card__body">
             <div class="pt-help-card" style="padding:0; background:none; border:none;">
               <div class="pt-help-card__icon">
@@ -676,7 +676,7 @@
               </div>
             </div>
           </div>
-        </div>
+        </div> {% endcomment %}
 
         <!-- Data Privacy -->
         <div class="pt-card" style="margin-top:20px;">

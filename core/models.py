@@ -229,17 +229,31 @@ class CustomUser(AbstractUser):
         if send_email is None:
             send_email = bool(getattr(settings, "LEGALTRACK_SEND_EMAILS", True))
 
-        subject = "Activate Your PAStrack Account"
+        subject = "Welcome to PAStrack — Activate Your Account"
         message = (
-            f"Hello {self.full_name or self.email},\n\n"
-            "Your PAStrack account has been created.\n\n"
+            f"Welcome to PAStrack, {self.full_name or self.email}!\n\n"
+            "We're pleased to have you on board.\n\n"
+            "Your account has been created and is ready for activation. "
+            "PAStrack is the Provincial Assessor's Office Tracking System, designed to "
+            "streamline document processing and provide secure, transparent tracking "
+            "from submission to final release.\n\n"
+            "Your Account Details\n"
             f"Staff ID: {self.username}\n"
-            f"Email: {self.email}\n"
+            f"Email Address: {self.email}\n"
             f"Temporary Password: {temp_password}\n\n"
-            "Activate your account using this link (expires in 1 hour):\n"
+            "Activate Your Account\n"
+            "Use the secure link below to activate your account and set your personal password:\n\n"
             f"{activation_link}\n\n"
-            "You will be required to set a new strong password during activation.\n\n"
-            "If your temporary password expires (7 days), contact the Super Admin for a manual resend.\n"
+            "Security Notes\n"
+            "- This activation link will expire in 1 hour.\n"
+            "- You will be required to create a new strong password during activation.\n"
+            "- Your temporary password remains valid for up to 7 days.\n"
+            "- If the link expires or you encounter any issues, please contact the "
+            "Super Administrator to request a new activation email.\n\n"
+            "We look forward to having you use PAStrack to support more efficient and "
+            "transparent document processing.\n\n"
+            "Warm regards,\n"
+            "The PAStrack Team\n"
         )
 
         if send_email:
