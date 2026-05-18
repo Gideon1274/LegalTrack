@@ -2145,9 +2145,11 @@ def profile(request):
 
 
 def _lgu_owns_case(user, case: Case) -> bool:
-    if getattr(user, "role", None) == "capitol_receiving":
-        return getattr(case, "submitted_by_id", None) == user.id
-    if getattr(user, "role", None) != "lgu_admin":
+    role = getattr(user, "role", "") or ""
+    if role == "capitol_receiving":
+        # Receivers "own" the case if it is in the intake or correction phase
+        return case.status in {"not_received", "received", "client_correction"} and case.assigned_to_id is None
+    if role != "lgu_admin":
         return False
     user_mun = (getattr(user, "lgu_municipality", "") or "").strip()
     case_mun = (getattr(getattr(case, "submitted_by", None), "lgu_municipality", "") or "").strip()
@@ -2156,26 +2158,34 @@ def _lgu_owns_case(user, case: Case) -> bool:
 def _lgu_can_edit_details(user, case: Case) -> bool:
     if not _lgu_owns_case(user, case):
         return False
-    if case.status in {"draft", "not_received", "returned"}:
-        return True
-    if case.status == "client_correction":
-        deadline = getattr(case, "client_correction_deadline", None)
-        if deadline and timezone.now() > deadline:
+    
+    role = getattr(user, "role", "") or ""
+    
+    # Receiver can edit if in intake or correction phase
+    if role == "capitol_receiving":
+        return case.status in {"draft", "not_received", "received", "client_correction"}
+        
+    # LGU can only edit if NOT yet submitted to capitol
+    if role == "lgu_admin":
+        if case.lgu_submitted_at is not None:
             return False
-        return True
+        return case.status in {"draft", "not_received", "returned"}
+        
     return False
 
 def _lgu_can_edit_documents(user, case: Case) -> bool:
     if not _lgu_can_edit_details(user, case):
         return False
-    if case.status == "returned":
+    
+    role = getattr(user, "role", "") or ""
+    if role == "capitol_receiving":
         return True
-    if case.status == "client_correction":
-        return True
-    if case.status == "not_received":
-        return True
-    if case.lgu_submitted_at is None:
-        return True
+        
+    if role == "lgu_admin":
+        if case.lgu_submitted_at is not None:
+            return False
+        return case.status in {"draft", "not_received", "returned"}
+        
     return False
 
 def _lgu_can_finalize(user, case: Case) -> bool:
@@ -3136,7 +3146,7 @@ def case_detail(request, tracking_id):
 
     can_receive = (
         request.user.role == "capitol_receiving" and
-        case.status in {"not_received"}
+        case.status in {"not_received", "client_correction"}
     )
 
     can_return = (
@@ -3213,7 +3223,7 @@ def case_detail(request, tracking_id):
         if role == "super_admin":
             return True
         if role == "capitol_receiving":
-            return case.status in {"not_received", "received"} and case.assigned_to_id is None
+            return case.status in {"not_received", "received", "client_correction"} and case.assigned_to_id is None
         if role == "capitol_examiner":
             return case.status in {"to_examine", "in_review"} and case.assigned_to_id == user.id
         if role == "capitol_approver":
@@ -3335,7 +3345,7 @@ def case_detail(request, tracking_id):
             "To be received by Receiver"
             if (getattr(case, "status", "") == "not_received" and getattr(case, "received_at", None) is None)
             else (
-                "Returned to Client" if getattr(case, "status", "") == "client_correction"
+                "Currently with Receiver (Correction needed)" if getattr(case, "status", "") == "client_correction"
                 else f"Currently with {_case_current_holder_label(case)}"
             )
         ),
@@ -3493,9 +3503,11 @@ def submissions(request):
         # 1. Scope Filter & Dynamic Tabs based on Role
         if request.user.role == "capitol_receiving":
             returned_from_examiner_qs = qs.filter(status="received", assigned_to__isnull=True, returned_by__role="capitol_examiner")
+            correction_qs = qs.filter(status="client_correction", assigned_to__isnull=True)
             tabs = [
                 ("all", f"All Case Intake ({qs.count()})"), 
                 ("returned_from_examiner", f"Returned from Examiner ({returned_from_examiner_qs.count()})"),
+                ("correction", f"Under Correction ({correction_qs.count()})"),
                 ("received", f"Received ({qs.filter(status='received', assigned_to__isnull=True).count()})"), 
                 ("to_examine", f"To Examine ({qs.filter(status__in=['to_examine','in_review']).count()})")
             ]
@@ -3510,6 +3522,8 @@ def submissions(request):
 
             if tab == "returned_from_examiner":
                 qs = returned_from_examiner_qs
+            elif tab == "correction":
+                qs = correction_qs
             elif tab == "received":
                 qs = qs.filter(status="received", assigned_to__isnull=True)
             elif tab == "to_examine":
@@ -3695,7 +3709,7 @@ def receive_case(request, tracking_id):
         messages.error(request, "Only Capitol Receiver can receive cases.")
         return redirect("case_detail", tracking_id=case.tracking_id)
 
-    if case.status not in {"not_received"}:
+    if case.status not in {"not_received", "client_correction"}:
         messages.error(request, "This case cannot be received in its current status.")
         return redirect("case_detail", tracking_id=case.tracking_id)
 
@@ -3806,7 +3820,7 @@ def assign_case(request, tracking_id):
         return redirect("case_detail", tracking_id=case.tracking_id)
 
     if request.method == "POST":
-        if case.status != "received" or case.assigned_to_id is not None:
+        if case.status not in {"received", "client_correction"} or case.assigned_to_id is not None:
             messages.error(request, "This case is not eligible for assignment.")
             return redirect("case_detail", tracking_id=case.tracking_id)
 

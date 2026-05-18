@@ -662,9 +662,9 @@
 
 <div id="receiveModal" class="drawer-backdrop" style="display:none; justify-content:center; align-items:center; opacity:1; visibility:visible;">
     <div class="panel" style="width: 400px; padding: 2rem;">
-        <h3 class="panel-title" style="margin-bottom: 1rem;">Resume Case</h3>
+        <h3 class="panel-title" style="margin-bottom: 1rem;">Receive transaction</h3>
         <div style="font-size: 0.9rem; color: var(--text-muted);">
-            Are you sure you want to mark this case as <strong style="color: var(--text-main);">Received</strong>?
+            Are you sure you want to mark this transaction as <strong style="color: var(--text-main);">Received</strong>?
         </div>
         <form method="post" action="{% url 'receive_case' case.tracking_id %}" style="margin-top: 1rem;">
             {% csrf_token %}
