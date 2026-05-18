@@ -326,6 +326,34 @@
                     {% endif %}
                 </div>
             </div>
+
+            {% if archived_documents %}
+            <div class="panel">
+                <div class="panel-header"><h2 class="panel-title">Document History</h2></div>
+                <div class="panel-body" style="padding-top: 0; padding-bottom: 0;">
+                    <table class="doc-table">
+                        {% for a in archived_documents %}
+                        <tr>
+                            <td class="doc-icon"><i class="ri-history-line"></i></td>
+                            <td>
+                                <div class="doc-name">{{ a.doc_type }}</div>
+                                <div class="doc-meta">Archived {{ a.archived_at|date:"M d, Y g:i A" }}</div>
+                                <div class="doc-meta">Auto-delete {{ a.keep_until|date:"M d, Y g:i A" }}</div>
+                                {% if a.original_filename %}
+                                    <div class="doc-meta">{{ a.original_filename }}</div>
+                                {% endif %}
+                            </td>
+                            <td style="text-align: right;">
+                                <a href="{% url 'download_archived_case_document' a.id %}" target="_blank" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">
+                                    Preview <i class="ri-external-link-line"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </table>
+                </div>
+            </div>
+            {% endif %}
         </div>
 
         <!-- RIGHT COLUMN: COMMAND CENTER & HISTORY -->
@@ -336,7 +364,7 @@
                     <div class="panel-header"><h2 class="panel-title">Workflow Actions</h2></div>
                     <div class="panel-body">
                         <div style="padding: 0.9rem; background: var(--inactive-bg); border-radius: 8px; color: var(--text-muted); text-align: center; margin-bottom: 1rem;">
-                            <p style="margin: 0; font-weight: 600; color: var(--text-main);">Currently with {{ current_holder_label }}</p>
+                            <p style="margin: 0; font-weight: 600; color: var(--text-main);">{{ workflow_status_text }}</p>
                             {% if current_holder_detail %}
                                 <p style="margin: 0.25rem 0 0 0; font-size: 0.85rem;">{{ current_holder_detail }}</p>
                             {% endif %}
@@ -349,6 +377,12 @@
                         {% endif %}
 
                         {% if is_receiver %}
+                            {% if can_receive %}
+                                <button class="btn btn-primary btn-block" type="button" onclick="openReceiveModal()">
+                                    <i class="ri-inbox-receive-line"></i> Resume Case
+                                </button>
+                            {% endif %}
+
                             {% if can_assign %}
                                 <button class="btn btn-primary btn-block" type="button" onclick="openAssignModal('{{ case.tracking_id }}', '{{ case.client_name|escapejs }}')">
                                     <i class="ri-user-add-line"></i> Assign to Examiner
@@ -471,20 +505,22 @@
                         <form method="post" action="{% url 'add_case_remark' case.tracking_id %}" style="margin-bottom: 1.5rem;">
                             {% csrf_token %}
 
-                            <textarea name="text" class="remarks-input" placeholder="Add an internal note..." id="noteBox"></textarea>
+                            <textarea name="text" class="remarks-input" placeholder="{% if can_remark %}Add an internal note...{% else %}You can only add notes when this case is currently with you.{% endif %}" id="noteBox" {% if not can_remark %}disabled style="opacity:0.6; cursor:not-allowed;"{% endif %}></textarea>
                             
-                            <button class="btn-submit-note" type="submit">Add Internal Note</button>
+                            <button class="btn-submit-note" type="submit" {% if not can_remark %}disabled style="opacity:0.6; cursor:not-allowed;"{% endif %}>Add Internal Note</button>
                         </form>
 
                         <script>
                         const textarea = document.getElementById("noteBox");
 
-                        textarea.addEventListener("keydown", function (event) {
-                            if (event.key === "Enter" && !event.shiftKey) {
-                                event.preventDefault(); // stop newline
-                                this.form.submit();     // now this works ✅
-                            }
-                        });
+                        if (textarea && !textarea.disabled) {
+                            textarea.addEventListener("keydown", function (event) {
+                                if (event.key === "Enter" && !event.shiftKey) {
+                                    event.preventDefault();
+                                    this.form.submit();
+                                }
+                            });
+                        }
                         </script>
 
                         <ul class="timeline">
@@ -613,6 +649,31 @@
     }
     function closeReturnModal() {
         document.getElementById('returnModal').style.display = 'none';
+    }
+</script>
+
+<div id="receiveModal" class="drawer-backdrop" style="display:none; justify-content:center; align-items:center; opacity:1; visibility:visible;">
+    <div class="panel" style="width: 400px; padding: 2rem;">
+        <h3 class="panel-title" style="margin-bottom: 1rem;">Resume Case</h3>
+        <div style="font-size: 0.9rem; color: var(--text-muted);">
+            Are you sure you want to mark this case as <strong style="color: var(--text-main);">Received</strong>?
+        </div>
+        <form method="post" action="{% url 'receive_case' case.tracking_id %}" style="margin-top: 1rem;">
+            {% csrf_token %}
+            <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                <button type="button" class="btn btn-outline" style="flex:1" onclick="closeReceiveModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary" style="flex:1;">Confirm</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function openReceiveModal() {
+        document.getElementById('receiveModal').style.display = 'flex';
+    }
+    function closeReceiveModal() {
+        document.getElementById('receiveModal').style.display = 'none';
     }
 </script>
 

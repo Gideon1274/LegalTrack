@@ -732,6 +732,39 @@ def case_document_upload_to(instance, filename: str) -> str:
     return f"cases/{key}/{doc_type}/{safe_name}"
 
 
+def archived_case_document_upload_to(instance, filename: str) -> str:
+    from pathlib import PurePosixPath
+    from django.utils.text import slugify
+
+    def _safe_filename(name: str, *, max_len: int = 120) -> str:
+        raw = (name or "").replace("\\", "/")
+        base = PurePosixPath(raw).name
+        if not base:
+            return "upload"
+
+        if "." in base:
+            stem, _, ext = base.rpartition(".")
+            ext = ext.lower()
+            ext_part = f".{ext}" if ext else ""
+            stem = stem or "file"
+        else:
+            stem, ext_part = base, ""
+
+        stem = " ".join(stem.split()).strip() or "file"
+        allowed = max(1, max_len - len(ext_part))
+        if len(stem) > allowed:
+            stem = stem[:allowed]
+        return f"{stem}{ext_part}"
+
+    case = getattr(instance, "case", None)
+    tracking = getattr(case, "tracking_id", None)
+    draft_id = getattr(case, "draft_id", None)
+    key = tracking or (str(draft_id) if draft_id else "unknown")
+    doc_type = (slugify(getattr(instance, "doc_type", "") or "document") or "document")[:60]
+    safe_name = _safe_filename(str(filename))
+    return f"cases/{key}/{doc_type}/archive/{safe_name}"
+
+
 class CaseDocument(TimestampedModel):
     case = models.ForeignKey("Case", on_delete=models.CASCADE, related_name="documents")
     doc_type = models.CharField(max_length=120)
@@ -764,6 +797,33 @@ class CaseDocument(TimestampedModel):
     def __str__(self):
         key = self.case.tracking_id or str(getattr(self.case, "draft_id", ""))
         return f"{key} - {self.doc_type}"
+
+
+class ArchivedCaseDocument(models.Model):
+    case = models.ForeignKey("Case", on_delete=models.CASCADE, related_name="archived_documents")
+    doc_type = models.CharField(max_length=120)
+    file = models.FileField(upload_to=archived_case_document_upload_to, max_length=1024)
+    original_filename = models.CharField(max_length=255, blank=True, default="")
+    archived_by = models.ForeignKey(
+        "CustomUser",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="archived_case_documents",
+    )
+    archived_at = models.DateTimeField(auto_now_add=True)
+    keep_until = models.DateTimeField()
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ["-archived_at"]
+        indexes: ClassVar[list] = [
+            models.Index(fields=["case"]),
+            models.Index(fields=["keep_until"]),
+        ]
+
+    def __str__(self):
+        key = self.case.tracking_id or str(getattr(self.case, "draft_id", ""))
+        return f"{key} - {self.doc_type} (archived)"
 
 
 class CaseNumber(TimestampedModel):

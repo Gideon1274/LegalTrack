@@ -300,7 +300,7 @@ from .forms import (
     StaffSearchForm,
     SupportFeedbackForm,
 )
-from .models import AuditLog, Case, CaseDocument, CaseNumber, CaseRemark, CustomUser, FAQItem, SupportFeedback
+from .models import ArchivedCaseDocument, AuditLog, Case, CaseDocument, CaseNumber, CaseRemark, CustomUser, FAQItem, SupportFeedback
 from .notifications import send_case_email, sns_hook
 
 
@@ -866,6 +866,8 @@ def _user_is_current_owner_for_internal_sections(user: CustomUser, case: Case) -
 
 def _case_current_holder_label(case: Case) -> str:
     status = getattr(case, "status", "") or ""
+    if status == "client_correction":
+        return "Returned to Client"
     if status in {"not_received", "received"}:
         return "Receiver"
     if status in {"to_examine", "in_review"}:
@@ -914,6 +916,42 @@ def download_case_document(request, doc_id: int):
     filename = os.path.basename(doc.file.name or "document")
     try:
         fh = doc.file.open("rb")
+    except (FileNotFoundError, OSError, ValueError):
+        return HttpResponse("File could not be opened.", status=404)
+
+    response = FileResponse(fh, as_attachment=False, filename=filename)
+    guessed, _ = mimetypes.guess_type(filename)
+    if guessed:
+        response["Content-Type"] = guessed
+    else:
+        if filename.lower().endswith(".pdf"):
+            response["Content-Type"] = "application/pdf"
+        elif filename.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp")):
+            response["Content-Type"] = "image/*"
+    response["Content-Disposition"] = f'inline; filename="{filename}"'
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+@xframe_options_sameorigin
+@login_required
+def download_archived_case_document(request, archive_id: int):
+    a = get_object_or_404(ArchivedCaseDocument.objects.select_related("case"), id=archive_id)
+    if not _user_can_view_case(request.user, a.case):
+        raise Http404()
+    if not a.file or not (a.file.name or "").strip():
+        return HttpResponse("File is missing for this archived document.", status=404)
+
+    if hasattr(a.file, "storage") and hasattr(a.file.storage, "exists"):
+        try:
+            if not a.file.storage.exists(a.file.name):
+                return HttpResponse("File not found on the server storage.", status=404)
+        except Exception:
+            pass
+
+    filename = os.path.basename(a.file.name or "document")
+    try:
+        fh = a.file.open("rb")
     except (FileNotFoundError, OSError, ValueError):
         return HttpResponse("File could not be opened.", status=404)
 
@@ -2260,6 +2298,57 @@ def _maybe_convert_office_upload_to_pdf(uploaded_file):
     return ContentFile(pdf_bytes, name=pdf_name), {"converted": True, "original_name": name, "pdf_name": pdf_name}
 
 
+def _purge_expired_archived_case_documents(*, case: Case | None = None) -> None:
+    now = timezone.now()
+    qs = ArchivedCaseDocument.objects.filter(keep_until__lt=now)
+    if case is not None:
+        qs = qs.filter(case=case)
+    for a in list(qs.only("id", "file")):
+        if getattr(a, "file", None):
+            with contextlib.suppress(Exception):
+                a.file.delete(save=False)
+        with contextlib.suppress(Exception):
+            a.delete()
+
+
+def _purge_all_archived_case_documents(*, case: Case) -> None:
+    qs = ArchivedCaseDocument.objects.filter(case=case)
+    for a in list(qs.only("id", "file")):
+        if getattr(a, "file", None):
+            with contextlib.suppress(Exception):
+                a.file.delete(save=False)
+        with contextlib.suppress(Exception):
+            a.delete()
+
+
+def _archive_existing_case_document_for_one_week(*, case: Case, doc: CaseDocument, actor: CustomUser | None) -> None:
+    if getattr(case, "status", "") != "client_correction":
+        return
+    if not getattr(doc, "file", None):
+        return
+
+    with contextlib.suppress(Exception):
+        _purge_expired_archived_case_documents(case=case)
+
+    previous_name = os.path.basename(doc.file.name or "")
+    try:
+        doc.file.open("rb")
+        content = doc.file.read()
+    finally:
+        with contextlib.suppress(Exception):
+            doc.file.close()
+
+    keep_until = timezone.now() + timedelta(days=7)
+    ArchivedCaseDocument.objects.create(
+        case=case,
+        doc_type=(getattr(doc, "doc_type", "") or ""),
+        file=ContentFile(content, name=(previous_name or f"{(getattr(doc, 'doc_type', '') or 'document')}.pdf")),
+        original_filename=previous_name,
+        archived_by=actor,
+        keep_until=keep_until,
+    )
+
+
 def _upsert_case_document(*, case: Case, doc_type: str, uploaded_file, actor: CustomUser | None):
     doc_type = (doc_type or "").strip()
     if not doc_type or not uploaded_file:
@@ -2273,6 +2362,8 @@ def _upsert_case_document(*, case: Case, doc_type: str, uploaded_file, actor: Cu
     previous_name = ""
     if not created and doc.file:
         previous_name = os.path.basename(doc.file.name or "")
+        with contextlib.suppress(Exception):
+            _archive_existing_case_document_for_one_week(case=case, doc=doc, actor=actor)
         with contextlib.suppress(Exception):
             doc.file.delete(save=False)
 
@@ -3025,19 +3116,10 @@ def case_detail(request, tracking_id):
     if not _user_can_view_case(request.user, case):
         raise Http404()
 
-    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+    with contextlib.suppress(Exception):
+        _purge_expired_archived_case_documents(case=case)
 
-    if not is_ajax and request.user.role == "capitol_receiving" and case.status == "not_received":
-        case.status = "received"
-        case.received_at = timezone.now()
-        case.received_by = request.user
-        case.save(update_fields=["status", "received_at", "received_by", "updated_at"])
-        AuditLog.objects.create(
-            actor=request.user,
-            action="case_receipt",
-            target_object=f"Case: {case.tracking_id}",
-            details={"old_status": "not_received", "new_status": "received", "note": "Receiver opened the case."},
-        )
+    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
 
     if not is_ajax and request.user.role == "capitol_examiner" and case.assigned_to == request.user and case.status == "to_examine":
         old_status = case.status
@@ -3146,6 +3228,7 @@ def case_detail(request, tracking_id):
 
     is_capitol = bool(request.user.is_authenticated and (_is_capitol_staff(request.user) or request.user.role == "super_admin"))
     show_internal = bool(is_capitol and case.status != "client_correction" and _user_is_current_owner_for_internal_sections(request.user, case))
+    role = (getattr(request.user, "role", "") or "").strip()
 
     show_correction_required_banner = False
     if getattr(case, "status", "") == "client_correction":
@@ -3155,6 +3238,7 @@ def case_detail(request, tracking_id):
         returned_by_role = (getattr(returned_by, "role", "") or "").strip()
         if (
             returned_by_role == "capitol_approver"
+            and getattr(case, "status", "") in {"to_examine", "in_review"}
             and getattr(case, "assigned_to_id", None) is not None
             and request.user.id == getattr(case, "assigned_to_id", None)
         ):
@@ -3179,9 +3263,30 @@ def case_detail(request, tracking_id):
             h.details_display = _format_case_history_details(getattr(h, "action", "") or "", getattr(h, "details", None))
 
         remarks = list(remarks_qs)
+    elif role == "lgu_admin":
+        history_qs = (
+            AuditLog.objects.filter(target_object=f"Case: {case.tracking_id}")
+            .filter(action__in=["case_create", "case_update", "case_remark"], actor=request.user)
+            .select_related("actor")
+            .order_by("-created_at")
+        )
+        history = list(history_qs)
+        for h in history:
+            h.details_display = _format_case_history_details(getattr(h, "action", "") or "", getattr(h, "details", None))
 
-        # Remarks are allowed only by the current responsible actor (owner).
+    if role == "super_admin":
         can_remark = True
+    elif show_internal:
+        can_remark = True
+    elif role == "lgu_admin":
+        can_remark = bool(
+            getattr(case, "status", "") in {"draft", "not_received"}
+            and getattr(case, "received_at", None) is None
+            and getattr(case, "assigned_to_id", None) is None
+            and _user_can_view_case(request.user, case)
+        )
+
+    if can_remark:
         remark_form = CaseRemarkForm()
 
     case_numbers = list(CaseNumber.objects.filter(case=case).order_by("number").values_list("number", flat=True))
@@ -3195,6 +3300,7 @@ def case_detail(request, tracking_id):
     response_context = {
         "case": case,
         "documents": list(case.documents.all()),
+        "archived_documents": list(ArchivedCaseDocument.objects.filter(case=case).order_by("-archived_at")[:200]),
         "is_examiner": is_examiner,
         "is_receiver": is_receiver,
         "is_approver": is_approver,
@@ -3225,6 +3331,14 @@ def case_detail(request, tracking_id):
         "show_correction_required_banner": show_correction_required_banner,
         "current_holder_label": _case_current_holder_label(case),
         "current_holder_detail": _case_current_holder_detail(case),
+        "workflow_status_text": (
+            "To be received by Receiver"
+            if (getattr(case, "status", "") == "not_received" and getattr(case, "received_at", None) is None)
+            else (
+                "Returned to Client" if getattr(case, "status", "") == "client_correction"
+                else f"Currently with {_case_current_holder_label(case)}"
+            )
+        ),
         "remarks": remarks,
         "history": history,
         "can_remark": can_remark,
@@ -3306,6 +3420,14 @@ def add_case_remark(request, tracking_id):
     elif role == "capitol_releaser":
         if case.status == "for_release" and case.status != "client_correction":
             is_authorized = True
+    elif role == "lgu_admin":
+        if (
+            _user_can_view_case(request.user, case)
+            and case.status in {"draft", "not_received"}
+            and case.received_at is None
+            and case.assigned_to_id is None
+        ):
+            is_authorized = True
 
     if not is_authorized:
         messages.error(request, "Not authorized to remark on this case right now.")
@@ -3357,7 +3479,7 @@ def submissions(request):
     date_to = parse_date(date_to_raw) if date_to_raw else None
 
     # Base: Everything submitted by LGUs
-    qs = Case.objects.filter(lgu_submitted_at__isnull=False).select_related("submitted_by", "assigned_to").order_by("-created_at")
+    qs = Case.objects.filter(lgu_submitted_at__isnull=False).select_related("submitted_by", "assigned_to", "returned_by").order_by("-created_at")
 
     examiners = None  # Will populate only if the user needs the Assignment Modal
 
@@ -3408,9 +3530,19 @@ def submissions(request):
                 qs = qs.filter(status__in=["to_examine", "in_review"], returned_by__role="capitol_examiner")
                 
         elif request.user.role == "capitol_approver":
-            tabs = [("all_assigned", "All Assigned")]
-            if not tab: tab = "all_assigned"
-            qs = qs.filter(status="for_approval")
+            returned_to_examiner_qs = qs.filter(status="in_review", returned_by__role="capitol_approver")
+            tabs = [
+                ("all_assigned", f"For Approval ({qs.filter(status='for_approval').count()})"),
+                ("returned_to_examiner", f"Returned to Examiner ({returned_to_examiner_qs.count()})"),
+            ]
+            if not tab:
+                tab = "all_assigned"
+
+            if tab == "returned_to_examiner":
+                qs = returned_to_examiner_qs
+            else:
+                tab = "all_assigned"
+                qs = qs.filter(status="for_approval")
             
         elif request.user.role == "capitol_taxmapper":
             tabs = [("all_assigned", "All Assigned")]
@@ -4101,6 +4233,8 @@ def release_case(request, tracking_id):
     case.status = "released"
     case.released_at = timezone.now()
     case.save(update_fields=["status", "released_at", "updated_at"])
+    with contextlib.suppress(Exception):
+        _purge_all_archived_case_documents(case=case)
 
     AuditLog.objects.create(
         actor=request.user,
