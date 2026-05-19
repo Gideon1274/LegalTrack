@@ -25,6 +25,7 @@ urlpatterns = [
     path("users/<int:user_id>/edit/", views.edit_staff_account, name="edit_staff_account"),
     path("users/<int:user_id>/toggle-active/", views.toggle_staff_active, name="toggle_staff_active"),
     path("users/<int:user_id>/resend-activation/", views.resend_activation, name="resend_activation"),
+    path("users/<int:user_id>/delete/", views.delete_user, name="delete_user"),
     path("api/users/", views.user_list_api, name="user_list_api"),
     path("audit-logs/", views.audit_logs, name="audit_logs"),
     path("audit-logs/export.csv", views.export_audit_logs_csv, name="export_audit_logs_csv"),
@@ -44,6 +45,7 @@ urlpatterns = [
     path("case/<str:tracking_id>/remarks/", views.add_case_remark, name="add_case_remark"),
     path("case/<str:tracking_id>/receive/", views.receive_case, name="receive_case"),
     path("case/<str:tracking_id>/return/", views.return_case, name="return_case"),
+    path("case/<str:tracking_id>/delete/", views.delete_case, name="delete_case"),
 
     path('case/<str:tracking_id>/forward/', views.forward_for_approval, name='forward_for_approval'),
     path('case/<str:tracking_id>/return-correction/', views.return_for_correction, name='return_for_correction'),

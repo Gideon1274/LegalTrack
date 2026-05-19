@@ -284,8 +284,11 @@
                         </div>
                     </div>
 
-                    <div class="form-actions">
-                        <a href="{% url 'dashboard' %}" class="btn-text">Cancel</a>
+                    <div class="form-actions" style="justify-content: space-between;">
+                        <div style="display: flex; gap: 1rem; align-items: center;">
+                            <a href="{% url 'dashboard' %}" class="btn-text">Cancel</a>
+                            <button type="submit" name="save_draft" value="1" class="btn btn-outline" style="border: 1px solid var(--border);">Save as Draft</button>
+                        </div>
                         <button type="submit" name="save_continue" value="1" class="btn btn-primary">Continue</button>
                     </div>
                 </form>
@@ -317,6 +320,7 @@
                                 <div style="display: none;">
                                     {{ row.form.doc_type }}
                                     {{ row.form.file }}
+                                    {{ row.form.is_deleted }}
                                 </div>
 
                                 <!-- STATE A: PENDING -->
@@ -332,7 +336,7 @@
                                         <div class="dz-icon"><i class="ri-cloud-upload-line"></i></div>
                                         <div class="dz-text">
                                             <strong>Select a file or drag and drop here</strong>
-                                            <span>JPG, PNG, MP4 or PDF, file size no more than 25MB</span>
+                                            <span>JPG, PNG, WORD or PDF, file size no more than 25MB</span>
                                         </div>
                                         <div class="dz-btn">SELECT FILE</div>
                                     </label>
@@ -359,8 +363,11 @@
 
                     <button type="submit" name="add_row" value="1" class="btn-add-custom"><i class="ri-add-line"></i> Add</button>
 
-                    <div class="form-actions" style="margin-top: 3rem;">
-                        <a href="{% url 'draft_wizard' case.draft_id 1 %}" class="btn-text" style="padding-left:0;">Back</a>
+                    <div class="form-actions" style="margin-top: 3rem; justify-content: space-between;">
+                        <div style="display: flex; gap: 1rem; align-items: center;">
+                            <a href="{% url 'draft_wizard' case.draft_id 1 %}" class="btn-text" style="padding-left:0;">Back</a>
+                            <button type="submit" name="save_draft" value="1" class="btn btn-outline" style="border: 1px solid var(--border);">Save as Draft</button>
+                        </div>
                         <button type="submit" class="btn btn-primary">Continue</button>
                     </div>
                 </form>
@@ -570,6 +577,11 @@
             const fileInput = document.getElementById(inputId);
             const row = document.getElementById(rowId);
             if (fileInput) fileInput.value = ''; 
+            
+            // Mark as deleted for backend
+            const isDeletedInput = row.querySelector('input[name$="-is_deleted"]');
+            if (isDeletedInput) isDeletedInput.value = 'true';
+
             if (row) {
                 row.classList.remove('state-completed');
                 row.classList.add('state-pending');
@@ -581,6 +593,10 @@
                 const fileInput = e.target;
                 const row = fileInput.closest('.doc-row');
                 if (row && fileInput.files.length > 0) {
+                    // Reset is_deleted if a new file is selected
+                    const isDeletedInput = row.querySelector('input[name$="-is_deleted"]');
+                    if (isDeletedInput) isDeletedInput.value = 'false';
+
                     const fileName = fileInput.files[0].name;
                     const rowIndex = row.id.split('-')[1];
                     const nameDisplay = document.getElementById('filename-' + rowIndex);

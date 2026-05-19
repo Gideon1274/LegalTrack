@@ -279,7 +279,7 @@
             </div>
             <div class="kpi-value">{{ stats_pending|default:"0" }}</div>
             <div class="kpi-meta"><i class="ri-file-list-line"></i>&nbsp;<span>Waiting for assignment</span></div>
-            <a href="?tab=not_numbered" class="kpi-cta">Start Numbering <i class="ri-arrow-right-line"></i></a>
+            <a href="{% url 'submissions' %}?scope=me&tab=pending_numbering" class="kpi-cta">Start Numbering <i class="ri-arrow-right-line"></i></a>
         </div>
 
         <!-- 2. Numbered Today — alert card if > 0 -->
@@ -290,7 +290,7 @@
             </div>
             <div class="kpi-value" {% if stats_numbered_today > 0 %}style="color:#15803d;"{% endif %}>{{ stats_numbered_today|default:"0" }}</div>
             <div class="kpi-meta" {% if stats_numbered_today > 0 %}style="color:#16a34a;"{% endif %}><i class="ri-calendar-line"></i>&nbsp;<span>Successfully assigned</span></div>
-            <a href="?tab=numbered" class="kpi-cta">View Numbered <i class="ri-arrow-right-line"></i></a>
+            <a href="{% url 'submissions' %}?scope=me&tab=numbered" class="kpi-cta">View Numbered <i class="ri-arrow-right-line"></i></a>
         </div>
 
         <!-- 3. Total Numbered -->
@@ -301,7 +301,7 @@
             </div>
             <div class="kpi-value">{{ stats_numbered_total|default:"0" }}</div>
             <div class="kpi-meta" style="color:#4338ca;"><i class="ri-arrow-up-line"></i>&nbsp;<span>All time assigned</span></div>
-            <a href="?tab=numbered" class="kpi-cta">View History <i class="ri-arrow-right-line"></i></a>
+            <a href="{% url 'submissions' %}?scope=me&tab=all_assigned" class="kpi-cta">View History <i class="ri-arrow-right-line"></i></a>
         </div>
 
         <!-- 4. Avg Numbering Time -->

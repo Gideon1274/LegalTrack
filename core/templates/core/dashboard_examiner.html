@@ -284,59 +284,59 @@
     <!-- ===== KPI ROW (5 cards) ===== -->
     <div class="kpi-row">
 
-        <!-- 1. Assigned Today — focus card -->
+        <!-- 1. To Examine — focus card -->
         <div class="bento-card focus-card">
             <div class="card-header">
-                <span class="card-title">Assigned Today</span>
+                <span class="card-title">To Examine</span>
                 <div class="kpi-icon-box"><i class="ri-inbox-archive-line"></i></div>
             </div>
-            <div class="kpi-value">{{ stats_assigned_today|default:"0" }}</div>
-            <div class="kpi-meta"><i class="ri-calendar-line"></i>&nbsp;<span>New cases today</span></div>
-            <a href="{% url 'submissions' %}?scope=me" class="kpi-cta">View Assigned <i class="ri-arrow-right-line"></i></a>
+            <div class="kpi-value">{{ stats_pending_intake|default:"0" }}</div>
+            <div class="kpi-meta"><i class="ri-time-line"></i>&nbsp;<span>Awaiting review</span></div>
+            <a href="{% url 'submissions' %}?scope=me&tab=to_examine" class="kpi-cta">Start Examining <i class="ri-arrow-right-line"></i></a>
         </div>
 
-        <!-- 2. Pending Review — alert card if > 0 -->
-        <div class="bento-card {% if stats_pending_intake > 0 %}alert-card{% endif %}">
+        <!-- 2. Under Examination — alert card if > 0 -->
+        <div class="bento-card {% if stats_under_review > 0 %}alert-card{% endif %}">
             <div class="card-header">
-                <span class="card-title">Pending Review</span>
-                <div class="kpi-icon-box" style="background:#fef3c7; color:#b45309;"><i class="ri-error-warning-line"></i></div>
-            </div>
-            <div class="kpi-value" {% if stats_pending_intake > 0 %}style="color:#92400e;"{% endif %}>{{ stats_pending_intake|default:"0" }}</div>
-            <div class="kpi-meta" {% if stats_pending_intake > 0 %}style="color:#b45309;"{% endif %}><i class="ri-time-line"></i>&nbsp;<span>Awaiting examination</span></div>
-            <a href="{% url 'submissions' %}?scope=me&tab=all_assigned" class="kpi-cta">Start Examining <i class="ri-arrow-right-line"></i></a>
-        </div>
-
-        <!-- 3. Under Review -->
-        <div class="bento-card">
-            <div class="card-header">
-                <span class="card-title">Under Review</span>
+                <span class="card-title">Under Examination</span>
                 <div class="kpi-icon-box" style="background:#e0e7ff; color:#4338ca;"><i class="ri-eye-line"></i></div>
             </div>
-            <div class="kpi-value">{{ stats_under_review|default:"0" }}</div>
-            <div class="kpi-meta" style="color:#4338ca;"><i class="ri-loader-2-line"></i>&nbsp;<span>Currently in progress</span></div>
+            <div class="kpi-value" {% if stats_under_review > 0 %}style="color:#1e40af;"{% endif %}>{{ stats_under_review|default:"0" }}</div>
+            <div class="kpi-meta" {% if stats_under_review > 0 %}style="color:#4338ca;"{% endif %}><i class="ri-loader-2-line"></i>&nbsp;<span>In progress</span></div>
             <a href="{% url 'submissions' %}?scope=me&tab=under_review" class="kpi-cta">View In Progress <i class="ri-arrow-right-line"></i></a>
         </div>
 
-        <!-- 4. Returned to LGU -->
+        <!-- 3. Returned -->
         <div class="bento-card">
             <div class="card-header">
-                <span class="card-title">Returned to LGU</span>
+                <span class="card-title">Returned</span>
                 <div class="kpi-icon-box" style="background:#fee2e2; color:#dc2626;"><i class="ri-arrow-go-back-line"></i></div>
             </div>
             <div class="kpi-value">{{ stats_returned|default:"0" }}</div>
-            <div class="kpi-meta" style="color:#dc2626;"><i class="ri-arrow-up-line"></i>&nbsp;<span>Corrections sent</span></div>
-            <a href="{% url 'submissions' %}?scope=me" class="kpi-cta">View Returns <i class="ri-arrow-right-line"></i></a>
+            <div class="kpi-meta" style="color:#dc2626;"><i class="ri-error-warning-line"></i>&nbsp;<span>Returned from Approver</span></div>
+            <a href="{% url 'submissions' %}?scope=me&tab=returned" class="kpi-cta">View Returned <i class="ri-arrow-right-line"></i></a>
         </div>
 
-        <!-- 5. Total Examined -->
+        <!-- 4. Total Handled -->
         <div class="bento-card">
             <div class="card-header">
-                <span class="card-title">Total Examined</span>
+                <span class="card-title">Total Handled</span>
                 <div class="kpi-icon-box" style="background:#dcfce7; color:#16a34a;"><i class="ri-check-double-line"></i></div>
             </div>
             <div class="kpi-value">{{ stats_total_handled|default:"0" }}</div>
             <div class="kpi-meta" style="color:#059669;"><i class="ri-arrow-up-line"></i>&nbsp;<span>All time completed</span></div>
             <a href="{% url 'submissions' %}?scope=me" class="kpi-cta">View History <i class="ri-arrow-right-line"></i></a>
+        </div>
+
+        <!-- 5. Assigned Today -->
+        <div class="bento-card">
+            <div class="card-header">
+                <span class="card-title">Assigned Today</span>
+                <div class="kpi-icon-box" style="background:#f1f5f9; color:#475569;"><i class="ri-calendar-line"></i></div>
+            </div>
+            <div class="kpi-value">{{ stats_assigned_today|default:"0" }}</div>
+            <div class="kpi-meta" style="color:#475569;"><i class="ri-stack-line"></i>&nbsp;<span>New cases today</span></div>
+            <a href="{% url 'submissions' %}?scope=me" class="kpi-cta">View Assigned <i class="ri-arrow-right-line"></i></a>
         </div>
 
     </div>

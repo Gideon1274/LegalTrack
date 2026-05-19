@@ -104,18 +104,15 @@
                                 </td>
                                 <td>
                                     <div class="action-group">
-                                        <!-- Continue Draft -->
-                                        <a href="{% url 'draft_wizard' d.draft_id 1 %}" class="action-btn edit-btn" title="Continue Draft">
-                                            <i class="ri-pencil-line"></i>
+                                        <!-- Resume Draft -->
+                                        <a href="{% url 'draft_wizard' d.draft_id 1 %}" class="action-btn edit-btn" title="Resume Draft">
+                                            <i class="ri-play-line"></i>
                                         </a>
                                         
-                                        <!-- Delete Draft (using form for POST security) -->
-                                        <form method="post" action="{% url 'delete_draft' d.draft_id %}" style="display:inline;" onsubmit="return confirm('Are you sure you want to permanently delete this draft?');">
-                                            {% csrf_token %}
-                                            <button type="submit" class="action-btn delete-btn" title="Delete Draft">
-                                                <i class="ri-delete-bin-line"></i>
-                                            </button>
-                                        </form>
+                                        <!-- Delete Draft (Trigger Modal) -->
+                                        <button type="button" class="action-btn delete-btn" title="Delete Draft" onclick="openDeleteModal('{{ d.draft_id }}')">
+                                            <i class="ri-delete-bin-line"></i>
+                                        </button>
                                     </div>
                                 </td>
                             </tr>
@@ -131,4 +128,45 @@
             {% endif %}
         </div>
     </div>
+
+    <!-- DELETE CONFIRMATION MODAL -->
+    <div id="deleteModal" class="drawer-backdrop" style="display:none; justify-content:center; align-items:center; opacity:1; visibility:visible;">
+        <div class="panel" style="width: 400px; padding: 2rem; border-radius: 12px;">
+            <h3 class="panel-title" style="margin-bottom: 1rem;">Delete Draft</h3>
+            <div style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 2rem;">
+                Are you sure you want to <strong style="color: #dc2626;">permanently delete</strong> this draft? This action cannot be undone.
+            </div>
+            
+            <form id="deleteForm" method="POST" action="">
+                {% csrf_token %}
+                <div style="display: flex; gap: 1rem;">
+                    <button type="button" class="btn btn-text" style="flex:1; border: 1px solid var(--border);" onclick="closeDeleteModal()">Cancel</button>
+                    <button type="submit" class="btn btn-danger" style="flex:1; background: #dc2626; color: white;">Delete Permanently</button>
+                </div>
+            </form>
+        </div>
+    </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function openDeleteModal(draftId) {
+        const modal = document.getElementById('deleteModal');
+        const form = document.getElementById('deleteForm');
+        form.action = `/draft/${draftId}/delete/`;
+        modal.style.display = 'flex';
+    }
+
+    function closeDeleteModal() {
+        document.getElementById('deleteModal').style.display = 'none';
+    }
+
+    // Close on click outside
+    window.onclick = function(event) {
+        const modal = document.getElementById('deleteModal');
+        if (event.target == modal) {
+            closeDeleteModal();
+        }
+    }
+</script>
 {% endblock %}
