@@ -233,6 +233,13 @@
                                             </form>
                                         {% endif %}
 
+                                        <!-- Delete User Form (Super Admin only) -->
+                                        {% if request.user.role == "super_admin" and u.id != request.user.id %}
+                                            <button class="action-btn text-danger" type="button" title="Delete User Account" onclick="openDeleteUserModal('{{ u.id }}', '{{ u.email|escapejs }}')">
+                                                <i class="ri-delete-bin-line"></i>
+                                            </button>
+                                        {% endif %}
+
                                     </div>
                                 </td>
                             </tr>
@@ -283,10 +290,42 @@
 
     </div>
 </div>
+
+<!-- DELETE USER CONFIRMATION MODAL -->
+<div id="deleteUserModal" class="drawer-backdrop" style="display:none; justify-content:center; align-items:center; opacity:1; visibility:visible;">
+    <div class="panel" style="width: 400px; padding: 2rem; border-radius: 12px;">
+        <h3 class="panel-title" style="margin-bottom: 1rem;">Delete User Account</h3>
+        <div style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 2rem;">
+            Are you sure you want to <strong style="color: #dc2626;">permanently delete</strong> account for <strong id="modalUserEmail" style="color: var(--text-main);"></strong>? This action cannot be undone.
+        </div>
+        
+        <form id="deleteUserForm" method="POST" action="">
+            {% csrf_token %}
+            <div style="display: flex; gap: 1rem;">
+                <button type="button" class="btn btn-text" style="flex:1; border: 1px solid var(--border);" onclick="closeDeleteUserModal()">Cancel</button>
+                <button type="submit" class="btn btn-danger" style="flex:1; background: #dc2626; color: white;">Delete Permanently</button>
+            </div>
+        </form>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
+    function openDeleteUserModal(userId, email) {
+        const modal = document.getElementById('deleteUserModal');
+        const form = document.getElementById('deleteUserForm');
+        const emailSpan = document.getElementById('modalUserEmail');
+        
+        emailSpan.textContent = email;
+        form.action = `/users/${userId}/delete/`;
+        modal.style.display = 'flex';
+    }
+
+    function closeDeleteUserModal() {
+        document.getElementById('deleteUserModal').style.display = 'none';
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         var form = document.getElementById('user-search-form');
         // This relies on Django outputting the select with id="id_role" 
@@ -298,6 +337,14 @@
         roleSelect.addEventListener('change', function () {
             form.submit();
         });
+
+        // Close on click outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('deleteUserModal');
+            if (event.target == modal) {
+                closeDeleteUserModal();
+            }
+        }
     });
 </script>
 {% endblock %}

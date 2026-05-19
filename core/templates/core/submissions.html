@@ -258,8 +258,8 @@
     <tr>
         <th class="col-case-no">Case Number</th>
         <th class="col-client">Client & Request</th>
-        {% if request.user.role == 'capitol_examiner' %}
-            <th>Route</th>
+        {% if request.user.role == 'capitol_numberer' %}
+            <th>Transaction Number</th>
         {% endif %}
         
         {% if tab == 'to_examine' or tab == 'in_review' %}
@@ -286,13 +286,9 @@
             <div class="request-subtext">{{ case.get_case_type_display }}</div>
         </td>
 
-        {% if request.user.role == 'capitol_examiner' %}
-            <td>
-                {% if case.returned_by and case.returned_by.role == 'capitol_examiner' and case.assigned_to_id == request.user.id and case.status != 'client_correction' %}
-                    <span class="text-muted" style="font-weight: 600;">EXM→REC→EXM</span>
-                {% else %}
-                    <span class="text-muted">—</span>
-                {% endif %}
+        {% if request.user.role == 'capitol_numberer' %}
+            <td style="font-family: monospace; font-weight: 700; color: #1e293b;">
+                {{ case.td_number|default:"—" }}
             </td>
         {% endif %}
 
