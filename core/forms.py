@@ -157,7 +157,7 @@ class ChecklistItemForm(forms.Form):
         self.fields["doc_type"].choices = choices
         self.fields["custom_doc_type"].widget.attrs.setdefault("placeholder", "Type document name")
         self.fields["file"].widget.attrs.update({
-            "accept": ".pdf,.png,.jpg,.jpeg,.doc,.docx"
+            "accept": ".pdf,.png,.jpg,.jpeg,.doc,.docx,.html"
         })
 
     def clean(self):

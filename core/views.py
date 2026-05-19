@@ -2254,55 +2254,65 @@ def _maybe_convert_office_upload_to_pdf(uploaded_file):
     if not (lower.endswith(".doc") or lower.endswith(".docx")):
         return uploaded_file, {"converted": False}
 
-    # 1. Pure Python Conversion (Most reliable on Render Free)
-    print(f"[CONVERSION] Attempting Pure Python conversion for {name}...")
+    # 1. DOCX to HTML Conversion (Using Mammoth - extremely reliable)
+    print(f"[CONVERSION] Attempting DOCX to HTML conversion for {name}...")
     try:
-        from docx import Document
-        from fpdf import FPDF
+        import mammoth
         import io
 
         uploaded_file.seek(0)
-        docx_doc = Document(io.BytesIO(uploaded_file.read()))
+        docx_bytes = uploaded_file.read()
+        docx_buffer = io.BytesIO(docx_bytes)
         
-        pdf = FPDF()
-        pdf.set_auto_page_break(auto=True, margin=15)
-        pdf.add_page()
-        pdf.set_font("helvetica", size=11)
+        # Convert to HTML
+        result = mammoth.convert_to_html(docx_buffer)
+        html_content = result.value
         
-        # Header
-        pdf.set_text_color(128, 128, 128)
-        pdf.cell(0, 10, f"Converted by PASTrack: {name}", ln=True, align='C')
-        pdf.ln(5)
-        pdf.set_text_color(0, 0, 0)
+        # Wrap in a basic document structure with styling
+        final_html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <style>
+                body {{ 
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                    line-height: 1.6;
+                    color: #1e293b;
+                    max-width: 800px;
+                    margin: 2rem auto;
+                    padding: 0 1rem;
+                    background: white;
+                }}
+                table {{ width: 100%; border-collapse: collapse; margin: 1rem 0; }}
+                th, td {{ border: 1px solid #e2e8f0; padding: 0.75rem; text-align: left; }}
+                img {{ max-width: 100%; height: auto; }}
+                .conversion-note {{ 
+                    font-size: 0.75rem; 
+                    color: #94a3b8; 
+                    border-bottom: 1px solid #e2e8f0;
+                    margin-bottom: 2rem;
+                    padding-bottom: 0.5rem;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="conversion-note">PASTrack Digital Document: {name}</div>
+            {html_content}
+        </body>
+        </html>
+        """
 
-        # Content
-        for para in docx_doc.paragraphs:
-            text = para.text.strip()
-            if text:
-                # Clean text for fpdf2
-                safe_text = text.encode('latin-1', 'replace').decode('latin-1')
-                pdf.multi_cell(0, 6, safe_text)
-                pdf.ln(2)
-            else:
-                pdf.ln(4)
-
-        # Get PDF bytes
-        pdf_output = pdf.output()
-        if isinstance(pdf_output, (bytes, bytearray)):
-            pdf_bytes = bytes(pdf_output)
-        else:
-            pdf_bytes = str(pdf_output).encode('latin-1')
-
-        pdf_name = f"{os.path.splitext(os.path.basename(name) or 'upload')[0]}.pdf"
+        html_name = f"{os.path.splitext(os.path.basename(name) or 'upload')[0]}.html"
         uploaded_file.seek(0)
-        return ContentFile(pdf_bytes, name=pdf_name), {"converted": True, "original_name": name}
+        return ContentFile(final_html.encode('utf-8'), name=html_name), {"converted": True, "original_name": name, "format": "html"}
 
     except Exception as e:
-        print(f"[CONVERSION-ERROR] Pure Python conversion failed: {str(e)}")
-        # If fallback fails, we try the legacy method (which likely fails on Render but works on Windows)
+        print(f"[CONVERSION-ERROR] DOCX to HTML failed: {str(e)}")
+        # Fallback to fpdf2 if HTML fails
         pass
 
-    # 2. Legacy Method (LibreOffice/Word - Works on Windows Dev)
+    # 2. PDF Fallback (fpdf2)
     soffice = shutil.which("soffice") or shutil.which("soffice.exe")
     if not soffice and os.name == "nt":
         candidates = [
