@@ -9,6 +9,5 @@ bcrypt==5.0.0
 gunicorn==23.0.0
 pillow==11.3.0
 python-docx==1.2.0
-mammoth==1.8.0
-xhtml2pdf==0.2.16
-reportlab==4.3.1
+fpdf2==2.8.1
+# mammoth and xhtml2pdf removed as they are too heavy for Render Free
