@@ -2346,26 +2346,53 @@ def _maybe_convert_office_upload_to_pdf(uploaded_file):
             try:
                 import mammoth
                 from xhtml2pdf import pisa
+                import io
                 
                 # 1. Convert DOCX to HTML using Mammoth
-                with open(in_path, "rb") as docx_file:
-                    result = mammoth.convert_to_html(docx_file)
-                    html_content = result.value
-                    # Wrap in basic CSS to ensure it looks decent
-                    styled_html = f"<html><head><style>body{{font-family: Helvetica, Arial, sans-serif; font-size: 12pt; line-height: 1.5;}}</style></head><body>{html_content}</body></html>"
+                uploaded_file.seek(0)
+                docx_bytes = uploaded_file.read()
+                docx_buffer = io.BytesIO(docx_bytes)
+                
+                result = mammoth.convert_to_html(docx_buffer)
+                html_content = result.value
+                
+                # Wrap in basic CSS to ensure it looks decent and handles common Word formatting
+                styled_html = f"""
+                <html>
+                <head>
+                <style>
+                    @page {{ size: letter; margin: 1in; }}
+                    body {{ font-family: Helvetica, Arial, sans-serif; font-size: 11pt; line-height: 1.3; color: #000; }}
+                    p {{ margin-bottom: 10pt; }}
+                    table {{ width: 100%; border-collapse: collapse; margin-bottom: 10pt; }}
+                    td, th {{ border: 1px solid #ccc; padding: 5pt; }}
+                </style>
+                </head>
+                <body>
+                    {html_content}
+                </body>
+                </html>
+                """
 
                 # 2. Convert HTML to PDF using xhtml2pdf
                 with open(out_path, "wb") as pdf_file:
                     pisa_status = pisa.CreatePDF(styled_html, dest=pdf_file)
                     
                 if pisa_status.err:
-                    print(f"[CONVERSION-ERROR] xhtml2pdf failed for {name}")
+                    print(f"[CONVERSION-ERROR] xhtml2pdf failed for {name}: {pisa_status.err}")
                 else:
                     print(f"[CONVERSION] Successfully converted {name} using Pure Python fallback.")
-            except ImportError:
-                print(f"[CONVERSION-ERROR] Fallback libraries (mammoth/xhtml2pdf) not installed.")
+            except ImportError as e:
+                print(f"[CONVERSION-ERROR] Fallback libraries (mammoth/xhtml2pdf) not installed: {str(e)}")
             except Exception as fallback_err:
-                print(f"[CONVERSION-ERROR] Fallback failed: {str(fallback_err)}")
+                print(f"[CONVERSION-ERROR] Fallback failed for {name}: {str(fallback_err)}")
+                import traceback
+                traceback.print_exc()
+            finally:
+                try:
+                    uploaded_file.seek(0)
+                except Exception:
+                    pass
 
         if not os.path.exists(out_path):
             try:
