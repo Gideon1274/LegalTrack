@@ -1,14 +1,21 @@
-# Use a lightweight Python image
+# Use a robust Python image
 FROM python:3.11-slim-bookworm
 
-# Install LibreOffice and system dependencies for PDF conversion and images
-RUN apt-get update && apt-get install -y \
+# Install LibreOffice and system dependencies
+# We include --no-install-recommends to keep the image slim, 
+# but ensure we have the necessary libraries for headless mode.
+RUN apt-get update && apt-get install -y --no-install-recommends \
     libreoffice-writer \
     libreoffice-java-common \
-    libmagic1 \
     libpq-dev \
     gcc \
+    python3-dev \
+    libmagic1 \
     && rm -rf /var/lib/apt/lists/*
+
+# LibreOffice needs a writable HOME directory to create a user profile in headless mode.
+# We set it to /tmp or another writable location.
+ENV HOME=/tmp
 
 WORKDIR /app
 
@@ -31,6 +38,7 @@ RUN python manage.py collectstatic --noinput 2>&1 || true
 EXPOSE 10000
 
 # Start command
-# Migrations are run at runtime to ensure DB is ready
+# Migrations are run at runtime to ensure DB is ready. 
+# $PORT is provided by Render at runtime.
 CMD python manage.py migrate --noinput && \
-    gunicorn legaltrack.wsgi:application --bind 0.0.0.0:$PORT --timeout 120
+    gunicorn legaltrack.wsgi:application --bind 0.0.0.0:$PORT --timeout 120 --graceful-timeout 30
