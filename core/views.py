@@ -30,8 +30,6 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 
 import random
-import mammoth
-from xhtml2pdf import pisa
 from .models import Case, CustomUser, AuditLog, LGUTaxDeclarationSequence # <--- Add it here
 
 @login_required
@@ -2346,6 +2344,9 @@ def _maybe_convert_office_upload_to_pdf(uploaded_file):
         if not os.path.exists(out_path):
             print(f"[CONVERSION] Soffice/Word not available. Attempting Pure Python fallback for {name}...")
             try:
+                import mammoth
+                from xhtml2pdf import pisa
+                
                 # 1. Convert DOCX to HTML using Mammoth
                 with open(in_path, "rb") as docx_file:
                     result = mammoth.convert_to_html(docx_file)
@@ -2361,6 +2362,8 @@ def _maybe_convert_office_upload_to_pdf(uploaded_file):
                     print(f"[CONVERSION-ERROR] xhtml2pdf failed for {name}")
                 else:
                     print(f"[CONVERSION] Successfully converted {name} using Pure Python fallback.")
+            except ImportError:
+                print(f"[CONVERSION-ERROR] Fallback libraries (mammoth/xhtml2pdf) not installed.")
             except Exception as fallback_err:
                 print(f"[CONVERSION-ERROR] Fallback failed: {str(fallback_err)}")
 
