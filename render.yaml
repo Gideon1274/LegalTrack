@@ -1,7 +1,7 @@
 services:
   - type: web
     name: LegalTrack
-    env: docker
+    env: python
     region: oregon
     plan: starter
     disk:
@@ -9,9 +9,13 @@ services:
       mountPath: /var/media
       sizeGB: 1
 
-    # No buildCommand or startCommand needed for env: docker
-    # as they are handled by the Dockerfile, but we can keep
-    # envVars for Django configuration.
+    buildCommand: >
+      pip install -r requirements.txt &&
+      python manage.py collectstatic --noinput
+
+    startCommand: >
+      python manage.py migrate --noinput &&
+      gunicorn legaltrack.wsgi:application --bind 0.0.0.0:$PORT --timeout 120
 
     envVars:
       - key: DJANGO_SETTINGS_MODULE
