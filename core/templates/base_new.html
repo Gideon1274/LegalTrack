@@ -4,7 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}PAStrack Admin{% endblock %}</title>
+    <title>{% block title %}PASTrack{% endblock %}</title>
+    <link rel="icon" type="image/x-icon" href="{% static 'favicon.ico' %}">
 
     <!-- Fonts & Icons -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -356,6 +357,9 @@
 
             <!-- 2. Super Admin ONLY -->
             {% if request.user.role == "super_admin" %}
+            <a href="{% url 'submissions' %}?scope=all" class="nav-item {% if request.resolver_match.url_name == 'submissions' %}active{% endif %}">
+                <i class="ri-global-line"></i> <span class="hide-text">All Transactions</span>
+            </a>
             <a href="{% url 'user_management' %}" class="nav-item {% if 'user' in request.resolver_match.url_name %}active{% endif %}">
                 <i class="ri-group-line"></i> <span class="hide-text">User Management</span>
             </a>

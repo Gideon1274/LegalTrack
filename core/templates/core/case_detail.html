@@ -152,7 +152,7 @@
         <!-- LEFT COLUMN: INFORMATION CORE -->
         <div class="main-column">
             
-            {% if case.status == 'client_correction' or case.return_reason %}
+            {% if show_correction_required_banner %}
             <div class="panel" style="border-left: 4px solid #dc2626; background: #fff5f5;">
                 <div class="panel-body">
                     <div class="info-label" style="color: #dc2626; margin-bottom: 0.5rem;">Correction Required</div>
@@ -173,13 +173,7 @@
                         <div class="info-item"><span class="info-label">Date Submitted</span><span class="info-value">{{ case.created_at|date:"M d, Y g:i A" }}</span></div>
                         <div class="info-item">
                             <span class="info-label">Transaction Number</span>
-                            <span class="info-value">
-                                {% for n in case.numbers.all %}
-                                    {{ n.number }}{% if not forloop.last %}, {% endif %}
-                                {% empty %}
-                                    —
-                                {% endfor %}
-                            </span>
+                            <span class="info-value">{{ case.td_number|default:"—" }}</span>
                         </div>
                     </div>
                 </div>
@@ -236,6 +230,78 @@
                                 </div>
                             {% endif %}
                         </form>
+                    {% elif show_internal and is_receiver %}
+                        <form method="post" action="{% url 'review_case_documents' case.tracking_id %}">
+                            {% csrf_token %}
+                            <table class="doc-table">
+                                {% for doc in documents %}
+                                <tr>
+                                    <td class="doc-icon"><i class="ri-file-pdf-2-line"></i></td>
+                                    <td>
+                                        <div class="doc-name">{{ doc.doc_type }}</div>
+                                        <div class="doc-meta">Uploaded {{ doc.uploaded_at|date:"M d, Y" }}</div>
+                                        <div class="doc-meta" style="margin-top: 0.5rem;">
+                                            <label style="display:flex; align-items:center; gap:0.5rem;">
+                                                <input type="checkbox" {% if doc.reviewed_ok %}checked{% endif %} disabled>
+                                                Reviewed OK
+                                            </label>
+                                        </div>
+                                        <div class="doc-meta" style="margin-top: 0.5rem;">
+                                            <input
+                                                type="text"
+                                                name="review_remark_{{ doc.id }}"
+                                                value="{{ doc.review_remark|default:'' }}"
+                                                placeholder="Remark (optional)"
+                                                style="width:100%; padding:0.5rem 0.75rem; border:1px solid var(--border); border-radius:8px;"
+                                            >
+                                        </div>
+                                        <input type="hidden" name="doc_id" value="{{ doc.id }}">
+                                    </td>
+                                    <td style="text-align: right;">
+                                        <a href="{% url 'download_case_document' doc.id %}" target="_blank" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">
+                                            Preview <i class="ri-external-link-line"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="3" style="text-align: center; padding: 2rem; color: var(--text-muted);">No documents uploaded for this case.</td>
+                                </tr>
+                                {% endfor %}
+                            </table>
+
+                            {% if documents %}
+                                <div style="padding: 1rem 0;">
+                                    <button class="btn btn-outline" type="submit" style="width:100%;">
+                                        <i class="ri-save-3-line"></i> Save Remarks
+                                    </button>
+                                </div>
+                            {% endif %}
+                        </form>
+                    {% elif show_internal and is_approver %}
+                        <table class="doc-table">
+                            {% for doc in documents %}
+                            <tr>
+                                <td class="doc-icon"><i class="ri-file-pdf-2-line"></i></td>
+                                <td>
+                                    <div class="doc-name">{{ doc.doc_type }}</div>
+                                    <div class="doc-meta">Uploaded {{ doc.uploaded_at|date:"M d, Y" }}</div>
+                                    <div class="doc-meta" style="margin-top: 0.5rem;">
+                                        <strong>Remark:</strong> {{ doc.review_remark|default:"—" }}
+                                    </div>
+                                </td>
+                                <td style="text-align: right;">
+                                    <a href="{% url 'download_case_document' doc.id %}" target="_blank" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">
+                                        Preview <i class="ri-external-link-line"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="3" style="text-align: center; padding: 2rem; color: var(--text-muted);">No documents uploaded for this case.</td>
+                            </tr>
+                            {% endfor %}
+                        </table>
                     {% else %}
                         <table class="doc-table">
                             {% for doc in documents %}
@@ -260,6 +326,34 @@
                     {% endif %}
                 </div>
             </div>
+
+            {% if archived_documents %}
+            <div class="panel">
+                <div class="panel-header"><h2 class="panel-title">Document History</h2></div>
+                <div class="panel-body" style="padding-top: 0; padding-bottom: 0;">
+                    <table class="doc-table">
+                        {% for a in archived_documents %}
+                        <tr>
+                            <td class="doc-icon"><i class="ri-history-line"></i></td>
+                            <td>
+                                <div class="doc-name">{{ a.doc_type }}</div>
+                                <div class="doc-meta">Archived {{ a.archived_at|date:"M d, Y g:i A" }}</div>
+                                <div class="doc-meta">Auto-delete {{ a.keep_until|date:"M d, Y g:i A" }}</div>
+                                {% if a.original_filename %}
+                                    <div class="doc-meta">{{ a.original_filename }}</div>
+                                {% endif %}
+                            </td>
+                            <td style="text-align: right;">
+                                <a href="{% url 'download_archived_case_document' a.id %}" target="_blank" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">
+                                    Preview <i class="ri-external-link-line"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </table>
+                </div>
+            </div>
+            {% endif %}
         </div>
 
         <!-- RIGHT COLUMN: COMMAND CENTER & HISTORY -->
@@ -270,23 +364,35 @@
                     <div class="panel-header"><h2 class="panel-title">Workflow Actions</h2></div>
                     <div class="panel-body">
                         <div style="padding: 0.9rem; background: var(--inactive-bg); border-radius: 8px; color: var(--text-muted); text-align: center; margin-bottom: 1rem;">
-                            <p style="margin: 0; font-weight: 600; color: var(--text-main);">Currently with {{ current_holder_label }}</p>
+                            <p style="margin: 0; font-weight: 600; color: var(--text-main);">{{ workflow_status_text }}</p>
                             {% if current_holder_detail %}
                                 <p style="margin: 0.25rem 0 0 0; font-size: 0.85rem;">{{ current_holder_detail }}</p>
                             {% endif %}
                         </div>
 
+                        {% if can_reassign_examiner %}
+                            <button class="btn btn-outline btn-block" type="button" onclick="openReassignModal()">
+                                <i class="ri-user-shared-line"></i> Reassign Examiner
+                            </button>
+                        {% endif %}
+
                         {% if is_receiver %}
+                            {% if can_receive %}
+                                <button class="btn btn-primary btn-block" type="button" onclick="openReceiveModal()">
+                                    <i class="ri-inbox-receive-line"></i> Receive transaction
+                                </button>
+                            {% endif %}
+
                             {% if can_assign %}
                                 <button class="btn btn-primary btn-block" type="button" onclick="openAssignModal('{{ case.tracking_id }}', '{{ case.client_name|escapejs }}')">
                                     <i class="ri-user-add-line"></i> Assign to Examiner
                                 </button>
-                            {% endif %}
-
-                            {% if can_return %}
-                                <button class="btn btn-danger btn-block" type="button" onclick="openReturnModal()">
-                                    <i class="ri-arrow-go-back-line"></i> Return to Client for Correction
-                                </button>
+                                
+                                {% if can_return %}
+                                    <button class="btn btn-danger btn-block" type="button" onclick="openReturnModal()">
+                                        <i class="ri-arrow-go-back-line"></i> Return to Client for Correction
+                                    </button>
+                                {% endif %}
                             {% endif %}
                         {% endif %}
 
@@ -324,12 +430,9 @@
                             {% endif %}
 
                             {% if can_approve %}
-                                <form method="post" action="{% url 'approve_case' case.tracking_id %}" class="btn-block">
-                                    {% csrf_token %}
-                                    <button class="btn btn-primary" type="submit" style="width:100%;">
-                                        <i class="ri-check-line"></i> Approve
-                                    </button>
-                                </form>
+                                <button class="btn btn-primary btn-block" type="button" onclick="openApproveModal()">
+                                    <i class="ri-check-line"></i> Approve
+                                </button>
                             {% endif %}
 
                             {% if can_return_for_correction %}
@@ -353,14 +456,40 @@
                                 {% csrf_token %}
                                 <input
                                     type="text"
-                                    name="numbers"
-                                    placeholder="Enter number (e.g. 00001)"
+                                    inputmode="numeric"
+                                    pattern="[0-9]*"
+                                    maxlength="6"
+                                    name="transaction_number"
+                                    placeholder="Enter 6-digit Transaction Number"
                                     class="form-control"
                                     style="margin-bottom: 0.5rem;"
                                     required
+                                    oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0, 6)"
                                 >
                                 <button class="btn btn-primary" type="submit" style="width:100%;">
-                                    <i class="ri-hashtag"></i> Submit Number
+                                    <i class="ri-hashtag"></i> Submit Transaction Number
+                                </button>
+                            </form>
+                        {% endif %}
+
+                        {% if request.user.role == "super_admin" %}
+                            <form method="post" action="{% url 'mark_numbered' case.tracking_id %}" class="btn-block">
+                                {% csrf_token %}
+                                <input
+                                    type="text"
+                                    inputmode="numeric"
+                                    pattern="[0-9]*"
+                                    maxlength="6"
+                                    name="transaction_number"
+                                    value="{{ case.td_number|default:'' }}"
+                                    placeholder="Override Transaction Number (6 digits)"
+                                    class="form-control"
+                                    style="margin-bottom: 0.5rem;"
+                                    required
+                                    oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0, 6)"
+                                >
+                                <button class="btn btn-outline" type="submit" style="width:100%;">
+                                    <i class="ri-edit-2-line"></i> Override Transaction Number
                                 </button>
                             </form>
                         {% endif %}
@@ -384,20 +513,22 @@
                         <form method="post" action="{% url 'add_case_remark' case.tracking_id %}" style="margin-bottom: 1.5rem;">
                             {% csrf_token %}
 
-                            <textarea name="text" class="remarks-input" placeholder="Add an internal note..." id="noteBox"></textarea>
+                            <textarea name="text" class="remarks-input" placeholder="{% if can_remark %}Add an internal note...{% else %}You can only add notes when this case is currently with you.{% endif %}" id="noteBox" {% if not can_remark %}disabled style="opacity:0.6; cursor:not-allowed;"{% endif %}></textarea>
                             
-                            <button class="btn-submit-note" type="submit">Add Internal Note</button>
+                            <button class="btn-submit-note" type="submit" {% if not can_remark %}disabled style="opacity:0.6; cursor:not-allowed;"{% endif %}>Add Internal Note</button>
                         </form>
 
                         <script>
                         const textarea = document.getElementById("noteBox");
 
-                        textarea.addEventListener("keydown", function (event) {
-                            if (event.key === "Enter" && !event.shiftKey) {
-                                event.preventDefault(); // stop newline
-                                this.form.submit();     // now this works ✅
-                            }
-                        });
+                        if (textarea && !textarea.disabled) {
+                            textarea.addEventListener("keydown", function (event) {
+                                if (event.key === "Enter" && !event.shiftKey) {
+                                    event.preventDefault();
+                                    this.form.submit();
+                                }
+                            });
+                        }
                         </script>
 
                         <ul class="timeline">
@@ -453,7 +584,7 @@
             <select name="assigned_to" required class="form-control">
                 <option value="" disabled selected>Select from active staff...</option>
                 {% for ex in examiners %}
-                    <option value="{{ ex.id }}">{{ ex.full_name|default:ex.email }}</option>
+                    <option value="{{ ex.id }}">{{ ex.full_name|default:ex.email }} ({{ ex.active_load|default:0 }})</option>
                 {% endfor %}
             </select>
             <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
@@ -473,6 +604,35 @@
     }
     function closeAssignModal() {
         document.getElementById('assignModal').style.display = 'none';
+    }
+</script>
+
+<div id="reassignModal" class="drawer-backdrop" style="display:none; justify-content:center; align-items:center; opacity:1; visibility:visible;">
+    <div class="panel" style="width: 420px; padding: 2rem;">
+        <h3 class="panel-title" style="margin-bottom: 1rem;">Reassign Examiner</h3>
+        <form method="post" action="{% url 'reassign_case_examiner' case.tracking_id %}">
+            {% csrf_token %}
+            <label style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.35rem; display:block;">Select Examiner</label>
+            <select name="assigned_to" required class="form-control">
+                <option value="" disabled selected>Select from active staff...</option>
+                {% for ex in examiners %}
+                    <option value="{{ ex.id }}">{{ ex.full_name|default:ex.email }} ({{ ex.active_load|default:0 }})</option>
+                {% endfor %}
+            </select>
+            <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                <button type="button" class="btn btn-outline" style="flex:1" onclick="closeReassignModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary" style="flex:1;">Confirm</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function openReassignModal() {
+        document.getElementById('reassignModal').style.display = 'flex';
+    }
+    function closeReassignModal() {
+        document.getElementById('reassignModal').style.display = 'none';
     }
 </script>
 
@@ -497,6 +657,31 @@
     }
     function closeReturnModal() {
         document.getElementById('returnModal').style.display = 'none';
+    }
+</script>
+
+<div id="receiveModal" class="drawer-backdrop" style="display:none; justify-content:center; align-items:center; opacity:1; visibility:visible;">
+    <div class="panel" style="width: 400px; padding: 2rem;">
+        <h3 class="panel-title" style="margin-bottom: 1rem;">Receive transaction</h3>
+        <div style="font-size: 0.9rem; color: var(--text-muted);">
+            Are you sure you want to mark this transaction as <strong style="color: var(--text-main);">Received</strong>?
+        </div>
+        <form method="post" action="{% url 'receive_case' case.tracking_id %}" style="margin-top: 1rem;">
+            {% csrf_token %}
+            <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                <button type="button" class="btn btn-outline" style="flex:1" onclick="closeReceiveModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary" style="flex:1;">Confirm</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function openReceiveModal() {
+        document.getElementById('receiveModal').style.display = 'flex';
+    }
+    function closeReceiveModal() {
+        document.getElementById('receiveModal').style.display = 'none';
     }
 </script>
 
@@ -543,6 +728,32 @@
     }
     function closeApproverReturnModal() {
         document.getElementById('approverReturnModal').style.display = 'none';
+    }
+</script>
+
+<div id="approveModal" class="drawer-backdrop" style="display:none; justify-content:center; align-items:center; opacity:1; visibility:visible;">
+    <div class="panel" style="width: 400px; padding: 2rem;">
+        <h3 class="panel-title" style="margin-bottom: 1rem;">Approve Transaction</h3>
+        <div style="font-size: 0.9rem; color: var(--text-muted);">
+            Confirm approval for <strong style="color: var(--text-main);">{{ case.tracking_id }}</strong>?
+        </div>
+        <form method="post" action="{% url 'approve_case' case.tracking_id %}" style="margin-top: 1rem;">
+            {% csrf_token %}
+            <input type="hidden" name="confirm_approve" value="1">
+            <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                <button type="button" class="btn btn-outline" style="flex:1" onclick="closeApproveModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary" style="flex:1;">Confirm</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function openApproveModal() {
+        document.getElementById('approveModal').style.display = 'flex';
+    }
+    function closeApproveModal() {
+        document.getElementById('approveModal').style.display = 'none';
     }
 </script>
 

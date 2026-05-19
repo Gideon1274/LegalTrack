@@ -229,17 +229,31 @@ class CustomUser(AbstractUser):
         if send_email is None:
             send_email = bool(getattr(settings, "LEGALTRACK_SEND_EMAILS", True))
 
-        subject = "Activate Your PAStrack Account"
+        subject = "Welcome to PAStrack — Activate Your Account"
         message = (
-            f"Hello {self.full_name or self.email},\n\n"
-            "Your PAStrack account has been created.\n\n"
+            f"Welcome to PAStrack, {self.full_name or self.email}!\n\n"
+            "We're pleased to have you on board.\n\n"
+            "Your account has been created and is ready for activation. "
+            "PAStrack is the Provincial Assessor's Office Tracking System, designed to "
+            "streamline document processing and provide secure, transparent tracking "
+            "from submission to final release.\n\n"
+            "Your Account Details\n"
             f"Staff ID: {self.username}\n"
-            f"Email: {self.email}\n"
+            f"Email Address: {self.email}\n"
             f"Temporary Password: {temp_password}\n\n"
-            "Activate your account using this link (expires in 1 hour):\n"
+            "Activate Your Account\n"
+            "Use the secure link below to activate your account and set your personal password:\n\n"
             f"{activation_link}\n\n"
-            "You will be required to set a new strong password during activation.\n\n"
-            "If your temporary password expires (7 days), contact the Super Admin for a manual resend.\n"
+            "Security Notes\n"
+            "- This activation link will expire in 1 hour.\n"
+            "- You will be required to create a new strong password during activation.\n"
+            "- Your temporary password remains valid for up to 7 days.\n"
+            "- If the link expires or you encounter any issues, please contact the "
+            "Super Administrator to request a new activation email.\n\n"
+            "We look forward to having you use PAStrack to support more efficient and "
+            "transparent document processing.\n\n"
+            "Warm regards,\n"
+            "The PAStrack Team\n"
         )
 
         if send_email:
@@ -363,6 +377,7 @@ class AuditLog(TimestampedModel):
         ("case_assignment", "Transaction Assigned"),
         ("case_approval", "Transaction Approved"),
         ("case_rejection", "Transaction Rejected"),
+        ("case_numbered", "Transaction Number Assigned"),
         ("case_release", "Transaction Released"),
         ("support_feedback", "Support Feedback Submitted"),
     ]
@@ -731,6 +746,39 @@ def case_document_upload_to(instance, filename: str) -> str:
     return f"cases/{key}/{doc_type}/{safe_name}"
 
 
+def archived_case_document_upload_to(instance, filename: str) -> str:
+    from pathlib import PurePosixPath
+    from django.utils.text import slugify
+
+    def _safe_filename(name: str, *, max_len: int = 120) -> str:
+        raw = (name or "").replace("\\", "/")
+        base = PurePosixPath(raw).name
+        if not base:
+            return "upload"
+
+        if "." in base:
+            stem, _, ext = base.rpartition(".")
+            ext = ext.lower()
+            ext_part = f".{ext}" if ext else ""
+            stem = stem or "file"
+        else:
+            stem, ext_part = base, ""
+
+        stem = " ".join(stem.split()).strip() or "file"
+        allowed = max(1, max_len - len(ext_part))
+        if len(stem) > allowed:
+            stem = stem[:allowed]
+        return f"{stem}{ext_part}"
+
+    case = getattr(instance, "case", None)
+    tracking = getattr(case, "tracking_id", None)
+    draft_id = getattr(case, "draft_id", None)
+    key = tracking or (str(draft_id) if draft_id else "unknown")
+    doc_type = (slugify(getattr(instance, "doc_type", "") or "document") or "document")[:60]
+    safe_name = _safe_filename(str(filename))
+    return f"cases/{key}/{doc_type}/archive/{safe_name}"
+
+
 class CaseDocument(TimestampedModel):
     case = models.ForeignKey("Case", on_delete=models.CASCADE, related_name="documents")
     doc_type = models.CharField(max_length=120)
@@ -763,6 +811,33 @@ class CaseDocument(TimestampedModel):
     def __str__(self):
         key = self.case.tracking_id or str(getattr(self.case, "draft_id", ""))
         return f"{key} - {self.doc_type}"
+
+
+class ArchivedCaseDocument(models.Model):
+    case = models.ForeignKey("Case", on_delete=models.CASCADE, related_name="archived_documents")
+    doc_type = models.CharField(max_length=120)
+    file = models.FileField(upload_to=archived_case_document_upload_to, max_length=1024)
+    original_filename = models.CharField(max_length=255, blank=True, default="")
+    archived_by = models.ForeignKey(
+        "CustomUser",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="archived_case_documents",
+    )
+    archived_at = models.DateTimeField(auto_now_add=True)
+    keep_until = models.DateTimeField()
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ["-archived_at"]
+        indexes: ClassVar[list] = [
+            models.Index(fields=["case"]),
+            models.Index(fields=["keep_until"]),
+        ]
+
+    def __str__(self):
+        key = self.case.tracking_id or str(getattr(self.case, "draft_id", ""))
+        return f"{key} - {self.doc_type} (archived)"
 
 
 class CaseNumber(TimestampedModel):

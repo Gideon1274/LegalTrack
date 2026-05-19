@@ -258,6 +258,9 @@
     <tr>
         <th class="col-case-no">Case Number</th>
         <th class="col-client">Client & Request</th>
+        {% if request.user.role == 'capitol_examiner' %}
+            <th>Route</th>
+        {% endif %}
         
         {% if tab == 'to_examine' or tab == 'in_review' %}
             <th>Assigned To</th>
@@ -282,6 +285,16 @@
             <div class="client-name">{{ case.client_name }}</div>
             <div class="request-subtext">{{ case.get_case_type_display }}</div>
         </td>
+
+        {% if request.user.role == 'capitol_examiner' %}
+            <td>
+                {% if case.returned_by and case.returned_by.role == 'capitol_examiner' and case.assigned_to_id == request.user.id and case.status != 'client_correction' %}
+                    <span class="text-muted" style="font-weight: 600;">EXM→REC→EXM</span>
+                {% else %}
+                    <span class="text-muted">—</span>
+                {% endif %}
+            </td>
+        {% endif %}
 
         {% if tab == 'to_examine' or tab == 'in_review' %}
             <td>
@@ -371,7 +384,7 @@
                     <select name="assigned_to" required class="assign-select" style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 6px;">
                         <option value="" disabled selected>Select an examiner...</option>
                         {% for ex in examiners %}
-                            <option value="{{ ex.id }}">{{ ex.full_name|default:ex.email }}</option>
+                            <option value="{{ ex.id }}">{{ ex.full_name|default:ex.email }} ({{ ex.active_load|default:0 }})</option>
                         {% endfor %}
                     </select>
                 </div>

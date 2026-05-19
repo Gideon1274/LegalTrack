@@ -49,6 +49,7 @@ urlpatterns = [
     path('case/<str:tracking_id>/return-correction/', views.return_for_correction, name='return_for_correction'),
 
     path("case/<str:tracking_id>/assign/", views.assign_case, name="assign_case"),
+    path("case/<str:tracking_id>/reassign-examiner/", views.reassign_case_examiner, name="reassign_case_examiner"),
     path("case/<str:tracking_id>/submit-for-approval/", views.submit_for_approval, name="submit_for_approval"),
     path("case/<str:tracking_id>/approve/", views.approve_case, name="approve_case"),
     path("case/<str:tracking_id>/assign-taxmapper/", views.assign_taxmapper, name="assign_taxmapper"),
@@ -61,6 +62,7 @@ urlpatterns = [
 
     # Protected media downloads
     path("documents/<int:doc_id>/download/", views.download_case_document, name="download_case_document"),
+    path("documents/archived/<int:archive_id>/download/", views.download_archived_case_document, name="download_archived_case_document"),
     path("documents/<int:doc_id>/review/", views.review_case_document, name="review_case_document"),
     
 ]
