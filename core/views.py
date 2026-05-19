@@ -2254,6 +2254,55 @@ def _maybe_convert_office_upload_to_pdf(uploaded_file):
     if not (lower.endswith(".doc") or lower.endswith(".docx")):
         return uploaded_file, {"converted": False}
 
+    # 1. Pure Python Conversion (Most reliable on Render Free)
+    print(f"[CONVERSION] Attempting Pure Python conversion for {name}...")
+    try:
+        from docx import Document
+        from fpdf import FPDF
+        import io
+
+        uploaded_file.seek(0)
+        docx_doc = Document(io.BytesIO(uploaded_file.read()))
+        
+        pdf = FPDF()
+        pdf.set_auto_page_break(auto=True, margin=15)
+        pdf.add_page()
+        pdf.set_font("helvetica", size=11)
+        
+        # Header
+        pdf.set_text_color(128, 128, 128)
+        pdf.cell(0, 10, f"Converted by PASTrack: {name}", ln=True, align='C')
+        pdf.ln(5)
+        pdf.set_text_color(0, 0, 0)
+
+        # Content
+        for para in docx_doc.paragraphs:
+            text = para.text.strip()
+            if text:
+                # Clean text for fpdf2
+                safe_text = text.encode('latin-1', 'replace').decode('latin-1')
+                pdf.multi_cell(0, 6, safe_text)
+                pdf.ln(2)
+            else:
+                pdf.ln(4)
+
+        # Get PDF bytes
+        pdf_output = pdf.output()
+        if isinstance(pdf_output, (bytes, bytearray)):
+            pdf_bytes = bytes(pdf_output)
+        else:
+            pdf_bytes = str(pdf_output).encode('latin-1')
+
+        pdf_name = f"{os.path.splitext(os.path.basename(name) or 'upload')[0]}.pdf"
+        uploaded_file.seek(0)
+        return ContentFile(pdf_bytes, name=pdf_name), {"converted": True, "original_name": name}
+
+    except Exception as e:
+        print(f"[CONVERSION-ERROR] Pure Python conversion failed: {str(e)}")
+        # If fallback fails, we try the legacy method (which likely fails on Render but works on Windows)
+        pass
+
+    # 2. Legacy Method (LibreOffice/Word - Works on Windows Dev)
     soffice = shutil.which("soffice") or shutil.which("soffice.exe")
     if not soffice and os.name == "nt":
         candidates = [
@@ -2275,141 +2324,35 @@ def _maybe_convert_office_upload_to_pdf(uploaded_file):
         out_path = os.path.join(tmpdir, f"{base}.pdf")
 
         if soffice:
-            # -env:UserInstallation ensures a fresh profile in a writable location (/tmp),
-            # preventing lock file errors or crashes in containerized environments (like Docker/Render).
-            cmd = [
-                soffice, 
-                "-env:UserInstallation=file:///tmp/libo_profile",
-                "--headless", 
-                "--convert-to", "pdf", 
-                "--outdir", tmpdir, 
-                in_path
-            ]
+            cmd = [soffice, "-env:UserInstallation=file:///tmp/libo_profile", "--headless", "--convert-to", "pdf", "--outdir", tmpdir, in_path]
             try:
-                result = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=120)
-                # Log success for debugging if needed (will show in Render logs)
-                print(f"[CONVERSION] Successfully converted {name} to PDF using LibreOffice.")
-            except subprocess.CalledProcessError as e:
-                error_msg = e.stderr.decode() if e.stderr else "Unknown error"
-                print(f"[CONVERSION-ERROR] LibreOffice failed: {error_msg}")
-                try:
-                    uploaded_file.seek(0)
-                except Exception:
-                    pass
-                raise ValueError(f"DOC/DOCX conversion failed. Error: {error_msg[:100]}")
-            except Exception as e:
-                print(f"[CONVERSION-ERROR] Unexpected error: {str(e)}")
-                try:
-                    uploaded_file.seek(0)
-                except Exception:
-                    pass
-                raise ValueError("DOC/DOCX upload failed to convert to PDF. Please upload a PDF instead.")
-        else:
-            if os.name != "nt":
-                raise ValueError("DOC/DOCX upload requires PDF conversion, but LibreOffice (soffice) is not installed on the server.")
+                subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=120)
+            except Exception:
+                pass
+        elif os.name == "nt":
             try:
                 import pythoncom
                 import win32com.client
-            except Exception:
-                raise ValueError("DOC/DOCX upload requires PDF conversion. Install LibreOffice (recommended) or install MS Word + pywin32 on this machine.")
-
-            pythoncom.CoInitialize()
-            word = None
-            doc = None
-            try:
+                pythoncom.CoInitialize()
                 word = win32com.client.DispatchEx("Word.Application")
                 word.Visible = False
-                word.DisplayAlerts = 0
                 doc = word.Documents.Open(in_path, ReadOnly=True)
                 doc.ExportAsFixedFormat(out_path, 17)
-            except Exception:
-                raise ValueError("DOC/DOCX upload failed to convert to PDF. Ensure MS Word is installed (or install LibreOffice).")
-            finally:
-                try:
-                    if doc is not None:
-                        doc.Close(False)
-                except Exception:
-                    pass
-                try:
-                    if word is not None:
-                        word.Quit()
-                except Exception:
-                    pass
-                try:
-                    pythoncom.CoUninitialize()
-                except Exception:
-                    pass
-
-        # --- FALLBACK: If no PDF was generated by soffice/word, use Pure Python (fpdf2) ---
-        if not os.path.exists(out_path):
-            print(f"[CONVERSION] Soffice/Word not available. Attempting Pure Python fallback (fpdf2) for {name}...")
-            try:
-                from docx import Document
-                from fpdf import FPDF
-                import io
-                
-                # 1. Read the DOCX
-                uploaded_file.seek(0)
-                docx_doc = Document(io.BytesIO(uploaded_file.read()))
-                
-                # 2. Initialize PDF
-                pdf = FPDF()
-                pdf.set_auto_page_break(auto=True, margin=15)
-                pdf.add_page()
-                
-                # Use a standard font that is guaranteed to be on Linux
-                pdf.set_font("helvetica", size=11)
-                
-                # Add a header
-                pdf.set_text_color(100, 100, 100)
-                pdf.cell(0, 10, f"Converted Document: {name}", ln=True, align='C')
-                pdf.ln(5)
-                pdf.set_text_color(0, 0, 0)
-                
-                # 3. Extract text from paragraphs
-                for para in docx_doc.paragraphs:
-                    text = para.text.strip()
-                    if text:
-                        # fpdf2 handles unicode better but we'll keep it safe
-                        # 'latin-1' is the default for standard fonts, we'll encode/decode to be safe
-                        safe_text = text.encode('latin-1', 'replace').decode('latin-1')
-                        pdf.multi_cell(0, 6, safe_text)
-                        pdf.ln(2)
-                    else:
-                        pdf.ln(4) # Empty line
-                
-                # 4. Save
-                pdf.output(out_path)
-                print(f"[CONVERSION] Successfully converted {name} using fpdf2.")
-            except ImportError as e:
-                print(f"[CONVERSION-ERROR] Fallback library fpdf2 or python-docx not installed: {str(e)}")
-            except Exception as fallback_err:
-                print(f"[CONVERSION-ERROR] fpdf2 fallback failed for {name}: {str(fallback_err)}")
-                import traceback
-                traceback.print_exc()
-            finally:
-                try:
-                    uploaded_file.seek(0)
-                except Exception:
-                    pass
-
-        if not os.path.exists(out_path):
-            try:
-                uploaded_file.seek(0)
+                doc.Close(False)
+                word.Quit()
             except Exception:
                 pass
-            raise ValueError("DOC/DOCX upload failed to convert to PDF. Please upload a PDF instead.")
 
-        with open(out_path, "rb") as f:
-            pdf_bytes = f.read()
+        if os.path.exists(out_path):
+            with open(out_path, "rb") as f:
+                pdf_bytes = f.read()
+            pdf_name = f"{os.path.splitext(os.path.basename(name) or 'upload')[0]}.pdf"
+            uploaded_file.seek(0)
+            return ContentFile(pdf_bytes, name=pdf_name), {"converted": True, "original_name": name}
 
-    try:
-        uploaded_file.seek(0)
-    except Exception:
-        pass
-
-    pdf_name = f"{os.path.splitext(os.path.basename(name) or 'upload')[0]}.pdf"
-    return ContentFile(pdf_bytes, name=pdf_name), {"converted": True, "original_name": name, "pdf_name": pdf_name}
+    # Final fallback: return original file if all conversion attempts failed
+    uploaded_file.seek(0)
+    return uploaded_file, {"converted": False}
 
 
 def _purge_expired_archived_case_documents(*, case: Case | None = None) -> None:
