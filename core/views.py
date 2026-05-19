@@ -2275,15 +2275,35 @@ def _maybe_convert_office_upload_to_pdf(uploaded_file):
         out_path = os.path.join(tmpdir, f"{base}.pdf")
 
         if soffice:
-            cmd = [soffice, "--headless", "--convert-to", "pdf", "--outdir", tmpdir, in_path]
+            # -env:UserInstallation ensures a fresh profile in a writable location (/tmp),
+            # preventing lock file errors or crashes in containerized environments (like Docker/Render).
+            cmd = [
+                soffice, 
+                "-env:UserInstallation=file:///tmp/libo_profile",
+                "--headless", 
+                "--convert-to", "pdf", 
+                "--outdir", tmpdir, 
+                in_path
+            ]
             try:
-                subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=120)
-            except Exception:
+                result = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=120)
+                # Log success for debugging if needed (will show in Render logs)
+                print(f"[CONVERSION] Successfully converted {name} to PDF using LibreOffice.")
+            except subprocess.CalledProcessError as e:
+                error_msg = e.stderr.decode() if e.stderr else "Unknown error"
+                print(f"[CONVERSION-ERROR] LibreOffice failed: {error_msg}")
                 try:
                     uploaded_file.seek(0)
                 except Exception:
                     pass
-                raise ValueError("DOC/DOCX upload failed to convert to PDF. Please upload a PDF instead or try again.")
+                raise ValueError(f"DOC/DOCX conversion failed. Error: {error_msg[:100]}")
+            except Exception as e:
+                print(f"[CONVERSION-ERROR] Unexpected error: {str(e)}")
+                try:
+                    uploaded_file.seek(0)
+                except Exception:
+                    pass
+                raise ValueError("DOC/DOCX upload failed to convert to PDF. Please upload a PDF instead.")
         else:
             if os.name != "nt":
                 raise ValueError("DOC/DOCX upload requires PDF conversion, but LibreOffice (soffice) is not installed on the server.")
