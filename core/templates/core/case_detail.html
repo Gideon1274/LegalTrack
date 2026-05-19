@@ -492,6 +492,10 @@
                                     <i class="ri-edit-2-line"></i> Override Transaction Number
                                 </button>
                             </form>
+
+                            <button class="btn btn-danger btn-block" type="button" onclick="openDeleteTransactionModal('{{ case.tracking_id }}')">
+                                <i class="ri-delete-bin-line"></i> Delete Transaction
+                            </button>
                         {% endif %}
 
                         {% if is_releaser and can_release %}
@@ -657,6 +661,39 @@
     }
     function closeReturnModal() {
         document.getElementById('returnModal').style.display = 'none';
+    }
+</script>
+
+<div id="deleteTransactionModal" class="drawer-backdrop" style="display:none; justify-content:center; align-items:center; opacity:1; visibility:visible;">
+    <div class="panel" style="width: 400px; padding: 2rem; border-radius: 12px;">
+        <h3 class="panel-title" style="margin-bottom: 1rem;">Delete Transaction</h3>
+        <div style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 2rem;">
+            Are you sure you want to <strong style="color: #dc2626;">permanently delete</strong> transaction <strong id="modalTransactionId" style="color: var(--text-main);"></strong>? This action cannot be undone.
+        </div>
+        
+        <form id="deleteTransactionForm" method="POST" action="">
+            {% csrf_token %}
+            <div style="display: flex; gap: 1rem;">
+                <button type="button" class="btn btn-text" style="flex:1; border: 1px solid var(--border);" onclick="closeDeleteTransactionModal()">Cancel</button>
+                <button type="submit" class="btn btn-danger" style="flex:1; background: #dc2626; color: white;">Delete Permanently</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function openDeleteTransactionModal(tid) {
+        const modal = document.getElementById('deleteTransactionModal');
+        const form = document.getElementById('deleteTransactionForm');
+        const tidSpan = document.getElementById('modalTransactionId');
+        
+        tidSpan.textContent = tid;
+        form.action = `/case/${tid}/delete/`;
+        modal.style.display = 'flex';
+    }
+
+    function closeDeleteTransactionModal() {
+        document.getElementById('deleteTransactionModal').style.display = 'none';
     }
 </script>
 

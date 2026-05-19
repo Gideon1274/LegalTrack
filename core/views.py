@@ -76,7 +76,6 @@ def lgu_submissions_view(request):
         "pending": {"not_received", "pending", "client_correction"},
         "processing": {"received", "to_examine", "in_review", "for_taxmapping", "for_approval", "for_numbering", "for_release"},
         "released": {"released"},
-        "returned": {"returned"},
     }
 
     counts = {
@@ -84,7 +83,6 @@ def lgu_submissions_view(request):
         "pending": base_qs.filter(status__in=tab_map["pending"]).count(),
         "processing": base_qs.filter(status__in=tab_map["processing"]).count(),
         "released": base_qs.filter(status__in=tab_map["released"]).count(),
-        "returned": base_qs.filter(status__in=tab_map["returned"]).count(),
     }
 
     qs = base_qs
@@ -116,7 +114,6 @@ def lgu_submissions_view(request):
             ("all", "All Submissions"),
             ("pending", "Pending"),
             ("processing", "Processing"),
-            ("returned", "Returned"),
             ("released", "Released"),
         ],
     }
@@ -1326,7 +1323,7 @@ def dashboard(request):
         template = "core/dashboard_superadmin.html"
 
     elif user.role == "lgu_admin":
-        tab = (request.GET.get("tab") or "").strip().lower() or "all"
+        tab = (request.GET.get("tab") or "all").strip().lower()
         mun = (getattr(user, "lgu_municipality", "") or "").strip()
         
         base_qs = Case.objects.filter(lgu_submitted_at__isnull=False).select_related("submitted_by").order_by("-created_at")
@@ -1341,10 +1338,15 @@ def dashboard(request):
         total_cases_count = base_qs.count()
         todays_cases_count = base_qs.filter(lgu_submitted_at__date=timezone.localdate()).count()
 
+        pending_statuses = {"not_received", "received", "to_examine", "in_review", "for_taxmapping", "for_approval", "for_numbering", "for_release"}
+        processing_statuses = {"received", "to_examine", "in_review", "for_taxmapping", "for_approval", "for_numbering", "for_release"}
+        released_statuses = {"released"}
+
         tab_map = {
             "all": None,
-            "pending": {"not_received", "client_correction"},
-            "received": {"received", "to_examine", "in_review", "for_taxmapping", "for_approval", "for_numbering", "for_release", "released"},
+            "pending": pending_statuses,
+            "processing": processing_statuses,
+            "released": released_statuses,
         }
         
         statuses = tab_map.get(tab)
@@ -1354,8 +1356,9 @@ def dashboard(request):
 
         # Counts for tab badges
         all_count = total_cases_count
-        pending_count = base_qs.filter(status__in=tab_map["pending"]).count()
-        received_count = base_qs.filter(status__in=tab_map["received"]).count()
+        pending_count = base_qs.filter(status__in=pending_statuses).count()
+        processing_count = base_qs.filter(status__in=processing_statuses).count()
+        released_count = base_qs.filter(status__in=released_statuses).count()
 
         paginator = Paginator(qs, 10)
         page_obj = paginator.get_page(request.GET.get("page") or 1)
@@ -1369,7 +1372,12 @@ def dashboard(request):
         context.update({
             "section": "lgu_admin",
             "tab": tab,
-            "tabs": [("all", "All", all_count), ("pending", "Pending", pending_count), ("received", "Received", received_count)],
+            "tabs": [
+                ("all", "All Submissions", all_count), 
+                ("pending", "Pending", pending_count), 
+                ("processing", "Processing", processing_count),
+                ("released", "Released", released_count)
+            ],
             "page_obj": page_obj,
             "status_counts": status_counts,
             "total_cases_count": total_cases_count,
@@ -1931,6 +1939,29 @@ def toggle_staff_active(request, user_id):
     messages.info(request, "This account is Pending Activation. Use Resend Activation if needed.")
     return redirect("user_management")
 
+@login_required
+@require_POST
+def delete_user(request, user_id):
+    denial = _require_super_admin(request)
+    if denial:
+        return denial
+
+    target = get_object_or_404(CustomUser, id=user_id)
+    if target.id == request.user.id:
+        messages.error(request, "You cannot delete your own account.")
+        return redirect("user_management")
+
+    AuditLog.objects.create(
+        actor=request.user,
+        action="delete_user",
+        target_object=f"User Deleted: {target.email} ({target.username})",
+        details={"full_name": target.full_name, "role": target.role}
+    )
+    
+    target.delete()
+    messages.success(request, "User account has been permanently deleted.")
+    return redirect("user_management")
+
 
 @login_required
 @require_POST
@@ -2148,7 +2179,7 @@ def _lgu_owns_case(user, case: Case) -> bool:
     role = getattr(user, "role", "") or ""
     if role == "capitol_receiving":
         # Receivers "own" the case if it is in the intake or correction phase
-        return case.status in {"not_received", "received", "client_correction"} and case.assigned_to_id is None
+        return case.status in {"draft", "not_received", "received", "client_correction"} and case.assigned_to_id is None
     if role != "lgu_admin":
         return False
     user_mun = (getattr(user, "lgu_municipality", "") or "").strip()
@@ -2470,9 +2501,11 @@ def submit_case(request):
                 if (new_case_type != old_case_type) or (new_title_type != old_title_type):
                     _reset_case_uploads_and_checklist(case=case)
                     _seed_case_checklist(case=case)
-                messages.info(request, "Continuing your existing draft.")
+
                 if wants_save_draft and not wants_continue:
+                    messages.success(request, "Draft saved.")
                     return redirect("drafts")
+
                 return redirect("draft_wizard", draft_id=case.draft_id, step=2)
 
             case = form.save(commit=False)
@@ -2515,11 +2548,10 @@ def submit_case(request):
                 details={"client": case.client_name, "case_type": case.case_type}
             )
 
-            if wants_save_draft and not wants_continue:
-                messages.success(request, "Draft saved.")
+            # Lead to 2nd stage instead of Draft dashboard
+            if "save_draft" in request.POST:
+                messages.success(request, "Draft created.")
                 return redirect("drafts")
-
-
             return redirect("draft_wizard", draft_id=case.draft_id, step=2)
     else:
         form = CaseDetailsForm(user=request.user)
@@ -2688,7 +2720,16 @@ def case_wizard(request, tracking_id, step: int):
                     seen.add(key)
 
                     uploaded_file = cd.get("file")
-                    if uploaded_file:
+                    is_deleted = cd.get("is_deleted")
+                    if is_deleted:
+                        # User explicitly cleared/deleted the file for this doc_type
+                        to_del = CaseDocument.objects.filter(case=case, doc_type=doc_type)
+                        for d in to_del:
+                            if d.file:
+                                with contextlib.suppress(Exception):
+                                    d.file.delete(save=False)
+                            d.delete()
+                    elif uploaded_file:
                         try:
                             change = _upsert_case_document(case=case, doc_type=doc_type, uploaded_file=uploaded_file, actor=request.user)
                         except ValueError as exc:
@@ -2728,6 +2769,16 @@ def case_wizard(request, tracking_id, step: int):
 
                 case.checklist = new_checklist
                 update_fields = ["checklist", "updated_at"]
+                
+                # Cleanup: remove CaseDocument files that are no longer in the checklist
+                current_doc_types = {item["doc_type"] for item in new_checklist}
+                to_delete = CaseDocument.objects.filter(case=case).exclude(doc_type__in=current_doc_types)
+                for d in to_delete:
+                    if d.file:
+                        with contextlib.suppress(Exception):
+                            d.file.delete(save=False)
+                    d.delete()
+
                 if case.status in {"returned", "client_correction"}:
                     case.status = "not_received"
                     case.client_correction_deadline = None
@@ -2879,7 +2930,6 @@ def draft_wizard(request, draft_id, step: int):
                     messages.success(request, "Draft saved.")
                     return redirect("drafts")
 
-                messages.success(request, "Draft details saved.")
                 return redirect("draft_wizard", draft_id=case.draft_id, step=2)
         else:
             form = CaseDetailsForm(instance=case, user=request.user)
@@ -2980,7 +3030,16 @@ def draft_wizard(request, draft_id, step: int):
                     seen.add(key)
 
                     uploaded_file = cd.get("file")
-                    if uploaded_file:
+                    is_deleted = cd.get("is_deleted")
+                    if is_deleted:
+                        # User explicitly cleared/deleted the file for this doc_type
+                        to_del = CaseDocument.objects.filter(case=case, doc_type=doc_type)
+                        for d in to_del:
+                            if d.file:
+                                with contextlib.suppress(Exception):
+                                    d.file.delete(save=False)
+                            d.delete()
+                    elif uploaded_file:
                         try:
                             _upsert_case_document(case=case, doc_type=doc_type, uploaded_file=uploaded_file, actor=request.user)
                         except ValueError as exc:
@@ -3012,6 +3071,16 @@ def draft_wizard(request, draft_id, step: int):
                         new_checklist.insert(0, {"doc_type": "Endorsement Letter", "required": False, "uploaded": False})
 
                 case.checklist = new_checklist
+                
+                # Cleanup: remove CaseDocument files that are no longer in the checklist
+                current_doc_types = {item["doc_type"] for item in new_checklist}
+                to_delete = CaseDocument.objects.filter(case=case).exclude(doc_type__in=current_doc_types)
+                for d in to_delete:
+                    if d.file:
+                        with contextlib.suppress(Exception):
+                            d.file.delete(save=False)
+                    d.delete()
+
                 case.status = "draft"
                 case.lgu_submitted_at = None
                 case.save(update_fields=["checklist", "status", "updated_at", "lgu_submitted_at"])
@@ -3078,6 +3147,16 @@ def draft_wizard(request, draft_id, step: int):
 
         if not (case.lgu_area_code or "").strip():
             case.lgu_area_code = _municipality_area_code(effective_mun)
+
+        # Cleanup: remove CaseDocument files that are no longer in the checklist
+        current_doc_types = {item["doc_type"] for item in checklist}
+        to_delete = CaseDocument.objects.filter(case=case).exclude(doc_type__in=current_doc_types)
+        for d in to_delete:
+            if d.file:
+                with contextlib.suppress(Exception):
+                    d.file.delete(save=False)
+            d.delete()
+
         case.save(update_fields=["status", "lgu_area_code", "lgu_submitted_at", "updated_at", "tracking_id"])
 
         AuditLog.objects.create(
@@ -3471,6 +3550,56 @@ def add_case_remark(request, tracking_id):
     return redirect("case_detail", tracking_id=case.tracking_id)
 
 @login_required
+@require_POST
+def delete_user(request, user_id):
+    denial = _require_super_admin(request)
+    if denial:
+        return denial
+
+    target = get_object_or_404(CustomUser, id=user_id)
+    if target.id == request.user.id:
+        messages.error(request, "You cannot delete your own account.")
+        return redirect("user_management")
+
+    AuditLog.objects.create(
+        actor=request.user,
+        action="delete_user",
+        target_object=f"User Deleted: {target.email} ({target.username})",
+        details={"full_name": target.full_name, "role": target.role}
+    )
+    
+    target.delete()
+    messages.success(request, "User account has been permanently deleted.")
+    return redirect("user_management")
+
+@login_required
+@require_POST
+def delete_case(request, tracking_id):
+    denial = _require_super_admin(request)
+    if denial:
+        return denial
+
+    case = get_object_or_404(Case, tracking_id=tracking_id)
+    
+    AuditLog.objects.create(
+        actor=request.user,
+        action="delete_case",
+        target_object=f"Transaction Deleted: {case.tracking_id}",
+        details={"client": case.client_name, "td_number": case.td_number}
+    )
+    
+    # Delete associated document files from storage
+    docs = list(case.documents.all())
+    for d in docs:
+        if d.file:
+            with contextlib.suppress(Exception):
+                d.file.delete(save=False)
+    
+    case.delete()
+    messages.success(request, "Transaction has been permanently deleted.")
+    return redirect("submissions")
+
+@login_required
 def submissions(request):
     if not (_is_capitol_staff(request.user) or request.user.role == "super_admin"):
         messages.error(request, "Not authorized.")
@@ -3502,16 +3631,29 @@ def submissions(request):
         
         # 1. Scope Filter & Dynamic Tabs based on Role
         if request.user.role == "capitol_receiving":
+            pending_intake_qs = qs.filter(status="not_received")
+            to_assign_qs = qs.filter(status="received", assigned_to__isnull=True)
+            received_qs = qs.filter(status="received")
+            correction_qs = qs.filter(status="client_correction")
             returned_from_examiner_qs = qs.filter(status="received", assigned_to__isnull=True, returned_by__role="capitol_examiner")
-            correction_qs = qs.filter(status="client_correction", assigned_to__isnull=True)
+            
+            # For Receivers, "All Assigned" refers to the pool of cases awaiting intake, receipt, or assignment.
+            # Once a case is assigned to an examiner, it is no longer in the Receiver's active workspace.
+            active_assigned_qs = qs.filter(
+                Q(status="not_received") |
+                Q(status="received", assigned_to__isnull=True) |
+                Q(status="client_correction")
+            )
+
             tabs = [
-                ("all", f"All Case Intake ({qs.count()})"), 
-                ("returned_from_examiner", f"Returned from Examiner ({returned_from_examiner_qs.count()})"),
+                ("all_assigned", f"All Assigned ({active_assigned_qs.count()})"),
+                ("pending", f"Pending ({pending_intake_qs.count()})"),
+                ("received", f"Received ({received_qs.count()})"),
+                ("to_assign", f"To Assign ({to_assign_qs.count()})"),
                 ("correction", f"Under Correction ({correction_qs.count()})"),
-                ("received", f"Received ({qs.filter(status='received', assigned_to__isnull=True).count()})"), 
-                ("to_examine", f"To Examine ({qs.filter(status__in=['to_examine','in_review']).count()})")
+                ("returned_from_examiner", f"Returned from Examiner ({returned_from_examiner_qs.count()})"),
             ]
-            if not tab: tab = "all"
+            if not tab: tab = "all_assigned"
 
             # Fetch examiners to populate the Assign modal
             examiners = (
@@ -3520,58 +3662,133 @@ def submissions(request):
                 .order_by("active_load", "full_name", "email")
             )
 
-            if tab == "returned_from_examiner":
-                qs = returned_from_examiner_qs
+            if tab == "pending":
+                qs = pending_intake_qs
+            elif tab == "received":
+                qs = received_qs
+            elif tab == "to_assign":
+                qs = to_assign_qs
             elif tab == "correction":
                 qs = correction_qs
-            elif tab == "received":
-                qs = qs.filter(status="received", assigned_to__isnull=True)
-            elif tab == "to_examine":
-                qs = qs.filter(status__in=["to_examine", "in_review"])
-            # If tab == "all", it keeps the base `qs` (everything)
+            elif tab == "returned_from_examiner":
+                qs = returned_from_examiner_qs
+            else:
+                # Strictly assigned to this specific user AND currently active
+                qs = active_assigned_qs
             
         elif request.user.role == "capitol_examiner":
-            returned_back_count = qs.filter(assigned_to=request.user, status__in=["to_examine", "in_review"], returned_by__role="capitol_examiner").count()
-            tabs = [("all_assigned", "All Assigned"), ("under_review", "Under Review"), ("returned_back", f"Returned Back ({returned_back_count})")]
+            to_examine_qs = qs.filter(assigned_to=request.user, status="to_examine")
+            under_review_qs = qs.filter(assigned_to=request.user, status="in_review")
+            returned_qs = qs.filter(assigned_to=request.user, returned_by__role="capitol_approver")
+            
+            # Currently assigned to Examiner means still in review process
+            active_assigned_qs = qs.filter(assigned_to=request.user, status__in=["to_examine", "in_review", "client_correction"])
+
+            tabs = [
+                ("all_assigned", f"All Assigned ({active_assigned_qs.count()})"), 
+                ("to_examine", f"To Examine ({to_examine_qs.count()})"), 
+                ("under_review", f"Under Review ({under_review_qs.count()})"), 
+                ("returned", f"Returned ({returned_qs.count()})")
+            ]
             if not tab: tab = "all_assigned"
             
-            # Note: Included "to_examine" so freshly assigned cases show up for them
-            qs = qs.filter(assigned_to=request.user, status__in=["to_examine", "in_review", "client_correction"])
-            
-            if tab == "under_review":
-                qs = qs.filter(status="in_review")
-            elif tab == "returned_back":
-                qs = qs.filter(status__in=["to_examine", "in_review"], returned_by__role="capitol_examiner")
+            if tab == "to_examine":
+                qs = to_examine_qs
+            elif tab == "under_review":
+                qs = under_review_qs
+            elif tab == "returned":
+                qs = returned_qs.filter(status="in_review")
+            else:
+                # Strictly assigned to this specific user AND currently active
+                qs = active_assigned_qs
                 
         elif request.user.role == "capitol_approver":
+            to_approve_qs = qs.filter(status="for_approval")
+            approved_qs = qs.filter(status="approved") 
             returned_to_examiner_qs = qs.filter(status="in_review", returned_by__role="capitol_approver")
+            
+            # Approvers share a queue of cases for approval
+            active_assigned_qs = to_approve_qs
+
             tabs = [
-                ("all_assigned", f"For Approval ({qs.filter(status='for_approval').count()})"),
+                ("all_assigned", f"All Assigned ({active_assigned_qs.count()})"),
+                ("to_approve", f"To Approve ({to_approve_qs.count()})"),
+                ("approved", f"Approved ({approved_qs.count()})"),
                 ("returned_to_examiner", f"Returned to Examiner ({returned_to_examiner_qs.count()})"),
             ]
-            if not tab:
-                tab = "all_assigned"
+            if not tab: tab = "all_assigned"
 
-            if tab == "returned_to_examiner":
+            if tab == "to_approve":
+                qs = to_approve_qs
+            elif tab == "approved":
+                qs = approved_qs
+            elif tab == "returned_to_examiner":
                 qs = returned_to_examiner_qs
             else:
-                tab = "all_assigned"
-                qs = qs.filter(status="for_approval")
+                # For Approvers, All Assigned shows everything pending approval
+                qs = active_assigned_qs
             
         elif request.user.role == "capitol_taxmapper":
-            tabs = [("all_assigned", "All Assigned")]
-            if not tab: tab = "all_assigned"
-            qs = qs.filter(status="for_taxmapping", taxmapper_assigned_to=request.user)
+            pending_taxmapping_qs = qs.filter(status="for_taxmapping")
             
+            # Use specific taxmapper assignment field
+            active_assigned_qs = qs.filter(taxmapper_assigned_to=request.user, status="for_taxmapping")
+
+            tabs = [
+                ("all_assigned", f"All Assigned ({active_assigned_qs.count()})"),
+                ("pending_taxmapping", f"Pending Taxmapping ({pending_taxmapping_qs.count()})")
+            ]
+            if not tab: tab = "all_assigned"
+            
+            if tab == "pending_taxmapping":
+                qs = pending_taxmapping_qs
+            else:
+                # Strictly assigned to this specific tax mapper AND currently active
+                qs = active_assigned_qs
+
         elif request.user.role == "capitol_numberer":
-            tabs = [("all_assigned", "All Assigned")]
-            if not tab: tab = "all_assigned"
-            qs = qs.filter(status="for_numbering")
+            pending_numbering_qs = qs.filter(status="for_numbering")
+            numbered_qs = qs.exclude(td_number__isnull=True).exclude(td_number="")
             
-        elif request.user.role == "capitol_releaser":
-            tabs = [("all_assigned", "All Assigned")]
+            # Numberers share a queue for numbering
+            active_assigned_qs = pending_numbering_qs
+
+            tabs = [
+                ("all_assigned", f"All Assigned ({active_assigned_qs.count()})"),
+                ("pending_numbering", f"Pending Numbering ({pending_numbering_qs.count()})"),
+                ("numbered", f"Numbered ({numbered_qs.count()})")
+            ]
             if not tab: tab = "all_assigned"
-            qs = qs.filter(status="for_release")
+            
+            if tab == "pending_numbering":
+                qs = pending_numbering_qs
+            elif tab == "numbered":
+                qs = numbered_qs
+            else:
+                # For Numberers, All Assigned shows everything pending numbering
+                qs = active_assigned_qs
+                
+        elif request.user.role == "capitol_releaser":
+            pending_release_qs = qs.filter(status="for_release")
+            released_qs = qs.filter(status="released")
+            
+            # Releasers share a queue for release
+            active_assigned_qs = pending_release_qs
+
+            tabs = [
+                ("all_assigned", f"All Assigned ({active_assigned_qs.count()})"),
+                ("pending_release", f"Pending Release ({pending_release_qs.count()})"),
+                ("released", f"Released ({released_qs.count()})")
+            ]
+            if not tab: tab = "all_assigned"
+            
+            if tab == "pending_release":
+                qs = pending_release_qs
+            elif tab == "released":
+                qs = released_qs
+            else:
+                # For Releasers, All Assigned shows everything pending release
+                qs = active_assigned_qs
 
     else:
         # GLOBAL TRANSACTIONS SCOPE

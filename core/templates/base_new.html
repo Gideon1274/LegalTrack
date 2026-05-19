@@ -370,8 +370,8 @@
 
             <!-- 3. LGU Admin ONLY -->
             {% if request.user.role == "lgu_admin" %}
-            <a href="{% url 'my_submissions' %}" class="nav-item {% if request.resolver_match.url_name == 'my_submissions' %}active{% endif %}">
-                <i class="ri-folder-open-line"></i> <span class="hide-text">Submissions</span>
+            <a href="{% url 'my_submissions' %}?tab=all" class="nav-item {% if request.resolver_match.url_name == 'my_submissions' %}active{% endif %}">
+                <i class="ri-folder-user-line"></i> <span class="hide-text">My Workspace</span>
             </a>
             <a href="{% url 'drafts' %}" class="nav-item {% if request.resolver_match.url_name == 'drafts' %}active{% endif %}">
                 <i class="ri-file-edit-line"></i> <span class="hide-text">Drafts</span>
@@ -383,9 +383,14 @@
 
             <!-- 4. Capitol Staff (Receiver, Examiner, Approver, Numberer, Releaser) -->
             {% if request.user.role in "capitol_receiving,capitol_examiner,capitol_approver,capitol_taxmapper,capitol_numberer,capitol_releaser" %}
-            <a href="{% url 'submissions' %}?scope=me" class="nav-item {% if request.resolver_match.url_name == 'submissions' and request.GET.scope != 'all' %}active{% endif %}">
-                <i class="ri-inbox-archive-line"></i> <span class="hide-text">My Workspace</span>
+            <a href="{% url 'submissions' %}?scope=me&tab=all_assigned" class="nav-item {% if request.resolver_match.url_name == 'submissions' and request.GET.scope == 'me' %}active{% endif %}">
+                <i class="ri-folder-user-line"></i> <span class="hide-text">My Workspace</span>
             </a>
+            {% if request.user.role == "capitol_receiving" %}
+            <a href="{% url 'drafts' %}" class="nav-item {% if request.resolver_match.url_name == 'drafts' %}active{% endif %}">
+                <i class="ri-file-edit-line"></i> <span class="hide-text">Drafts</span>
+            </a>
+            {% endif %}
             <a href="{% url 'submissions' %}?scope=all" class="nav-item {% if request.resolver_match.url_name == 'submissions' and request.GET.scope == 'all' %}active{% endif %}">
                 <i class="ri-global-line"></i> <span class="hide-text">All Transactions</span>
             </a>

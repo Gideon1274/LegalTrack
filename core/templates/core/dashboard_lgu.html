@@ -306,12 +306,12 @@
     <!-- Total Submissions (focus/blue card) -->
     <div class="bento-card focus-card span-3">
         <div class="card-header">
-            <span class="card-title">Total Submissions</span>
+            <span class="card-title">All Submissions</span>
             <div class="kpi-icon-box"><i class="ri-folder-upload-line"></i></div>
         </div>
         <div class="kpi-value">{{ total_cases_count|default:"0" }}</div>
-        <div class="kpi-meta"><i class="ri-stack-line"></i>&nbsp;<span>All time</span></div>
-        <a href="{% url 'my_submissions' %}" class="kpi-cta">
+        <div class="kpi-meta"><i class="ri-stack-line"></i>&nbsp;<span>Lifetime total</span></div>
+        <a href="{% url 'my_submissions' %}?tab=all" class="kpi-cta">
             View All <i class="ri-arrow-right-line"></i>
         </a>
     </div>
@@ -319,38 +319,35 @@
     <!-- Submitted Today -->
     <div class="bento-card span-3">
         <div class="card-header">
-            <span class="card-title">Submitted Today</span>
-            <div class="kpi-icon-box" style="background:#dcfce7; color:#166534;"><i class="ri-calendar-check-line"></i></div>
+            <span class="card-title">Submitted</span>
+            <div class="kpi-icon-box" style="background:#dcfce7; color:#166534;"><i class="ri-send-plane-line"></i></div>
         </div>
         <div class="kpi-value">{{ todays_cases_count|default:"0" }}</div>
-        <div class="kpi-meta" style="color:#059669;"><i class="ri-calendar-line"></i>&nbsp;<span>Today's activity</span></div>
-        <a href="{% url 'my_submissions' %}?tab=all" class="kpi-cta">Today's List <i class="ri-arrow-right-line"></i></a>
+        <div class="kpi-meta" style="color:#059669;"><i class="ri-calendar-line"></i>&nbsp;<span>New activity</span></div>
+        <a href="{% url 'my_submissions' %}?tab=pending" class="kpi-cta">Submitted <i class="ri-arrow-right-line"></i></a>
     </div>
 
-    <!-- Action Required (from tabs loop) -->
-    {% for key, label, count in tabs %}
-        {% if key == 'pending' %}
-        <div class="bento-card span-3">
-            <div class="card-header">
-                <span class="card-title">Action Required</span>
-                <div class="kpi-icon-box" style="background:#fef3c7; color:#b45309;"><i class="ri-error-warning-line"></i></div>
-            </div>
-            <div class="kpi-value">{{ count }}</div>
-            <div class="kpi-meta" style="color:#b45309;"><i class="ri-time-line"></i>&nbsp;<span>Needs attention</span></div>
-            <a href="{% url 'my_submissions' %}?tab=pending" class="kpi-cta">Review Now <i class="ri-arrow-right-line"></i></a>
+    <!-- Processing -->
+    <div class="bento-card span-3">
+        <div class="card-header">
+            <span class="card-title">Processing</span>
+            <div class="kpi-icon-box" style="background:#e0f2fe; color:#0369a1;"><i class="ri-loader-4-line"></i></div>
         </div>
-        {% elif key == 'received' %}
-        <div class="bento-card span-3">
-            <div class="card-header">
-                <span class="card-title">At Capitol</span>
-                <div class="kpi-icon-box" style="background:#f3e8ff; color:#6b21a8;"><i class="ri-building-4-line"></i></div>
-            </div>
-            <div class="kpi-value">{{ count }}</div>
-            <div class="kpi-meta" style="color:#6b21a8;"><i class="ri-arrow-up-line"></i>&nbsp;<span>Processing</span></div>
-            <a href="{% url 'my_submissions' %}?tab=received" class="kpi-cta">Track Status <i class="ri-arrow-right-line"></i></a>
+        <div class="kpi-value">{{ processing_count|default:"0" }}</div>
+        <div class="kpi-meta" style="color:#0369a1;"><i class="ri-time-line"></i>&nbsp;<span>In capitol queue</span></div>
+        <a href="{% url 'my_submissions' %}?tab=processing" class="kpi-cta">Track Status <i class="ri-arrow-right-line"></i></a>
+    </div>
+
+    <!-- Released -->
+    <div class="bento-card span-3">
+        <div class="card-header">
+            <span class="card-title">Released</span>
+            <div class="kpi-icon-box" style="background:#dcfce7; color:#166534;"><i class="ri-checkbox-circle-line"></i></div>
         </div>
-        {% endif %}
-    {% endfor %}
+        <div class="kpi-value">{{ released_count|default:"0" }}</div>
+        <div class="kpi-meta" style="color:#166534;"><i class="ri-calendar-check-line"></i>&nbsp;<span>Ready for pickup</span></div>
+        <a href="{% url 'my_submissions' %}?tab=released" class="kpi-cta">View Released <i class="ri-arrow-right-line"></i></a>
+    </div>
 
     <!-- ===== SUBMISSION VOLUME CHART (span-8) ===== -->
     <div class="bento-card span-8">
@@ -372,7 +369,7 @@
             <span class="card-title">Status Breakdown</span>
             <select id="pipelineFilter" class="chart-filter">
                 <option value="all">All Cases</option>
-                <option value="pending">Pending / Returned</option>
+                <option value="pending">Pending</option>
                 <option value="in_progress">In Progress</option>
                 <option value="completed">Completed</option>
             </select>
@@ -558,17 +555,17 @@ document.addEventListener("DOMContentLoaded", function () {
     // ==========================================
     const pipelineData = {
         all: {
-            labels: ['Not Received','Received','In Review','For Approval','For Numbering','Released','Returned'],
-            data:   [12, 28, 18, 9, 6, 35, 5],
-            colors: ['#f59e0b','#0ea5e9','#6366f1','#7c3aed','#ec4899','#059669','#dc2626'],
+            labels: ['Not Received','Received','In Review','For Approval','For Numbering','Released'],
+             data:   [12, 28, 18, 9, 6, 35],
+             colors: ['#f59e0b','#0ea5e9','#6366f1','#7c3aed','#ec4899','#059669'],
             total: 113, centerLabel: 'Total Cases'
         },
         pending: {
-            labels: ['Not Received','Returned to LGU'],
-            data:   [12, 5],
-            colors: ['#f59e0b','#dc2626'],
-            total: 17, centerLabel: 'Need Action'
-        },
+             labels: ['Not Received'],
+             data:   [12],
+             colors: ['#f59e0b'],
+             total: 12, centerLabel: 'Pending'
+         },
         in_progress: {
             labels: ['Received','In Review','For Approval','For Numbering'],
             data:   [28, 18, 9, 6],

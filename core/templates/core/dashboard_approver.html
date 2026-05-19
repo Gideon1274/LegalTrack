@@ -264,7 +264,7 @@
             </div>
             <div class="kpi-value">{{ stats_pending_approval|default:"0" }}</div>
             <div class="kpi-meta"><i class="ri-inbox-archive-line"></i>&nbsp;<span>Awaiting signature</span></div>
-            <a href="{% url 'submissions' %}?scope=me" class="kpi-cta">Review Queue <i class="ri-arrow-right-line"></i></a>
+            <a href="{% url 'submissions' %}?scope=me&tab=to_approve" class="kpi-cta">Review Queue <i class="ri-arrow-right-line"></i></a>
         </div>
 
         <!-- 2. Approved Today — alert card if > 0 -->
@@ -275,7 +275,7 @@
             </div>
             <div class="kpi-value" {% if stats_approved_today > 0 %}style="color:#15803d;"{% endif %}>{{ stats_approved_today|default:"0" }}</div>
             <div class="kpi-meta" {% if stats_approved_today > 0 %}style="color:#16a34a;"{% endif %}><i class="ri-calendar-line"></i>&nbsp;<span>Successfully signed</span></div>
-            <a href="{% url 'submissions' %}?scope=me&tab=for_numbering" class="kpi-cta">View Approved <i class="ri-arrow-right-line"></i></a>
+            <a href="{% url 'submissions' %}?scope=me&tab=approved" class="kpi-cta">View Approved <i class="ri-arrow-right-line"></i></a>
         </div>
 
         <!-- 3. Total Signed -->
@@ -286,18 +286,18 @@
             </div>
             <div class="kpi-value">{{ stats_total_signed|default:"0" }}</div>
             <div class="kpi-meta" style="color:#7e22ce;"><i class="ri-arrow-up-line"></i>&nbsp;<span>All time signed</span></div>
-            <a href="{% url 'submissions' %}?scope=me" class="kpi-cta">View History <i class="ri-arrow-right-line"></i></a>
+            <a href="{% url 'submissions' %}?scope=me&tab=all_assigned" class="kpi-cta">View History <i class="ri-arrow-right-line"></i></a>
         </div>
 
-        <!-- 4. Returned for Edits -->
+        <!-- 4. Returned to Examiner -->
         <div class="bento-card">
             <div class="card-header">
-                <span class="card-title">Returned for Edits</span>
+                <span class="card-title">Returned to Examiner</span>
                 <div class="kpi-icon-box" style="background:#fee2e2; color:#dc2626;"><i class="ri-arrow-go-back-line"></i></div>
             </div>
             <div class="kpi-value">{{ stats_cases_denied|default:"0" }}</div>
             <div class="kpi-meta" style="color:#dc2626;"><i class="ri-arrow-up-line"></i>&nbsp;<span>Sent back to examiners</span></div>
-            <a href="{% url 'submissions' %}?scope=me" class="kpi-cta">View Returns <i class="ri-arrow-right-line"></i></a>
+            <a href="{% url 'submissions' %}?scope=me&tab=returned_to_examiner" class="kpi-cta">View Returned <i class="ri-arrow-right-line"></i></a>
         </div>
 
         <!-- 5. Avg Approval Time -->

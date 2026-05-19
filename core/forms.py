@@ -143,6 +143,7 @@ class ChecklistItemForm(forms.Form):
     doc_type = forms.ChoiceField(required=False, choices=[("", "— Select —")])
     custom_doc_type = forms.CharField(max_length=120, required=False)
     file = forms.FileField(required=False)
+    is_deleted = forms.BooleanField(required=False, initial=False, widget=forms.HiddenInput())
 
     def __init__(self, *args, doc_type_choices=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -155,6 +156,9 @@ class ChecklistItemForm(forms.Form):
         choices.append(("__custom__", "Other (type manually)"))
         self.fields["doc_type"].choices = choices
         self.fields["custom_doc_type"].widget.attrs.setdefault("placeholder", "Type document name")
+        self.fields["file"].widget.attrs.update({
+            "accept": ".pdf,.png,.jpg,.jpeg,.doc,.docx"
+        })
 
     def clean(self):
         cleaned = super().clean() or {}
@@ -185,7 +189,7 @@ class ChecklistItemForm(forms.Form):
         allowed = getattr(
             settings,
             "ALLOWED_UPLOAD_EXTENSIONS",
-            {".pdf", ".png", ".jpg", ".jpeg", ".doc", ".docx", ".xls", ".xlsx", ".txt"},
+            {".pdf", ".png", ".jpg", ".jpeg", ".doc", ".docx"},
         )
         name = getattr(f, "name", "") or ""
         ext = os.path.splitext(name)[1].lower()

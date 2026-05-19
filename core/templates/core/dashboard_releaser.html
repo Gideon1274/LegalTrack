@@ -247,12 +247,12 @@
         <!-- 1. Ready for Pickup — focus card -->
         <div class="bento-card focus-card">
             <div class="card-header">
-                <span class="card-title">Ready for Pickup</span>
+                <span class="card-title">Pending Release</span>
                 <div class="kpi-icon-box"><i class="ri-folder-shared-line"></i></div>
             </div>
             <div class="kpi-value">{{ stats_pending|default:"0" }}</div>
             <div class="kpi-meta"><i class="ri-package-line"></i>&nbsp;<span>Awaiting collection</span></div>
-            <a href="{% url 'submissions' %}" class="kpi-cta">View Queue <i class="ri-arrow-right-line"></i></a>
+            <a href="{% url 'submissions' %}?scope=me&tab=pending_release" class="kpi-cta">View Queue <i class="ri-arrow-right-line"></i></a>
         </div>
 
         <!-- 2. Released Today -->
@@ -263,7 +263,7 @@
             </div>
             <div class="kpi-value">{{ stats_released_today|default:"0" }}</div>
             <div class="kpi-meta" style="color:#16a34a;"><i class="ri-calendar-line"></i>&nbsp;<span>Documents released</span></div>
-            <a href="{% url 'submissions' %}" class="kpi-cta">View Releases <i class="ri-arrow-right-line"></i></a>
+            <a href="{% url 'submissions' %}?scope=me&tab=released" class="kpi-cta">View Releases <i class="ri-arrow-right-line"></i></a>
         </div>
 
         <!-- 3. Released This Week -->
@@ -274,7 +274,7 @@
             </div>
             <div class="kpi-value">{{ stats_released_week|default:"0" }}</div>
             <div class="kpi-meta" style="color:#4f46e5;"><i class="ri-time-line"></i>&nbsp;<span>Weekly total</span></div>
-            <a href="{% url 'submissions' %}" class="kpi-cta">View Details <i class="ri-arrow-right-line"></i></a>
+            <a href="{% url 'submissions' %}?scope=me&tab=released" class="kpi-cta">View Details <i class="ri-arrow-right-line"></i></a>
         </div>
 
         <!-- 4. Total Dispatched -->
@@ -285,7 +285,7 @@
             </div>
             <div class="kpi-value">{{ stats_total_released|default:"0" }}</div>
             <div class="kpi-meta" style="color:#475569;"><i class="ri-arrow-up-line"></i>&nbsp;<span>All time released</span></div>
-            <a href="{% url 'submissions' %}" class="kpi-cta">View History <i class="ri-arrow-right-line"></i></a>
+            <a href="{% url 'submissions' %}?scope=me&tab=all_assigned" class="kpi-cta">View History <i class="ri-arrow-right-line"></i></a>
         </div>
 
     </div>
